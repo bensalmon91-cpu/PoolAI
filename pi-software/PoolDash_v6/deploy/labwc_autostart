@@ -19,6 +19,9 @@ wlr-randr --output DSI-2 --transform "$TRANSFORM" 2>/dev/null &
 
 sleep 3
 
+# Clear stale Chromium lock files (prevents startup failure after crash/reboot)
+rm -f ~/.config/chromium/SingletonLock ~/.config/chromium/SingletonSocket ~/.config/chromium/SingletonCookie 2>/dev/null
+
 # Chromium kiosk - Flask runs on port 80
 /usr/bin/chromium --noerrdialogs --disable-infobars --kiosk --incognito \
   --ozone-platform=wayland --password-store=basic \
