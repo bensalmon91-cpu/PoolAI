@@ -1,0 +1,27 @@
+# PoolAIssistant Kiosk Mode
+# This file should be copied to /home/poolaissistant/.config/labwc/autostart
+
+pkill -f pcmanfm-pi 2>/dev/null
+pkill -f wf-panel-pi 2>/dev/null
+
+swaybg -c '#000000' &
+
+# Apply screen rotation from saved settings
+ROTATION=$(python3 -c "import json; print(json.load(open('/opt/PoolAIssistant/data/pooldash_settings.json')).get('screen_rotation', 0))" 2>/dev/null || echo 0)
+case "$ROTATION" in
+    90)  TRANSFORM="90" ;;
+    180) TRANSFORM="180" ;;
+    270) TRANSFORM="270" ;;
+    *)   TRANSFORM="normal" ;;
+esac
+sleep 2
+wlr-randr --output DSI-2 --transform "$TRANSFORM" 2>/dev/null &
+
+sleep 3
+
+# Chromium kiosk - Flask runs on port 80
+/usr/bin/chromium --noerrdialogs --disable-infobars --kiosk --incognito \
+  --ozone-platform=wayland --password-store=basic \
+  --touch-events=enabled \
+  --enable-touch-drag-drop \
+  http://localhost &

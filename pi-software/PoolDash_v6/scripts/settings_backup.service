@@ -1,0 +1,15 @@
+[Unit]
+Description=PoolAIssistant Settings Backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/PoolAIssistant/app
+ExecStart=/usr/bin/python3 /opt/PoolAIssistant/app/scripts/settings_backup.py
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

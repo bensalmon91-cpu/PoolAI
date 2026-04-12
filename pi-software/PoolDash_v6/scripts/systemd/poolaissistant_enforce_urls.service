@@ -1,0 +1,14 @@
+[Unit]
+Description=PoolAIssistant System URL Enforcement
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/PoolAIssistant/app/scripts/enforce_system_urls.py
+User=poolai
+Group=poolai
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

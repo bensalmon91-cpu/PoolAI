@@ -1,0 +1,16 @@
+[Unit]
+Description=PoolAIssistant Chunk Sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/PoolAIssistant/app
+ExecStart=/usr/bin/python3 /opt/PoolAIssistant/app/scripts/chunk_manager.py
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

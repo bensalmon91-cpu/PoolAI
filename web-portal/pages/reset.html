@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set New Password | PoolDash_v6</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-mark">PoolDash_v6</span>
+      <span class="brand-sub">Password Reset</span>
+    </div>
+    <nav class="site-nav">
+      <a href="../index.html">Home</a>
+      <a href="advertising.html">Advertising & Sales</a>
+      <a href="login.html">Login</a>
+    </nav>
+  </header>
+
+  <main class="content">
+    <section class="hero">
+      <h1>Set a new password</h1>
+      <p class="lead">Paste the token from your reset email and choose a new password.</p>
+    </section>
+
+    <section class="card">
+      <form class="upload-form" action="/api/password/reset" method="post">
+        <label for="token">Reset token</label>
+        <input id="token" name="token" type="text" required>
+
+        <label for="password">New password</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" required>
+
+        <button type="submit">Update password</button>
+      </form>
+      <p class="helper-text">Backend endpoint: <code>/api/password/reset</code></p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>PoolDash_v6 &copy; <span id="year"></span></span>
+  </footer>
+
+  <script src="../js/app.js"></script>
+  <script src="../js/reset.js"></script>
+</body>
+</html>

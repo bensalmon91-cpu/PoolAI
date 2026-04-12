@@ -1,0 +1,12 @@
+[Unit]
+Description=PoolAIssistant Port Configuration
+After=network.target
+Before=poolaissistant_ui.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/PoolAIssistant/app/scripts/ensure_ports.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

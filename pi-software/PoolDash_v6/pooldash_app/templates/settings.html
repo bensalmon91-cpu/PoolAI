@@ -1,0 +1,1536 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- ===== LANGUAGE SELECTOR ===== -->
+<div class="language-selector">
+  {% for code, info in supported_languages.items() %}
+  <form method="post" action="{{ url_for('main.update_language') }}" class="lang-form">
+    <input type="hidden" name="language" value="{{ code }}">
+    <button type="submit" class="flag-btn {% if current_language == code %}active{% endif %}" title="{{ info.name }}">
+      {{ info.flag }}
+    </button>
+  </form>
+  {% endfor %}
+</div>
+
+<style>
+.language-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+.lang-form {
+  margin: 0;
+  padding: 0;
+}
+.flag-btn {
+  font-size: 1.4rem;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 4px 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+  opacity: 0.5;
+}
+.flag-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+.flag-btn.active {
+  opacity: 1;
+  border-color: var(--color-accent);
+  background: var(--color-surface-raised);
+}
+</style>
+
+<h2>{{ _('settings') }}</h2>
+
+<!-- ===== QUICK CONNECT SECTION ===== -->
+<div class="card">
+  <h3>{{ _('quick_connect') }}</h3>
+  <div class="quick-connect-layout">
+    <a href="/qr/page" class="qr-image-large">
+      <img src="/qr" alt="QR Code">
+    </a>
+
+    <div class="quick-connect-credentials">
+      <h4>{{ _('connection_details') }}</h4>
+      <div class="credential-row">
+        <span class="credential-label">{{ _('ip_address') }}:</span>
+        <code class="credential-value">{{ device_ip or _('unknown') }}</code>
+      </div>
+      <form method="post" action="{{ url_for('main.update_device_name') }}" class="hostname-form">
+        <div class="hostname-row">
+          <span class="credential-label">{{ _('hostname') }}:</span>
+          <div class="hostname-input-group">
+            <span class="hostname-prefix">PoolAI-</span>
+            <input type="text" name="device_name" id="deviceName"
+                   value="{{ device_name or '' }}"
+                   placeholder="XX"
+                   maxlength="12"
+                   pattern="[a-zA-Z0-9-]+"
+                   title="Letters, numbers, and hyphens only"
+                   class="hostname-input">
+            <span class="hostname-suffix">.local</span>
+            <button type="submit" class="hostname-save-btn" title="{{ _('save') }}">&#10003;</button>
+          </div>
+        </div>
+        <p class="hostname-hint">Set a unique name to access this device. Type <code>PoolAI-{{ device_name or 'XX' }}.local</code> in your browser.</p>
+      </form>
+    </div>
+
+    <!-- Portal Link Status -->
+    <div id="portalStatus" class="portal-status not-linked w-full">
+      <span class="portal-status-icon">...</span>
+      <span class="portal-status-text">Checking portal status...</span>
+    </div>
+    <div id="linkCodeContainer" class="w-full mt-2">
+      <button type="button" class="btn btn--sm btn--secondary btn--full" onclick="generateLinkCode()">Link to Portal Account</button>
+    </div>
+    <div id="linkCodeDisplay" style="display: none;" class="w-full mt-2">
+      <div class="link-code-box">
+        <span id="linkCodeValue" class="link-code"></span>
+        <p class="form-hint mt-2">Enter this code at <a href="https://poolaissistant.modprojects.co.uk/portal" target="_blank">poolaissistant.modprojects.co.uk/portal</a></p>
+        <p class="form-hint">Expires in <span id="linkCodeExpiry">15</span> minutes.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== GET THE APP SECTION (hidden when offline) ===== -->
+<div class="card pwa-promo" id="pwaPromoSection" style="display: none;">
+  <div class="pwa-promo-content">
+    <div class="pwa-promo-icon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+        <line x1="12" y1="18" x2="12.01" y2="18"></line>
+      </svg>
+    </div>
+    <div class="pwa-promo-text">
+      <h4>Get the PoolAIssistant App</h4>
+      <p>Monitor your pool from anywhere on your phone or tablet</p>
+    </div>
+    <a href="https://poolai.modprojects.co.uk" target="_blank" class="btn btn--sm">
+      Open Portal
+    </a>
+  </div>
+  <p class="pwa-promo-hint">
+    Visit the portal on your phone and tap "Add to Home Screen" to install the app.
+    <span class="pwa-promo-note">Works best on Safari (iOS) or Chrome (Android).</span>
+  </p>
+</div>
+
+<style>
+.pwa-promo {
+  background: linear-gradient(135deg, var(--color-accent-light) 0%, var(--color-surface-raised) 100%);
+  border: 1px solid var(--color-accent);
+}
+.pwa-promo-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.pwa-promo-icon {
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+.pwa-promo-text {
+  flex: 1;
+  min-width: 200px;
+}
+.pwa-promo-text h4 {
+  margin: 0 0 4px 0;
+  font-size: var(--text-md);
+}
+.pwa-promo-text p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.pwa-promo-hint {
+  margin: var(--space-2) 0 0 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+.pwa-promo-note {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+</style>
+
+<style>
+.link-code-box {
+  background: var(--color-surface-raised);
+  border: 2px dashed var(--color-accent);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+}
+.link-code {
+  font-family: monospace;
+  font-size: 2.5rem;
+  font-weight: bold;
+  letter-spacing: 0.3rem;
+  color: var(--color-accent);
+}
+.controller-type-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.controller-type-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+.controller-type-label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  margin: 0;
+  white-space: nowrap;
+}
+.controller-type-select {
+  width: auto;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* Inline hostname editor */
+.hostname-form {
+  margin: 0;
+}
+.hostname-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.hostname-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.hostname-prefix,
+.hostname-suffix {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  background: var(--color-surface-raised);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.hostname-prefix {
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  border-right: none;
+}
+.hostname-suffix {
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+.hostname-input {
+  width: 120px;
+  min-width: 80px;
+  max-width: 140px;
+  padding: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  text-align: center;
+}
+.hostname-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  background: var(--color-bg);
+}
+.hostname-save-btn {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: var(--space-2) var(--space-2);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  transition: all 0.15s ease;
+}
+.hostname-save-btn:hover {
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+.hostname-hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin: var(--space-2) 0 0 0;
+}
+.hostname-hint code {
+  background: var(--color-surface-raised);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: inherit;
+}
+</style>
+
+<script>
+// Check portal link status and internet connectivity on load
+(function() {
+  const pwaPromo = document.getElementById('pwaPromoSection');
+  const portalStatus = document.getElementById('portalStatus');
+  const linkBtn = document.getElementById('linkCodeContainer');
+
+  fetch('/settings/portal/status')
+    .then(response => response.json())
+    .then(data => {
+      // We got a response - check if we're online (backend reachable)
+      if (data.online !== false) {
+        // Show portal sections when online
+        if (pwaPromo) pwaPromo.style.display = 'block';
+
+        if (data.linked) {
+          portalStatus.className = 'portal-status linked w-full';
+          portalStatus.innerHTML = '<span class="portal-status-icon">&#10003;</span><span class="portal-status-text">Linked to: ' + (data.email || 'Portal Account') + '</span>';
+          linkBtn.style.display = 'none';
+        } else {
+          portalStatus.className = 'portal-status not-linked w-full';
+          portalStatus.innerHTML = '<span class="portal-status-icon">&#9888;</span><span class="portal-status-text">Not linked to a portal account</span>';
+        }
+      } else {
+        // Backend says we're offline
+        hidePortalSections();
+      }
+    })
+    .catch(err => {
+      // Network error - likely offline
+      hidePortalSections();
+    });
+
+  function hidePortalSections() {
+    if (pwaPromo) pwaPromo.style.display = 'none';
+    portalStatus.className = 'portal-status offline w-full';
+    portalStatus.innerHTML = '<span class="portal-status-icon">&#128268;</span><span class="portal-status-text">Offline - Portal features unavailable</span>';
+    linkBtn.style.display = 'none';
+  }
+})();
+
+function generateLinkCode() {
+  const container = document.getElementById('linkCodeContainer');
+  const display = document.getElementById('linkCodeDisplay');
+  const codeValue = document.getElementById('linkCodeValue');
+  const expiry = document.getElementById('linkCodeExpiry');
+
+  container.innerHTML = '<p class="form-hint">Generating code...</p>';
+
+  fetch('/settings/portal/generate_link_code', { method: 'POST' })
+    .then(response => response.json())
+    .then(data => {
+      if (data.ok) {
+        codeValue.textContent = data.code;
+        expiry.textContent = Math.round(data.expires_in / 60);
+        container.style.display = 'none';
+        display.style.display = 'block';
+      } else {
+        container.innerHTML = '<p class="status-bad">' + (data.error || 'Failed to generate code') + '</p>' +
+          '<button type="button" class="btn btn--sm btn--secondary mt-2" onclick="generateLinkCode()">Try Again</button>';
+      }
+    })
+    .catch(err => {
+      container.innerHTML = '<p class="status-bad">Connection error: ' + err.message + '</p>' +
+        '<button type="button" class="btn btn--sm btn--secondary mt-2" onclick="generateLinkCode()">Try Again</button>';
+    });
+}
+</script>
+
+<!-- ===== WIFI SECTION ===== -->
+<div class="card" id="wifi-section">
+  <h3>{{ _('wifi_settings') }}</h3>
+
+  <!-- Current Connection (always visible) -->
+  <div class="wifi-current-display">
+    {% if current_ssid %}
+    <span class="wifi-status-icon connected">&#10003;</span>
+    <div class="wifi-info-col">
+      <div class="wifi-network-name">{{ current_ssid }}</div>
+      <div class="wifi-ip-address">{{ device_ip or 'No IP' }}</div>
+    </div>
+    <form method="post" action="{{ url_for('main.disconnect_wifi') }}" class="wifi-disconnect-form">
+      <button type="submit" class="btn btn--sm btn--outline" onclick="return confirm('Disconnect from WiFi?')">Disconnect</button>
+    </form>
+    {% else %}
+    <span class="wifi-status-icon disconnected">&#10007;</span>
+    <div>
+      <div class="wifi-network-name">{{ _('not_connected') }}</div>
+      <div class="wifi-ip-address">No WiFi network</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Change Network (collapsed) -->
+  <details id="wifiChangeDetails">
+    <summary class="settings-toggle">Change Network</summary>
+    <div class="settings-collapsed">
+      <form method="post" action="{{ url_for('main.update_wifi') }}" id="wifiForm">
+        <div class="form-stack">
+          <div class="form-field">
+            <label>Network</label>
+            <div class="input-row">
+              <select name="ssid" id="wifiSelect" class="input--flex">
+                <option value="">-- Select a network --</option>
+                {% if current_ssid %}
+                <option value="{{ current_ssid }}" selected>{{ current_ssid }} (current)</option>
+                {% endif %}
+              </select>
+              <button type="button" class="btn btn--sm" id="scanWifiBtn" onclick="scanWifi()">Scan</button>
+            </div>
+            <p id="wifiStatus" class="form-hint">{% if current_ssid %}Note: Scanning will temporarily disconnect WiFi{% endif %}</p>
+          </div>
+          <div class="form-field">
+            <label>Password</label>
+            <input type="text" name="psk" id="wifiPassword" placeholder="Enter network password">
+            <p class="form-hint">Password is visible for easier entry</p>
+          </div>
+        </div>
+        <details class="mt-3">
+          <summary class="summary--muted">Manual entry (hidden networks)</summary>
+          <div class="form-field mt-2">
+            <label>Network Name (SSID)</label>
+            <input type="text" id="manualSsid" placeholder="Enter network name manually" oninput="useManualSsid()">
+          </div>
+        </details>
+        <button class="btn btn--full mt-3" onclick="return confirm('Connect to this network? The device may briefly disconnect.')">Connect to WiFi</button>
+      </form>
+    </div>
+  </details>
+</div>
+
+<script>
+function scanWifi() {
+  const btn = document.getElementById('scanWifiBtn');
+  const select = document.getElementById('wifiSelect');
+  const status = document.getElementById('wifiStatus');
+  const currentSsid = '{{ current_ssid or "" }}';
+
+  btn.disabled = true;
+  btn.textContent = 'Scanning...';
+  if (currentSsid) {
+    status.textContent = 'Disconnecting and scanning...';
+  } else {
+    status.textContent = 'Scanning for networks...';
+  }
+
+  fetch('/settings/wifi/scan')
+    .then(response => response.json())
+    .then(data => {
+      select.innerHTML = '<option value="">-- Select a network --</option>';
+      const wasConnected = data.was_connected;
+      if (data.networks && data.networks.length > 0) {
+        data.networks.forEach(net => {
+          const option = document.createElement('option');
+          option.value = net.ssid;
+          let label = net.ssid;
+          if (net.signal) label += ' (' + net.signal + '%)';
+          if (net.security) label += ' \u{1F512}';
+          if (net.current || net.ssid === wasConnected) {
+            label += ' (was connected)';
+            option.selected = true;
+          }
+          option.innerHTML = label;
+          select.appendChild(option);
+        });
+        let statusMsg = 'Found ' + data.networks.length + ' network(s).';
+        if (wasConnected) {
+          statusMsg += ' WiFi disconnected - select network to reconnect.';
+        }
+        status.textContent = statusMsg;
+      } else {
+        status.textContent = 'No networks found. Try again.';
+      }
+    })
+    .catch(err => { status.textContent = 'Scan failed: ' + err.message; })
+    .finally(() => { btn.disabled = false; btn.textContent = 'Scan'; });
+}
+
+function useManualSsid() {
+  const manual = document.getElementById('manualSsid').value.trim();
+  const select = document.getElementById('wifiSelect');
+  if (manual) {
+    let found = false;
+    for (let opt of select.options) {
+      if (opt.value === manual) { opt.selected = true; found = true; break; }
+    }
+    if (!found) {
+      const option = document.createElement('option');
+      option.value = manual;
+      option.textContent = manual + ' (manual)';
+      option.selected = true;
+      select.appendChild(option);
+    }
+  }
+}
+
+// Auto-scan WiFi when "Change Network" is expanded
+document.getElementById('wifiChangeDetails').addEventListener('toggle', function(e) {
+  if (this.open) {
+    scanWifi();
+  }
+});
+</script>
+
+<!-- ===== ETHERNET NETWORK ===== -->
+<div class="card" id="ethernet-section">
+  <h3>Ethernet Network</h3>
+
+  <!-- Current Network Status -->
+  <div class="network-status-display mb-3">
+    <div class="network-status-row">
+      <span class="network-status-label">Ethernet:</span>
+      <span id="ethCableStatus" class="network-status-value">Checking...</span>
+    </div>
+    <div class="network-status-row">
+      <span class="network-status-label">Pi IP:</span>
+      <code id="ethCurrentIp">{{ ethernet_config.current_ip or 'Not assigned' }}</code>
+      <span class="muted" id="ethMode">({{ ethernet_config.mode }})</span>
+    </div>
+    {% if controllers and controllers|length > 0 %}
+    <div class="network-status-row">
+      <span class="network-status-label">Controllers:</span>
+      <span id="controllerStatus">Checking connectivity...</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Quick Setup for Controller -->
+  <div class="quick-setup-section">
+    <h4 class="settings-section__title">Quick Setup</h4>
+    <p class="form-hint mb-2">Enter your controller's IP and we'll configure the Pi to connect to it.</p>
+    <form id="quickSetupForm" onsubmit="return quickSetupCalculate(event)">
+      <div class="input-row">
+        <input type="text" id="controllerIpInput" name="controller_ip" placeholder="e.g. 192.168.200.11" pattern="^(\d{1,3}\.){3}\d{1,3}$" class="mono">
+        <button type="submit" class="btn btn--sm">Auto-Configure</button>
+      </div>
+      <p class="form-hint mt-2">
+        <a href="#" onclick="showControllerHelp(); return false;">Help me find my controller IP</a> |
+        <a href="{{ url_for('main.network_wizard') }}">Run Network Wizard</a>
+      </p>
+    </form>
+
+    <!-- Quick Setup Result (hidden until calculated) -->
+    <div id="quickSetupResult" style="display: none;" class="mt-3">
+      <div class="quick-setup-preview">
+        <div class="preview-row">
+          <span class="preview-label">Controller IP:</span>
+          <code id="previewControllerIp"></code>
+        </div>
+        <div class="preview-row">
+          <span class="preview-label">Pi will be set to:</span>
+          <code id="previewPiIp"></code>
+        </div>
+        <div class="preview-row" id="previewAvailability">
+          <span class="preview-label">IP Status:</span>
+          <span id="previewIpStatus">Checking...</span>
+        </div>
+      </div>
+      <div class="btn-row mt-3">
+        <button type="button" class="btn btn--sm" onclick="applyQuickSetup()">Apply Configuration</button>
+        <button type="button" class="btn btn--sm btn--secondary" onclick="cancelQuickSetup()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controller IP Help Modal -->
+  <div id="controllerHelpModal" style="display: none;" class="help-modal mt-3">
+    <h4>Finding Your Controller IP</h4>
+    <div class="help-content">
+      <details open>
+        <summary><strong>Ezetrol Touch</strong></summary>
+        <ol>
+          <li>Press <strong>Menu</strong> on the controller</li>
+          <li>Navigate to <strong>Network</strong> or <strong>Settings</strong></li>
+          <li>Look for <strong>IP Address</strong></li>
+        </ol>
+      </details>
+      <details>
+        <summary><strong>BAYROL</strong></summary>
+        <ol>
+          <li>Press <strong>Settings</strong> button</li>
+          <li>Navigate to <strong>Network Info</strong></li>
+          <li>IP Address is displayed on screen</li>
+        </ol>
+      </details>
+      <details>
+        <summary><strong>DULCOPOOL</strong></summary>
+        <ol>
+          <li>Go to <strong>System</strong> menu</li>
+          <li>Select <strong>IP Config</strong></li>
+          <li>The IP address is shown</li>
+        </ol>
+      </details>
+      <details>
+        <summary><strong>Walchem WebMaster</strong></summary>
+        <ol>
+          <li>Press <strong>Menu</strong> on the controller</li>
+          <li>Navigate to <strong>Communications</strong> &rarr; <strong>Modbus TCP</strong></li>
+          <li>IP Address is displayed on screen</li>
+        </ol>
+      </details>
+      <p class="form-hint mt-3">Don't know? Your pool installer should have this information.</p>
+    </div>
+    <button type="button" class="btn btn--sm btn--secondary mt-2" onclick="hideControllerHelp()">Close</button>
+  </div>
+
+  <div class="settings-divider"></div>
+
+  <!-- Manual Ethernet Configuration (collapsed) -->
+  <details>
+    <summary class="settings-toggle">Manual Ethernet Configuration</summary>
+    <div class="settings-collapsed mt-3">
+      <form method="post" action="{{ url_for('main.update_ethernet') }}" id="ethernetForm">
+        <div class="form-stack">
+          <div class="form-field">
+            <label>Mode</label>
+            <div class="mode-toggle">
+              <label class="mode-option {% if ethernet_config.mode == 'dhcp' %}active{% endif %}">
+                <input type="radio" name="eth_mode" value="dhcp" {% if ethernet_config.mode == 'dhcp' %}checked{% endif %} onchange="toggleEthernetMode()">
+                DHCP (Auto)
+              </label>
+              <label class="mode-option {% if ethernet_config.mode == 'static' %}active{% endif %}">
+                <input type="radio" name="eth_mode" value="static" {% if ethernet_config.mode == 'static' %}checked{% endif %} onchange="toggleEthernetMode()">
+                Static IP
+              </label>
+            </div>
+          </div>
+
+          <div id="staticIpFields" {% if ethernet_config.mode == 'dhcp' %}style="display:none;"{% endif %}>
+            <div class="form-field">
+              <label>IP Address</label>
+              <input type="text" name="eth_ip" value="{{ ethernet_config.ip }}" placeholder="192.168.200.100" class="mono" pattern="^(\d{1,3}\.){3}\d{1,3}$">
+            </div>
+            <div class="form-field">
+              <label>Subnet Mask (CIDR)</label>
+              <select name="eth_netmask">
+                <option value="24" {% if ethernet_config.netmask == '24' %}selected{% endif %}>/24 (255.255.255.0)</option>
+                <option value="16" {% if ethernet_config.netmask == '16' %}selected{% endif %}>/16 (255.255.0.0)</option>
+                <option value="8" {% if ethernet_config.netmask == '8' %}selected{% endif %}>/8 (255.0.0.0)</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Gateway (optional)</label>
+              <input type="text" name="eth_gateway" value="{{ ethernet_config.gateway }}" placeholder="192.168.200.1" class="mono">
+            </div>
+          </div>
+        </div>
+        <button class="btn btn--full mt-3">Save Ethernet Configuration</button>
+      </form>
+    </div>
+  </details>
+</div>
+
+<style>
+.network-status-display {
+  background: var(--color-surface-raised);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.network-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+.network-status-row:not(:last-child) {
+  border-bottom: 1px solid var(--color-border);
+}
+.network-status-label {
+  min-width: 100px;
+  color: var(--color-text-muted);
+}
+.network-status-value {
+  font-weight: 500;
+}
+.network-status-ok { color: #10b981; }
+.network-status-warn { color: #f59e0b; }
+.network-status-error { color: #ef4444; }
+
+.quick-setup-section {
+  background: var(--color-accent-light);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.quick-setup-preview {
+  background: var(--color-surface);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.preview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+.preview-label {
+  min-width: 140px;
+  color: var(--color-text-muted);
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 8px;
+}
+.mode-option {
+  flex: 1;
+  padding: 12px;
+  text-align: center;
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mode-option:hover {
+  border-color: var(--color-accent);
+}
+.mode-option.active {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
+}
+.mode-option input {
+  display: none;
+}
+
+.help-modal {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.help-modal h4 {
+  margin: 0 0 12px 0;
+}
+.help-content details {
+  margin-bottom: 8px;
+}
+.help-content ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.controller-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.status-dot.ok { background: #10b981; }
+.status-dot.error { background: #ef4444; }
+.status-dot.checking { background: #9ca3af; animation: pulse 1s infinite; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+</style>
+
+<script>
+// Check ethernet cable status on load
+(function() {
+  fetch('/settings/network/cable-status')
+    .then(r => r.json())
+    .then(data => {
+      const el = document.getElementById('ethCableStatus');
+      if (data.connected) {
+        el.innerHTML = '<span class="network-status-ok">&#9679; Connected</span>';
+      } else {
+        el.innerHTML = '<span class="network-status-error">&#9679; ' + (data.message || 'Not connected') + '</span>';
+      }
+    })
+    .catch(() => {
+      document.getElementById('ethCableStatus').innerHTML = '<span class="muted">Unable to check</span>';
+    });
+
+  // Check controller connectivity
+  {% if controllers and controllers|length > 0 %}
+  checkControllerConnectivity();
+  {% endif %}
+})();
+
+{% if controllers and controllers|length > 0 %}
+function checkControllerConnectivity() {
+  const controllers = {{ controllers|tojson }};
+  const statusEl = document.getElementById('controllerStatus');
+  let results = [];
+
+  const promises = controllers.filter(c => c.enabled).map(controller => {
+    return fetch('/settings/network/ping?host=' + encodeURIComponent(controller.host))
+      .then(r => r.json())
+      .then(data => ({host: controller.host, name: controller.name, ok: data.reachable}))
+      .catch(() => ({host: controller.host, name: controller.name, ok: false}));
+  });
+
+  Promise.all(promises).then(results => {
+    if (results.length === 0) {
+      statusEl.innerHTML = '<span class="muted">No controllers enabled</span>';
+      return;
+    }
+
+    const reachable = results.filter(r => r.ok).length;
+    const total = results.length;
+
+    if (reachable === total) {
+      statusEl.innerHTML = '<span class="network-status-ok">&#9679; All ' + total + ' controller(s) reachable</span>';
+    } else if (reachable > 0) {
+      statusEl.innerHTML = '<span class="network-status-warn">&#9679; ' + reachable + '/' + total + ' reachable</span>';
+    } else {
+      statusEl.innerHTML = '<span class="network-status-error">&#9679; No controllers reachable</span>';
+    }
+  });
+}
+{% endif %}
+
+// Quick Setup Functions
+let quickSetupData = null;
+
+function quickSetupCalculate(event) {
+  event.preventDefault();
+  const ip = document.getElementById('controllerIpInput').value.trim();
+  if (!ip) {
+    alert('Please enter a controller IP address');
+    return false;
+  }
+
+  // Validate IP format
+  const ipPattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  if (!ipPattern.test(ip)) {
+    alert('Invalid IP address format. Use format like 192.168.200.11');
+    return false;
+  }
+
+  // Calculate Pi IP
+  fetch('/settings/network/calculate-pi-ip?controller=' + encodeURIComponent(ip))
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      quickSetupData = data;
+      document.getElementById('previewControllerIp').textContent = ip;
+      document.getElementById('previewPiIp').textContent = data.pi_ip + '/' + data.netmask;
+      document.getElementById('previewIpStatus').innerHTML = '<span class="status-dot checking"></span> Checking...';
+      document.getElementById('quickSetupResult').style.display = 'block';
+
+      // Check if the proposed IP is available
+      fetch('/settings/network/check-ip?ip=' + encodeURIComponent(data.pi_ip))
+        .then(r => r.json())
+        .then(ipData => {
+          const statusEl = document.getElementById('previewIpStatus');
+          if (ipData.available) {
+            statusEl.innerHTML = '<span class="network-status-ok">&#9679; Available</span>';
+          } else {
+            statusEl.innerHTML = '<span class="network-status-warn">&#9679; In use - may conflict</span>';
+          }
+        });
+    })
+    .catch(err => {
+      alert('Error: ' + err.message);
+    });
+
+  return false;
+}
+
+function applyQuickSetup() {
+  if (!quickSetupData) return;
+
+  if (!confirm('Apply network configuration?\n\nPi will be set to: ' + quickSetupData.pi_ip + '\n\nThis may briefly disconnect you.')) {
+    return;
+  }
+
+  const controllerIp = document.getElementById('controllerIpInput').value.trim();
+
+  fetch('/settings/network/quick-configure', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      controller_ip: controllerIp,
+      pi_ip: quickSetupData.pi_ip,
+      netmask: quickSetupData.netmask,
+      gateway: quickSetupData.gateway
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert('Configuration applied!\n\n' + data.message);
+      location.reload();
+    } else {
+      alert('Configuration failed: ' + data.error);
+    }
+  })
+  .catch(err => {
+    alert('Error applying configuration: ' + err.message);
+  });
+}
+
+function cancelQuickSetup() {
+  document.getElementById('quickSetupResult').style.display = 'none';
+  quickSetupData = null;
+}
+
+function showControllerHelp() {
+  document.getElementById('controllerHelpModal').style.display = 'block';
+}
+
+function hideControllerHelp() {
+  document.getElementById('controllerHelpModal').style.display = 'none';
+}
+
+function toggleEthernetMode() {
+  const isDhcp = document.querySelector('input[name="eth_mode"]:checked').value === 'dhcp';
+  document.getElementById('staticIpFields').style.display = isDhcp ? 'none' : 'block';
+  document.querySelectorAll('.mode-option').forEach(opt => opt.classList.remove('active'));
+  document.querySelector('input[name="eth_mode"]:checked').closest('.mode-option').classList.add('active');
+}
+</script>
+
+<!-- ===== POOL CONTROLLERS ===== -->
+<div class="card" id="controllers-section">
+  <h3>{{ _('controllers') }}</h3>
+  <div class="controller-type-row mb-3">
+    <form method="post" action="{{ url_for('main.update_modbus_profile') }}" class="controller-type-form">
+      <label class="controller-type-label">Controller Type:</label>
+      <select name="modbus_profile" class="controller-type-select" onchange="this.form.submit()">
+        <option value="bayrol" {% if modbus_profile == 'bayrol' %}selected{% endif %}>BAYROL</option>
+        <option value="dulcopool" {% if modbus_profile == 'dulcopool' %}selected{% endif %}>DULCOPOOL</option>
+        <option value="ezetrol" {% if modbus_profile == 'ezetrol' %}selected{% endif %}>Ezetrol Touch</option>
+        <option value="walchem" {% if modbus_profile == 'walchem' %}selected{% endif %}>Walchem WebMaster</option>
+      </select>
+    </form>
+    <span class="form-hint">Port: <code>502</code></span>
+    <button type="button" class="btn btn--xs" onclick="applyDefaultPorts()">Apply to all</button>
+  </div>
+  <form method="post" action="{{ url_for('main.update_hosts') }}" id="controllersForm">
+    <div class="table-wrap">
+      <table class="table--compact">
+        <thead>
+          <tr>
+            <th style="width:40px;">On</th>
+            <th>IP Address</th>
+            <th>Name</th>
+            <th style="width:90px;">Vol (L)</th>
+            <th style="width:36px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% if controllers and controllers|length > 0 %}
+          {% for c in controllers %}
+            {% set i = loop.index0 %}
+            <tr>
+              <td><input type="checkbox" name="c_enabled__{{ i }}" {% if c.enabled %}checked{% endif %}></td>
+              <td><input class="mono" type="text" name="c_host__{{ i }}" value="{{ c.host }}" placeholder="192.168.1.x" required></td>
+              <input type="hidden" name="c_port__{{ i }}" value="{{ c.port or 502 }}">
+              <td><input type="text" name="c_name__{{ i }}" value="{{ c.name }}" placeholder="Name" required></td>
+              <td><input type="number" name="c_volume__{{ i }}" value="{{ c.volume_l or '' }}" placeholder="55000" step="any"></td>
+              <td><a href="{{ url_for('main.pool_actions_page', pool=c.name) }}" class="cog-link" title="Quick Log Actions">&#9881;</a></td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="5" class="muted text-center">No controllers configured</td></tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+    <div class="btn-row mt-3">
+      <button class="btn btn--sm" type="submit">Save</button>
+      <button class="btn btn--sm btn--secondary" type="button" onclick="addControllerRow()">+ Add</button>
+      <button class="btn btn--sm btn--secondary" type="button" id="scanNetworkBtn" onclick="scanNetwork()">Scan Network</button>
+    </div>
+  </form>
+
+  <!-- Network Scan Results -->
+  <div id="scanResults" class="mt-3" style="display: none;">
+    <div class="card-inner">
+      <h4 id="scanStatus">Scanning network...</h4>
+      <div id="scanProgress" class="muted"></div>
+      <div id="scanDevices" class="mt-2"></div>
+      <div id="scanActions" class="btn-row mt-2" style="display: none;">
+        <button class="btn btn--sm" type="button" onclick="addSelectedControllers()">Add Selected</button>
+        <button class="btn btn--sm btn--secondary" type="button" onclick="closeScanResults()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scan Specific Subnet -->
+  <details class="mt-3">
+    <summary class="summary--muted">Scan Specific Subnet</summary>
+    <div class="settings-collapsed mt-2">
+      <p class="form-hint mb-2">If you know which subnet your controller is on, enter it here to scan that specific network.</p>
+      <div class="input-row">
+        <input type="text" id="subnetInput" placeholder="e.g. 192.168.200" class="mono" style="max-width:180px;">
+        <button type="button" class="btn btn--sm" onclick="scanSpecificSubnet()">Scan Subnet</button>
+      </div>
+      <div id="subnetScanResult" class="mt-2"></div>
+    </div>
+  </details>
+</div>
+
+<style>
+.scan-help-text {
+  background: var(--color-accent-light);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+}
+.scan-help-text h5 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+}
+.scan-help-text ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+.cog-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 1.1rem;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+  display: inline-block;
+  line-height: 1;
+}
+.cog-link:hover {
+  opacity: 1;
+  color: var(--color-accent);
+}
+</style>
+
+<script>
+const brandPorts = {'bayrol': 502, 'dulcopool': 502, 'ezetrol': 502};
+function getDefaultPort() { return brandPorts['{{ modbus_profile }}'] || 502; }
+function applyDefaultPorts() {
+  document.querySelectorAll('#controllersForm input[name^="c_port__"]').forEach(input => {
+    input.value = getDefaultPort();
+  });
+}
+function addControllerRow() {
+  const tbody = document.querySelector('#controllersForm table tbody');
+  const emptyRow = tbody.querySelector('tr td[colspan]');
+  if (emptyRow) emptyRow.parentElement.remove();
+  const i = tbody.querySelectorAll('tr').length;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="checkbox" name="c_enabled__${i}" checked></td>
+    <td><input class="mono" type="text" name="c_host__${i}" placeholder="192.168.1.x" required></td>
+    <input type="hidden" name="c_port__${i}" value="${getDefaultPort()}">
+    <td><input type="text" name="c_name__${i}" placeholder="Name" required></td>
+    <td><input type="number" name="c_volume__${i}" placeholder="55000" step="any"></td>
+    <td><span class="cog-link" style="opacity:0.3;" title="Save first to configure actions">&#9881;</span></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+// Network Scanner Functions
+let discoveredDevices = [];
+
+function scanNetwork() {
+  const btn = document.getElementById('scanNetworkBtn');
+  const results = document.getElementById('scanResults');
+  const status = document.getElementById('scanStatus');
+  const progress = document.getElementById('scanProgress');
+  const devices = document.getElementById('scanDevices');
+  const actions = document.getElementById('scanActions');
+
+  btn.disabled = true;
+  btn.textContent = 'Scanning...';
+  results.style.display = 'block';
+
+  // Show current network status before scanning
+  const currentEthIp = '{{ eth_ip or "" }}';
+  if (currentEthIp) {
+    status.textContent = 'Scanning network for Modbus controllers...';
+    progress.innerHTML = 'Current Pi IP: <code>' + currentEthIp + '</code><br>Scanning connected networks...';
+  } else {
+    status.textContent = 'Scanning network for Modbus controllers...';
+    progress.innerHTML = '<span class="network-status-warn">&#9888; No ethernet IP detected.</span> Scanning may not find controllers.<br>Use the Network Setup Wizard or configure ethernet first.';
+  }
+
+  devices.innerHTML = '';
+  actions.style.display = 'none';
+  discoveredDevices = [];
+
+  fetch('/settings/scan_network')
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        discoveredDevices = data.devices || [];
+        const subnets = data.subnets_scanned || [];
+
+        if (discoveredDevices.length === 0) {
+          status.textContent = 'No Modbus controllers found';
+          progress.innerHTML = 'Scanned: ' + subnets.map(s => s.network).join(', ');
+          devices.innerHTML = `
+            <div class="scan-help-text">
+              <h5>Troubleshooting Tips:</h5>
+              <ul>
+                <li>Make sure the controller is powered on</li>
+                <li>Check the ethernet cable is connected</li>
+                <li>The Pi and controller must be on the same network</li>
+                <li>Try entering the controller IP directly if you know it</li>
+                <li>Use "Scan Specific Subnet" if controller is on a different network</li>
+              </ul>
+              <a href="{{ url_for('main.network_wizard') }}" class="btn btn--sm btn--secondary mt-2">Run Network Wizard</a>
+            </div>
+          `;
+        } else {
+          status.textContent = `Found ${discoveredDevices.length} controller(s)`;
+          progress.textContent = 'Scanned: ' + subnets.map(s => s.network).join(', ');
+
+          const existingIPs = new Set();
+          document.querySelectorAll('#controllersForm input[name^="c_host__"]').forEach(input => {
+            if (input.value) existingIPs.add(input.value.trim());
+          });
+
+          let html = '<table class="table--compact"><thead><tr><th></th><th>IP Address</th><th>Port</th><th>Status</th></tr></thead><tbody>';
+          discoveredDevices.forEach((device, idx) => {
+            const isExisting = existingIPs.has(device.ip);
+            const statusText = device.modbus_ok ?
+              '<span class="status-ok">Modbus OK</span>' :
+              '<span class="status-warn">Port open</span>';
+            const existingBadge = isExisting ? ' <span class="muted">(already added)</span>' : '';
+
+            html += `<tr>
+              <td><input type="checkbox" id="dev_${idx}" value="${device.ip}" ${isExisting ? 'disabled' : 'checked'}></td>
+              <td class="mono">${device.ip}${existingBadge}</td>
+              <td>${device.port}</td>
+              <td>${statusText}</td>
+            </tr>`;
+          });
+          html += '</tbody></table>';
+          devices.innerHTML = html;
+          actions.style.display = 'flex';
+        }
+      } else {
+        status.textContent = 'Scan failed';
+        progress.textContent = data.error || 'Unknown error';
+      }
+    })
+    .catch(err => {
+      status.textContent = 'Scan failed';
+      progress.textContent = err.message;
+    })
+    .finally(() => {
+      btn.disabled = false;
+      btn.textContent = 'Scan Network';
+    });
+}
+
+function addSelectedControllers() {
+  const selectedIPs = [];
+  discoveredDevices.forEach((device, idx) => {
+    const checkbox = document.getElementById(`dev_${idx}`);
+    if (checkbox && checkbox.checked && !checkbox.disabled) {
+      selectedIPs.push(device.ip);
+    }
+  });
+
+  if (selectedIPs.length === 0) {
+    alert('No controllers selected');
+    return;
+  }
+
+  fetch('/settings/add_discovered', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ips: selectedIPs})
+  })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        alert(`Added ${data.added} controller(s). Reloading page...`);
+        location.reload();
+      } else {
+        alert('Failed to add controllers: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(err => {
+      alert('Failed to add controllers: ' + err.message);
+    });
+}
+
+function closeScanResults() {
+  document.getElementById('scanResults').style.display = 'none';
+  discoveredDevices = [];
+}
+
+function scanSpecificSubnet() {
+  const subnet = document.getElementById('subnetInput').value.trim();
+  const resultEl = document.getElementById('subnetScanResult');
+
+  if (!subnet) {
+    resultEl.innerHTML = '<p class="status-bad">Please enter a subnet (e.g., 192.168.200)</p>';
+    return;
+  }
+
+  resultEl.innerHTML = '<p>Scanning ' + subnet + '... <span class="muted">This may take 10-30 seconds.</span></p>';
+
+  fetch('/settings/network/scan-subnet?subnet=' + encodeURIComponent(subnet))
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) {
+        resultEl.innerHTML = '<p class="status-bad">Scan failed: ' + data.error + '</p>';
+        return;
+      }
+
+      if (!data.devices || data.devices.length === 0) {
+        resultEl.innerHTML = `
+          <p class="status-warn">No controllers found on ${data.network}</p>
+          <p class="form-hint">Make sure the controller is powered on and connected to this network.</p>
+        `;
+        return;
+      }
+
+      // Get existing IPs
+      const existingIPs = new Set();
+      document.querySelectorAll('#controllersForm input[name^="c_host__"]').forEach(input => {
+        if (input.value) existingIPs.add(input.value.trim());
+      });
+
+      let html = '<p class="status-ok">Found ' + data.devices.length + ' controller(s) on ' + data.network + '</p>';
+      html += '<table class="table--compact mt-2"><thead><tr><th></th><th>IP Address</th><th>Status</th><th></th></tr></thead><tbody>';
+
+      data.devices.forEach((device, idx) => {
+        const isExisting = existingIPs.has(device.ip);
+        const statusText = device.modbus_ok ?
+          '<span class="status-ok">Modbus OK</span>' :
+          '<span class="status-warn">Port open</span>';
+        const existingBadge = isExisting ? '<span class="muted">(already added)</span>' : '';
+
+        html += `<tr>
+          <td><input type="checkbox" class="subnet-device" data-ip="${device.ip}" ${isExisting ? 'disabled checked' : 'checked'}></td>
+          <td class="mono">${device.ip} ${existingBadge}</td>
+          <td>${statusText}</td>
+          <td>
+            ${!isExisting ? '<button class="btn btn--xs" onclick="addSingleController(\'' + device.ip + '\')">Add</button>' : ''}
+          </td>
+        </tr>`;
+      });
+
+      html += '</tbody></table>';
+      html += '<button class="btn btn--sm mt-2" onclick="addSubnetControllers()">Add All Selected</button>';
+
+      resultEl.innerHTML = html;
+    })
+    .catch(err => {
+      resultEl.innerHTML = '<p class="status-bad">Scan failed: ' + err.message + '</p>';
+    });
+}
+
+function addSingleController(ip) {
+  fetch('/settings/add_discovered', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ips: [ip]})
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert('Controller added! Reloading...');
+        location.reload();
+      } else {
+        alert('Failed: ' + (data.error || 'Unknown error'));
+      }
+    });
+}
+
+function addSubnetControllers() {
+  const ips = [];
+  document.querySelectorAll('.subnet-device:checked:not(:disabled)').forEach(cb => {
+    ips.push(cb.dataset.ip);
+  });
+
+  if (ips.length === 0) {
+    alert('No controllers selected');
+    return;
+  }
+
+  fetch('/settings/add_discovered', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ips: ips})
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert('Added ' + data.added + ' controller(s). Reloading...');
+        location.reload();
+      } else {
+        alert('Failed: ' + (data.error || 'Unknown error'));
+      }
+    });
+}
+</script>
+
+<!-- ===== RS485 WATER TESTER ===== -->
+<div class="card" id="rs485-section">
+  <h3>RS485 Water Tester</h3>
+  <p class="form-hint mb-3">Configure RS485 serial water testing devices (TDS, conductivity, etc.)</p>
+
+  <form method="post" action="{{ url_for('main.update_rs485_devices') }}" id="rs485Form">
+    <div class="table-wrap">
+      <table class="table--compact">
+        <thead>
+          <tr>
+            <th style="width:40px;">On</th>
+            <th>Serial Port</th>
+            <th style="width:70px;">Baud</th>
+            <th>Name</th>
+            <th>Display Mode</th>
+          </tr>
+        </thead>
+        <tbody id="rs485DevicesBody">
+        {% if rs485_devices and rs485_devices|length > 0 %}
+          {% for dev in rs485_devices %}
+            {% set i = loop.index0 %}
+            <tr>
+              <td><input type="checkbox" name="rs485_enabled__{{ i }}" {% if dev.enabled %}checked{% endif %}></td>
+              <td>
+                <select name="rs485_port__{{ i }}" class="mono">
+                  <option value="/dev/ttyUSB0" {% if dev.port == '/dev/ttyUSB0' %}selected{% endif %}>/dev/ttyUSB0</option>
+                  <option value="/dev/ttyUSB1" {% if dev.port == '/dev/ttyUSB1' %}selected{% endif %}>/dev/ttyUSB1</option>
+                  <option value="/dev/ttyACM0" {% if dev.port == '/dev/ttyACM0' %}selected{% endif %}>/dev/ttyACM0</option>
+                  <option value="/dev/ttyAMA0" {% if dev.port == '/dev/ttyAMA0' %}selected{% endif %}>/dev/ttyAMA0</option>
+                  <option value="custom" {% if dev.port not in ['/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyACM0', '/dev/ttyAMA0'] %}selected{% endif %}>Custom...</option>
+                </select>
+                <input type="text" name="rs485_port_custom__{{ i }}"
+                       value="{% if dev.port not in ['/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyACM0', '/dev/ttyAMA0'] %}{{ dev.port }}{% endif %}"
+                       placeholder="/dev/ttyXXX"
+                       class="mono mt-1"
+                       style="display: {% if dev.port not in ['/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyACM0', '/dev/ttyAMA0'] %}block{% else %}none{% endif %};">
+              </td>
+              <td>
+                <select name="rs485_baud__{{ i }}">
+                  <option value="9600" {% if dev.baud == 9600 %}selected{% endif %}>9600</option>
+                  <option value="19200" {% if dev.baud == 19200 %}selected{% endif %}>19200</option>
+                  <option value="38400" {% if dev.baud == 38400 %}selected{% endif %}>38400</option>
+                  <option value="115200" {% if dev.baud == 115200 %}selected{% endif %}>115200</option>
+                </select>
+              </td>
+              <td><input type="text" name="rs485_name__{{ i }}" value="{{ dev.name }}" placeholder="Water Tester" required></td>
+              <td>
+                <select name="rs485_mode__{{ i }}" class="rs485-mode-select" onchange="toggleMergedPool(this, {{ i }})">
+                  <option value="standalone" {% if dev.mode == 'standalone' %}selected{% endif %}>Standalone Tab</option>
+                  <option value="merged" {% if dev.mode == 'merged' %}selected{% endif %}>Merge with Pool</option>
+                </select>
+                <select name="rs485_merged_pool__{{ i }}" class="rs485-pool-select mt-1"
+                        style="display: {% if dev.mode == 'merged' %}block{% else %}none{% endif %};">
+                  <option value="">-- Select Pool --</option>
+                  {% for c in controllers %}
+                    {% if c.enabled %}
+                    <option value="{{ c.name }}" {% if dev.merged_with_pool == c.name %}selected{% endif %}>{{ c.name }}</option>
+                    {% endif %}
+                  {% endfor %}
+                </select>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr id="rs485EmptyRow"><td colspan="5" class="muted text-center">No RS485 devices configured</td></tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+    <div class="btn-row mt-3">
+      <button class="btn btn--sm" type="submit">Save</button>
+      <button class="btn btn--sm btn--secondary" type="button" onclick="addRS485DeviceRow()">+ Add Device</button>
+      <button class="btn btn--sm btn--secondary" type="button" onclick="detectRS485Devices()">Detect Devices</button>
+    </div>
+  </form>
+
+  <details class="mt-3">
+    <summary class="summary--muted">RS485 Setup Help</summary>
+    <div class="help-modal mt-2">
+      <h4>Connecting RS485 Water Testers</h4>
+      <div class="help-content">
+        <ol>
+          <li><strong>Hardware:</strong> Connect your RS485 adapter to the Pi's USB port</li>
+          <li><strong>Wiring:</strong> Connect A/B (or D+/D-) terminals to your water tester</li>
+          <li><strong>Serial Port:</strong> Usually <code>/dev/ttyUSB0</code> for USB adapters</li>
+          <li><strong>Baud Rate:</strong> Check your device manual (common: 9600)</li>
+        </ol>
+        <p class="form-hint mt-2"><strong>Display Mode:</strong></p>
+        <ul>
+          <li><strong>Standalone:</strong> Shows as its own tab with separate charts</li>
+          <li><strong>Merged:</strong> Data appears within the selected pool's page</li>
+        </ul>
+      </div>
+    </div>
+  </details>
+</div>
+
+<style>
+.rs485-mode-select,
+.rs485-pool-select {
+  width: 100%;
+  font-size: var(--text-sm);
+}
+</style>
+
+<script>
+function toggleMergedPool(selectEl, idx) {
+  const poolSelect = selectEl.parentElement.querySelector('.rs485-pool-select');
+  if (selectEl.value === 'merged') {
+    poolSelect.style.display = 'block';
+  } else {
+    poolSelect.style.display = 'none';
+  }
+}
+
+function addRS485DeviceRow() {
+  const tbody = document.getElementById('rs485DevicesBody');
+  const emptyRow = document.getElementById('rs485EmptyRow');
+  if (emptyRow) emptyRow.remove();
+
+  const i = tbody.querySelectorAll('tr').length;
+
+  // Build pool options from controllers
+  const controllers = {{ controllers|tojson if controllers else '[]' }};
+  let poolOptions = '<option value="">-- Select Pool --</option>';
+  controllers.forEach(c => {
+    if (c.enabled) {
+      poolOptions += `<option value="${c.name}">${c.name}</option>`;
+    }
+  });
+
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="checkbox" name="rs485_enabled__${i}" checked></td>
+    <td>
+      <select name="rs485_port__${i}" class="mono" onchange="toggleCustomPort(this, ${i})">
+        <option value="/dev/ttyUSB0">/dev/ttyUSB0</option>
+        <option value="/dev/ttyUSB1">/dev/ttyUSB1</option>
+        <option value="/dev/ttyACM0">/dev/ttyACM0</option>
+        <option value="/dev/ttyAMA0">/dev/ttyAMA0</option>
+        <option value="custom">Custom...</option>
+      </select>
+      <input type="text" name="rs485_port_custom__${i}" placeholder="/dev/ttyXXX" class="mono mt-1" style="display:none;">
+    </td>
+    <td>
+      <select name="rs485_baud__${i}">
+        <option value="9600" selected>9600</option>
+        <option value="19200">19200</option>
+        <option value="38400">38400</option>
+        <option value="115200">115200</option>
+      </select>
+    </td>
+    <td><input type="text" name="rs485_name__${i}" placeholder="Water Tester" required></td>
+    <td>
+      <select name="rs485_mode__${i}" class="rs485-mode-select" onchange="toggleMergedPool(this, ${i})">
+        <option value="standalone">Standalone Tab</option>
+        <option value="merged">Merge with Pool</option>
+      </select>
+      <select name="rs485_merged_pool__${i}" class="rs485-pool-select mt-1" style="display:none;">
+        ${poolOptions}
+      </select>
+    </td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function toggleCustomPort(selectEl, idx) {
+  const customInput = selectEl.parentElement.querySelector('input[name^="rs485_port_custom"]');
+  if (selectEl.value === 'custom') {
+    customInput.style.display = 'block';
+    customInput.required = true;
+  } else {
+    customInput.style.display = 'none';
+    customInput.required = false;
+  }
+}
+
+function detectRS485Devices() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Detecting...';
+
+  fetch('/settings/rs485/detect')
+    .then(r => r.json())
+    .then(data => {
+      if (data.success && data.ports && data.ports.length > 0) {
+        let msg = 'Found serial ports:\n\n';
+        data.ports.forEach(p => {
+          msg += `${p.port}: ${p.description || 'Unknown device'}\n`;
+        });
+        alert(msg);
+      } else {
+        alert('No RS485/serial devices detected.\n\nMake sure your USB adapter is connected.');
+      }
+    })
+    .catch(err => {
+      alert('Detection failed: ' + err.message);
+    })
+    .finally(() => {
+      btn.disabled = false;
+      btn.textContent = 'Detect Devices';
+    });
+}
+
+// Handle custom port toggle on page load
+document.querySelectorAll('select[name^="rs485_port__"]').forEach(sel => {
+  sel.addEventListener('change', function() {
+    const idx = this.name.split('__')[1];
+    toggleCustomPort(this, idx);
+  });
+});
+</script>
+
+<!-- ===== QUICK LOG ACTIONS ===== -->
+<div class="card" id="quick-log-actions">
+  <h3>Quick Log Actions</h3>
+  <p class="form-hint mb-3">Use the <span class="cog-inline">&#9881;</span> icon next to each controller above to set pool-specific actions.</p>
+  <details>
+    <summary class="summary--muted">Edit Global Default Actions</summary>
+    <div class="settings-collapsed mt-2">
+      <form method="post" action="{{ url_for('main.update_actions') }}">
+        <label>One action per line (used when no pool-specific actions are set)</label>
+        <textarea name="actions_text" class="textarea--lg">{{ actions_text }}</textarea>
+        <button class="btn btn--full mt-3">{{ _('save') }}</button>
+      </form>
+    </div>
+  </details>
+</div>
+<style>
+.cog-inline {
+  display: inline-block;
+  font-size: 1rem;
+  vertical-align: middle;
+  opacity: 0.7;
+}
+</style>
+
+<!-- ===== SYSTEM LINK ===== -->
+<a href="{{ url_for('main.system_page') }}" class="system-link-card">
+  <span class="system-link-icon">&#9881;</span>
+  <div class="system-link-content">
+    <div class="system-link-title">System Settings</div>
+    <div class="system-link-description">Appearance, Updates, Storage, Screen, SSH, Advanced</div>
+  </div>
+  <span class="system-link-arrow">&rarr;</span>
+</a>
+
+{% endblock %}

@@ -1,0 +1,27 @@
+# PoolAIssistant Log Rotation Config
+# Copy to /etc/logrotate.d/poolaissistant
+
+/opt/PoolAIssistant/data/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 poolaissistant poolaissistant
+    sharedscripts
+    postrotate
+        systemctl reload poolaissistant_ui > /dev/null 2>&1 || true
+    endscript
+}
+
+/opt/PoolAIssistant/data/watchdog.log {
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    size 10M
+    create 0644 root root
+}

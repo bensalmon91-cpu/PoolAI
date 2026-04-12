@@ -1,0 +1,11 @@
+[Unit]
+Description=PoolAIssistant Remote Sync Timer
+
+[Timer]
+# Run every 6 hours - the script itself checks if it's time to sync based on settings
+OnBootSec=5min
+OnUnitActiveSec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

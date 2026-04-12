@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>{{ pool }} — Alarms</h2>
+
+<div class="card" style="margin-bottom:12px;">
+  <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <span id="statusDot" style="width:12px;height:12px;border-radius:50%;display:inline-block;background:#888;"></span>
+    <span id="lastUpdate" style="opacity:0.8;">Waiting for data…</span>
+  </div>
+</div>
+
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
+  <div class="card">
+    <h3>Active now</h3>
+    <div id="activeList"></div>
+  </div>
+
+  <div class="card">
+    <h3>Recent changes</h3>
+    <div id="recentList"></div>
+  </div>
+</div>
+
+<script>
+  const pool = {{ pool|tojson }};
+  const pollMs = 1500;
+  let lastHash = "";
+
+  function safeText(s){ return (s ?? "").toString(); }
+
+  function hashPayload(obj){
+    return JSON.stringify(obj);
+  }
+
+  function alarmTitle(item){
+    // Display label and system info if available
+    const parts = [safeText(item.label)];
+    if (item.system_name) {
+      parts.push(safeText(item.system_name));
+    }
+    return parts.join(" — ");
+  }
+
+  function rowHtml(item, isActive){
+    const present = isActive;
+    const color = present ? "#b00020" : "#0b5bd3"; // red/blue
+    const when = safeText(item.ts);
+    const v = (item.value ?? 0);
+
+    return `
+      <div style="border-left:6px solid ${color}; padding:8px 10px; margin:8px 0; border-radius:10px; background: rgba(255,255,255,0.04);">
+        <div style="display:flex; justify-content:space-between; gap:10px;">
+          <div style="font-weight:600;">${alarmTitle(item)}</div>
+          <div style="opacity:0.85; font-size:12px;">${present ? "PRESENT" : "CLEARED"}</div>
+        </div>
+        <div style="opacity:0.8; font-size:12px; margin-top:4px;">
+          ${when} &nbsp;|&nbsp; value=${v}
+        </div>
+      </div>
+    `;
+  }
+
+  function flash(el){
+    el.style.transform = "scale(1.01)";
+    el.style.transition = "transform 120ms ease";
+    setTimeout(()=>{ el.style.transform="scale(1)"; }, 150);
+  }
+
+  async function poll(){
+    try{
+      const r = await fetch(`/alarms/api/${encodeURIComponent(pool)}?limit=120`, { cache: "no-store" });
+      const data = await r.json();
+
+      const h = hashPayload(data);
+      const changed = h !== lastHash;
+      lastHash = h;
+
+      document.getElementById("lastUpdate").textContent =
+        `Updated: ${new Date().toLocaleTimeString()} — Active alarms: ${data.active.length}`;
+      document.getElementById("statusDot").style.background =
+        data.active.length ? "#b00020" : "#0b5bd3";
+
+      const activeEl = document.getElementById("activeList");
+      if (!data.active.length){
+        activeEl.innerHTML = `<div style="opacity:0.7;">No active alarms.</div>`;
+      } else {
+        activeEl.innerHTML = data.active.map(a => rowHtml(a, true)).join("");
+      }
+
+      const recentEl = document.getElementById("recentList");
+      recentEl.innerHTML = (data.recent || []).map(e => rowHtml(e, (e.value ?? 0) != 0)).join("");
+
+      if (changed){
+        flash(activeEl);
+      }
+    } catch(e){
+      document.getElementById("lastUpdate").textContent = `Error polling: ${e}`;
+      document.getElementById("statusDot").style.background = "#888";
+    } finally{
+      setTimeout(poll, pollMs);
+    }
+  }
+
+  poll();
+</script>
+
+{% endblock %}

@@ -1,0 +1,58 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PoolDash_v6 Portal</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-mark">PoolDash_v6</span>
+      <span class="brand-sub">Client Portal</span>
+    </div>
+    <nav class="site-nav">
+      <a href="index.html">Home</a>
+      <a href="pages/advertising.html">Advertising & Sales</a>
+      <a href="pages/login.html">Login</a>
+    </nav>
+  </header>
+
+  <main class="content">
+    <section class="hero">
+      <h1>Welcome to PoolDash_v6</h1>
+      <p class="lead">This is the initial draft of the client-facing portal. Use this space for announcements, key links, and next steps.</p>
+    </section>
+
+    <section class="card-grid">
+      <article class="card">
+        <h2>File Upload</h2>
+        <p>Send documents or reports to the backend script endpoint for processing.</p>
+        <form class="upload-form" action="/api/upload" method="post" enctype="multipart/form-data">
+          <label for="upload-file">Choose a file</label>
+          <input id="upload-file" name="file" type="file" required>
+          <button type="submit">Upload</button>
+        </form>
+        <p class="helper-text">Backend endpoint placeholder: <code>/api/upload</code> (login required).</p>
+      </article>
+      <article class="card">
+        <h2>Account Access</h2>
+        <p>Clients can sign in to view account details, billing, and service history.</p>
+        <a class="button" href="pages/login.html">Go to Login</a>
+      </article>
+      <article class="card">
+        <h2>Advertising & Sales</h2>
+        <p>Highlight current promotions, service plans, and seasonal packages.</p>
+        <a class="button" href="pages/advertising.html">View Advertising Page</a>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>PoolDash_v6 &copy; <span id="year"></span></span>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

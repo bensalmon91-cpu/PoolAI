@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>{{ pool }} — Alarm History & Log</h2>
+
+<div class="card" style="margin-bottom:14px;">
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:16px;">
+    <div>
+      <div style="opacity:0.7; font-size:12px;">Total Alarms</div>
+      <div style="font-size:24px; font-weight:600;">{{ stats.total }}</div>
+    </div>
+    <div>
+      <div style="opacity:0.7; font-size:12px;">Critical</div>
+      <div style="font-size:24px; font-weight:600; color:#b00020;">{{ stats.by_severity.get('critical', 0) }}</div>
+    </div>
+    <div>
+      <div style="opacity:0.7; font-size:12px;">Warnings</div>
+      <div style="font-size:24px; font-weight:600; color:#ff9800;">{{ stats.by_severity.get('warning', 0) }}</div>
+    </div>
+    <div>
+      <div style="opacity:0.7; font-size:12px;">Acknowledged</div>
+      <div style="font-size:24px; font-weight:600; color:#0b5bd3;">{{ stats.acknowledged }}</div>
+    </div>
+    <div>
+      <div style="opacity:0.7; font-size:12px;">Avg Duration</div>
+      <div style="font-size:24px; font-weight:600;">{{ (stats.avg_duration_seconds / 60) | round(1) }}m</div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:14px;">
+  <form method="get" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; align-items:end;">
+    <div>
+      <label style="font-size:12px; opacity:0.8;">Severity</label>
+      <select name="severity" style="width:100%; padding:8px; border-radius:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:inherit;">
+        <option value="">All</option>
+        <option value="critical" {% if filter_severity == 'critical' %}selected{% endif %}>Critical</option>
+        <option value="warning" {% if filter_severity == 'warning' %}selected{% endif %}>Warning</option>
+        <option value="info" {% if filter_severity == 'info' %}selected{% endif %}>Info</option>
+      </select>
+    </div>
+
+    <div>
+      <label style="font-size:12px; opacity:0.8;">Status</label>
+      <select name="acknowledged" style="width:100%; padding:8px; border-radius:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:inherit;">
+        <option value="">All</option>
+        <option value="1" {% if filter_acknowledged == '1' %}selected{% endif %}>Acknowledged</option>
+        <option value="0" {% if filter_acknowledged == '0' %}selected{% endif %}>Unacknowledged</option>
+      </select>
+    </div>
+
+    <div>
+      <label style="font-size:12px; opacity:0.8;">Since Date</label>
+      <input type="date" name="since_date" value="{{ filter_since_date or '' }}"
+             style="width:100%; padding:8px; border-radius:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:inherit;">
+    </div>
+
+    <div style="display:flex; gap:8px;">
+      <button type="submit" class="btn" style="flex:1;">Filter</button>
+      <a href="{{ url_for('alarms.alarm_history', pool=pool) }}" class="btn secondary" style="flex:1; text-align:center;">Reset</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <h3>Alarm Records ({{ alarms | length }})</h3>
+    <div style="display:flex; gap:8px;">
+      <a href="{{ url_for('alarms.export_alarm_history', pool=pool, severity=filter_severity or '', acknowledged=filter_acknowledged or '', since_date=filter_since_date or '') }}"
+         class="btn secondary">📥 Export CSV</a>
+      <form method="post" action="{{ url_for('alarms.sync_alarm_history', pool=pool) }}" style="display:inline;">
+        <button type="submit" class="btn secondary">🔄 Sync from Events</button>
+      </form>
+    </div>
+  </div>
+
+  {% if not alarms %}
+    <div style="text-align:center; padding:40px; opacity:0.7;">
+      <div style="font-size:48px; margin-bottom:16px;">📋</div>
+      <div>No alarm records found</div>
+      <div style="font-size:14px; margin-top:8px;">Try adjusting filters or sync from events</div>
+    </div>
+  {% else %}
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:2px solid rgba(255,255,255,0.1);">
+            <th style="padding:12px 8px; text-align:left; font-size:12px; opacity:0.8;">Time</th>
+            <th style="padding:12px 8px; text-align:left; font-size:12px; opacity:0.8;">Alarm</th>
+            <th style="padding:12px 8px; text-align:left; font-size:12px; opacity:0.8;">Severity</th>
+            <th style="padding:12px 8px; text-align:left; font-size:12px; opacity:0.8;">Duration</th>
+            <th style="padding:12px 8px; text-align:left; font-size:12px; opacity:0.8;">Status</th>
+            <th style="padding:12px 8px; text-align:left; font-size:12px; opacity:0.8;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for alarm in alarms %}
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.05);" id="alarm-{{ alarm.id }}">
+            <td style="padding:12px 8px; font-size:13px;">
+              <div>{{ alarm.started_ts[:10] }}</div>
+              <div style="opacity:0.6; font-size:11px;">{{ alarm.started_ts[11:19] }}</div>
+            </td>
+            <td style="padding:12px 8px;">
+              <div style="font-weight:600; font-size:13px;">{{ alarm.alarm_name or alarm.alarm_label }}</div>
+              <div style="opacity:0.6; font-size:11px;">{{ alarm.host }}</div>
+            </td>
+            <td style="padding:12px 8px;">
+              <span style="
+                font-size:10px;
+                padding:4px 8px;
+                border-radius:12px;
+                background:{% if alarm.severity == 'critical' %}#b0002022{% elif alarm.severity == 'warning' %}#ff980022{% else %}#0b5bd322{% endif %};
+                color:{% if alarm.severity == 'critical' %}#b00020{% elif alarm.severity == 'warning' %}#ff9800{% else %}#0b5bd3{% endif %};
+                font-weight:600;
+                text-transform:uppercase;
+              ">
+                {{ alarm.severity }}
+              </span>
+            </td>
+            <td style="padding:12px 8px; font-size:13px;">
+              {% if alarm.duration_seconds %}
+                {% set hours = (alarm.duration_seconds / 3600) | int %}
+                {% set mins = ((alarm.duration_seconds % 3600) / 60) | int %}
+                {% if hours > 0 %}{{ hours }}h {% endif %}{{ mins }}m
+              {% elif not alarm.ended_ts %}
+                <span style="opacity:0.6;">Ongoing</span>
+              {% else %}
+                <span style="opacity:0.6;">-</span>
+              {% endif %}
+            </td>
+            <td style="padding:12px 8px; font-size:13px;">
+              {% if alarm.acknowledged %}
+                <div style="color:#0b5bd3;">✓ Acknowledged</div>
+                <div style="opacity:0.6; font-size:11px;">by {{ alarm.acknowledged_by }}</div>
+              {% else %}
+                <span style="opacity:0.6;">Not acknowledged</span>
+              {% endif %}
+            </td>
+            <td style="padding:12px 8px;">
+              <button onclick="viewDetails({{ alarm.id }})" class="btn secondary" style="font-size:12px; padding:4px 12px;">
+                View
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Modal for alarm details -->
+<div id="detailsModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:1000; padding:20px; overflow-y:auto;">
+  <div style="max-width:800px; margin:40px auto; background:#1a1a1a; border-radius:12px; padding:24px;">
+    <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:20px;">
+      <h3>Alarm Details</h3>
+      <button onclick="closeModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:inherit; padding:0 8px;">&times;</button>
+    </div>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script>
+const alarmsData = {{ alarms | tojson }};
+
+function viewDetails(alarmId) {
+  const alarm = alarmsData.find(a => a.id === alarmId);
+  if (!alarm) return;
+
+  const modal = document.getElementById('detailsModal');
+  const content = document.getElementById('modalContent');
+
+  const severityColors = {
+    critical: '#b00020',
+    warning: '#ff9800',
+    info: '#0b5bd3'
+  };
+
+  content.innerHTML = `
+    <div class="alarm-details">
+      <div style="display:grid; gap:16px;">
+        <div>
+          <div style="opacity:0.7; font-size:12px; margin-bottom:4px;">Alarm Name</div>
+          <div style="font-size:18px; font-weight:600;">${alarm.alarm_name || alarm.alarm_label}</div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+          <div>
+            <div style="opacity:0.7; font-size:12px; margin-bottom:4px;">Severity</div>
+            <div style="color:${severityColors[alarm.severity] || '#888'}; font-weight:600;">${alarm.severity.toUpperCase()}</div>
+          </div>
+          <div>
+            <div style="opacity:0.7; font-size:12px; margin-bottom:4px;">Pool/Host</div>
+            <div>${alarm.pool} / ${alarm.host}</div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+          <div>
+            <div style="opacity:0.7; font-size:12px; margin-bottom:4px;">Started</div>
+            <div>${new Date(alarm.started_ts).toLocaleString()}</div>
+          </div>
+          <div>
+            <div style="opacity:0.7; font-size:12px; margin-bottom:4px;">Ended</div>
+            <div>${alarm.ended_ts ? new Date(alarm.ended_ts).toLocaleString() : 'Ongoing'}</div>
+          </div>
+        </div>
+
+        ${alarm.duration_seconds ? `
+          <div>
+            <div style="opacity:0.7; font-size:12px; margin-bottom:4px;">Duration</div>
+            <div>${formatDuration(alarm.duration_seconds)}</div>
+          </div>
+        ` : ''}
+
+        ${alarm.acknowledged ? `
+          <div style="background:rgba(11,91,211,0.1); padding:12px; border-radius:8px; border-left:3px solid #0b5bd3;">
+            <div style="font-weight:600; margin-bottom:8px;">✓ Acknowledged</div>
+            <div style="font-size:13px;">By: ${alarm.acknowledged_by}</div>
+            <div style="font-size:13px; opacity:0.8;">When: ${new Date(alarm.acknowledged_ts).toLocaleString()}</div>
+          </div>
+        ` : `
+          <form onsubmit="acknowledgeAlarm(event, ${alarm.id})" style="background:rgba(255,255,255,0.03); padding:16px; border-radius:8px;">
+            <h4 style="margin:0 0 12px 0;">Acknowledge Alarm</h4>
+            <div style="margin-bottom:12px;">
+              <label style="display:block; font-size:12px; opacity:0.8; margin-bottom:4px;">Your Name</label>
+              <input type="text" name="acknowledged_by" required
+                     style="width:100%; padding:8px; border-radius:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:inherit;">
+            </div>
+            <div style="margin-bottom:12px;">
+              <label style="display:block; font-size:12px; opacity:0.8; margin-bottom:4px;">Action Taken</label>
+              <textarea name="action_taken" rows="2"
+                        style="width:100%; padding:8px; border-radius:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:inherit; resize:vertical;"></textarea>
+            </div>
+            <div style="margin-bottom:12px;">
+              <label style="display:block; font-size:12px; opacity:0.8; margin-bottom:4px;">Notes</label>
+              <textarea name="notes" rows="3"
+                        style="width:100%; padding:8px; border-radius:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:inherit; resize:vertical;"></textarea>
+            </div>
+            <button type="submit" class="btn">Acknowledge</button>
+          </form>
+        `}
+
+        ${alarm.action_taken ? `
+          <div>
+            <div style="opacity:0.7; font-size:12px; margin-bottom:4px;">Action Taken</div>
+            <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:6px;">${alarm.action_taken}</div>
+          </div>
+        ` : ''}
+
+        ${alarm.notes ? `
+          <div>
+            <div style="opacity:0.7; font-size:12px; margin-bottom:4px;">Notes</div>
+            <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:6px; white-space:pre-wrap;">${alarm.notes}</div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+
+  modal.style.display = 'block';
+}
+
+function closeModal() {
+  document.getElementById('detailsModal').style.display = 'none';
+}
+
+function formatDuration(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+async function acknowledgeAlarm(event, alarmId) {
+  event.preventDefault();
+  const form = event.target;
+  const formData = new FormData(form);
+
+  try {
+    const response = await fetch(`/alarms/acknowledge/${alarmId}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        acknowledged_by: formData.get('acknowledged_by'),
+        action_taken: formData.get('action_taken'),
+        notes: formData.get('notes')
+      })
+    });
+
+    if (response.ok) {
+      alert('Alarm acknowledged successfully!');
+      window.location.reload();
+    } else {
+      alert('Failed to acknowledge alarm');
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// Close modal on background click
+document.getElementById('detailsModal').addEventListener('click', (e) => {
+  if (e.target.id === 'detailsModal') closeModal();
+});
+</script>
+
+<style>
+table tbody tr:hover {
+  background: rgba(255,255,255,0.02);
+}
+
+.btn {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #0b5bd3;
+  color: white;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  background: #0952b8;
+}
+
+.btn.secondary {
+  background: rgba(255,255,255,0.1);
+}
+
+.btn.secondary:hover {
+  background: rgba(255,255,255,0.15);
+}
+</style>
+
+{% endblock %}

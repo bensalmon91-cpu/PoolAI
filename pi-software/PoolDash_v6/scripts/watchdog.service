@@ -1,0 +1,13 @@
+[Unit]
+Description=PoolAIssistant Service Watchdog
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/python3 /opt/PoolAIssistant/app/scripts/watchdog.py
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

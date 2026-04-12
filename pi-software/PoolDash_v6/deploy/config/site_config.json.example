@@ -1,0 +1,31 @@
+{
+  "site_name": "Example Pool Site",
+  "controllers": [
+    {
+      "enabled": true,
+      "host": "192.168.1.100",
+      "name": "Main Pool",
+      "port": 502,
+      "volume_l": 50000
+    },
+    {
+      "enabled": true,
+      "host": "192.168.1.101",
+      "name": "Spa",
+      "port": 502,
+      "volume_l": 5000
+    }
+  ],
+  "modbus_profile": "ezetrol",
+  "ezetrol_layout": "CDAB",
+  "maintenance_actions": [
+    "Backwash Filter 1",
+    "Backwash Filter 2",
+    "Clean Chlorine Probe",
+    "Clean pH Probe",
+    "Add Chlorine",
+    "Add pH Up",
+    "Add pH Down",
+    "Custom note"
+  ]
+}

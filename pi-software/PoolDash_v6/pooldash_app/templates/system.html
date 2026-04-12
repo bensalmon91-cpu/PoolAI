@@ -1,0 +1,635 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-header">
+  <h2>System Settings</h2>
+  <a href="{{ url_for('main.settings') }}" class="btn btn--sm btn--secondary">&larr; Back</a>
+</div>
+
+<!-- ===== APPEARANCE SECTION ===== -->
+<div class="card">
+  <h3>Appearance</h3>
+  <form method="post" action="{{ url_for('main.update_appearance') }}">
+    <div class="settings-section">
+      <h4 class="settings-section__title">Theme</h4>
+      <div class="theme-toggle">
+        <label class="theme-option {% if appearance_theme == 'light' %}active{% endif %}">
+          <input type="radio" name="appearance_theme" value="light" {% if appearance_theme == 'light' %}checked{% endif %}>
+          Light
+        </label>
+        <label class="theme-option {% if appearance_theme == 'dark' %}active{% endif %}">
+          <input type="radio" name="appearance_theme" value="dark" {% if appearance_theme == 'dark' %}checked{% endif %}>
+          Dark
+        </label>
+        <label class="theme-option {% if appearance_theme == 'system' %}active{% endif %}">
+          <input type="radio" name="appearance_theme" value="system" {% if appearance_theme == 'system' %}checked{% endif %}>
+          System
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-section">
+      <h4 class="settings-section__title">Accent Color</h4>
+      <div class="color-swatches">
+        <label class="color-swatch color-swatch--blue {% if appearance_accent_color == 'blue' %}active{% endif %}" title="Blue">
+          <input type="radio" name="appearance_accent_color" value="blue" {% if appearance_accent_color == 'blue' %}checked{% endif %}>
+        </label>
+        <label class="color-swatch color-swatch--green {% if appearance_accent_color == 'green' %}active{% endif %}" title="Green">
+          <input type="radio" name="appearance_accent_color" value="green" {% if appearance_accent_color == 'green' %}checked{% endif %}>
+        </label>
+        <label class="color-swatch color-swatch--purple {% if appearance_accent_color == 'purple' %}active{% endif %}" title="Purple">
+          <input type="radio" name="appearance_accent_color" value="purple" {% if appearance_accent_color == 'purple' %}checked{% endif %}>
+        </label>
+        <label class="color-swatch color-swatch--orange {% if appearance_accent_color == 'orange' %}active{% endif %}" title="Orange">
+          <input type="radio" name="appearance_accent_color" value="orange" {% if appearance_accent_color == 'orange' %}checked{% endif %}>
+        </label>
+        <label class="color-swatch color-swatch--teal {% if appearance_accent_color == 'teal' %}active{% endif %}" title="Teal">
+          <input type="radio" name="appearance_accent_color" value="teal" {% if appearance_accent_color == 'teal' %}checked{% endif %}>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-section">
+      <h4 class="settings-section__title">Font Size</h4>
+      <div class="input-row">
+        <select name="appearance_font_size" class="input--flex">
+          <option value="small" {% if appearance_font_size == 'small' %}selected{% endif %}>Small</option>
+          <option value="medium" {% if appearance_font_size == 'medium' %}selected{% endif %}>Medium</option>
+          <option value="large" {% if appearance_font_size == 'large' %}selected{% endif %}>Large</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-section">
+      <label class="checkbox-label">
+        <input type="checkbox" name="appearance_compact_mode" {% if appearance_compact_mode %}checked{% endif %}>
+        <span>Compact mode (reduce padding)</span>
+      </label>
+    </div>
+
+    <button class="btn btn--full mt-3">Save Appearance</button>
+  </form>
+</div>
+
+<script>
+// Live preview for theme and color changes
+document.querySelectorAll('input[name="appearance_theme"]').forEach(input => {
+  input.addEventListener('change', function() {
+    document.documentElement.setAttribute('data-theme', this.value);
+    document.querySelectorAll('.theme-option').forEach(opt => opt.classList.remove('active'));
+    this.closest('.theme-option').classList.add('active');
+  });
+});
+
+document.querySelectorAll('input[name="appearance_accent_color"]').forEach(input => {
+  input.addEventListener('change', function() {
+    document.documentElement.setAttribute('data-accent', this.value);
+    document.querySelectorAll('.color-swatch').forEach(opt => opt.classList.remove('active'));
+    this.closest('.color-swatch').classList.add('active');
+  });
+});
+</script>
+
+<!-- ===== SOFTWARE UPDATES ===== -->
+<div class="card">
+  <h3>Software Updates</h3>
+  <div class="system-info-row">
+    <span class="muted">Current Version:</span>
+    <code>{{ app_version or "Unknown" }}</code>
+    <form method="post" action="{{ url_for('main.check_update') }}" class="m-0 ml-auto">
+      <button class="btn btn--sm btn--secondary">Check for Updates</button>
+    </form>
+  </div>
+  {% if update_status and update_status.update_available and update_status.download_path %}
+  <form method="post" action="{{ url_for('main.apply_update') }}" class="mt-2" onsubmit="return confirm('Apply update to v{{ update_status.version }}? The service will restart.')">
+    <button class="btn btn--full btn--primary">Apply Update (v{{ update_status.version }})</button>
+  </form>
+  {% elif update_status and update_status.applied %}
+  <p class="form-hint mt-2 status-ok">&#10003; Update applied! You are running the latest version.</p>
+  {% endif %}
+  {% if update_status and update_status.message and not update_status.applied %}
+  <p class="form-hint mt-2">{{ update_status.message }}</p>
+  {% endif %}
+
+  <div class="settings-divider mt-3 mb-3"></div>
+
+  <!-- Auto-Update Timer Status -->
+  <h4 class="settings-section__title">Auto-Update</h4>
+  <div id="autoUpdateStatus" class="system-info-row">
+    <span class="muted">Checking timer status...</span>
+  </div>
+</div>
+
+<script>
+(function() {
+  fetch('/settings/update_timer_status')
+    .then(r => r.json())
+    .then(data => {
+      const container = document.getElementById('autoUpdateStatus');
+      if (!data.ok) {
+        container.innerHTML = '<span class="status-bad">Failed to check timer status</span>';
+        return;
+      }
+
+      let html = '<span class="muted">Auto-Update:</span> ';
+      if (data.enabled && data.active) {
+        html += '<span class="status-ok">&#9679; Enabled</span>';
+        html += '<span class="muted ml-2">(checks daily at 3 AM)</span>';
+      } else if (data.enabled) {
+        html += '<span class="status-warn">&#9679; Enabled but not running</span>';
+        html += '<form method="post" action="/settings/enable_update_timer" class="m-0 ml-auto">';
+        html += '<button class="btn btn--sm btn--secondary">Restart Timer</button>';
+        html += '</form>';
+      } else {
+        html += '<span class="muted">&#9679; Disabled</span>';
+        html += '<form method="post" action="/settings/enable_update_timer" class="m-0 ml-auto">';
+        html += '<button class="btn btn--sm">Enable Auto-Update</button>';
+        html += '</form>';
+      }
+      container.innerHTML = html;
+    })
+    .catch(err => {
+      document.getElementById('autoUpdateStatus').innerHTML = '<span class="muted">Timer status unavailable</span>';
+    });
+})();
+</script>
+
+<!-- ===== STORAGE ===== -->
+<div class="card">
+  <h3>Storage</h3>
+  <div class="storage-grid mb-3">
+    <div class="storage-item">
+      <span class="muted">Database</span>
+      <code>{{ storage_info.total_db_size_mb }} MB</code>
+    </div>
+    <div class="storage-item">
+      <span class="muted">Disk Used</span>
+      <code>{{ storage_info.disk_used_percent }}%</code>
+    </div>
+    <div class="storage-item">
+      <span class="muted">Free Space</span>
+      <code>{{ (storage_info.disk_free_mb / 1024)|round(1) }} GB</code>
+    </div>
+  </div>
+
+  <div class="settings-divider"></div>
+
+  <h4 class="settings-section__title">External Storage</h4>
+  <div id="externalStorageInfo">
+    <p class="form-hint">Checking for external storage...</p>
+  </div>
+</div>
+
+<script>
+(function() {
+  fetch('/settings/external-storage')
+    .then(r => r.json())
+    .then(data => {
+      const container = document.getElementById('externalStorageInfo');
+      if (!data.ok) {
+        container.innerHTML = '<p class="status-bad">Failed to check storage</p>';
+        return;
+      }
+
+      let html = '';
+
+      if (data.is_symlink) {
+        html += '<div class="storage-status storage-status--external">';
+        html += '<span class="status-ok">&#9679;</span> Using <strong>External Storage</strong>';
+        html += '</div>';
+      } else {
+        html += '<div class="storage-status storage-status--internal">';
+        html += '<span class="muted">&#9679;</span> Using <strong>Internal SD Card</strong>';
+        html += '</div>';
+      }
+
+      if (data.devices && data.devices.length > 0) {
+        html += '<div class="external-devices mt-3">';
+        data.devices.forEach(dev => {
+          html += '<div class="external-device-card">';
+          html += '<div class="device-header">';
+          html += '<strong>' + (dev.model || 'Unknown Device') + '</strong>';
+          if (dev.is_active) {
+            html += ' <span class="badge badge--active">Active</span>';
+          }
+          html += '</div>';
+          html += '<div class="device-details">';
+          html += '<div class="device-row"><span class="muted">Device:</span> <code>' + dev.device + '</code></div>';
+          html += '<div class="device-row"><span class="muted">Size:</span> ' + dev.size + '</div>';
+          html += '<div class="device-row"><span class="muted">Format:</span> ' + (dev.fstype || 'Unknown') + '</div>';
+          if (dev.mounted) {
+            html += '<div class="device-row"><span class="muted">Mount:</span> <code>' + dev.mountpoint + '</code></div>';
+            html += '<div class="device-row"><span class="muted">Used:</span> ';
+            html += '<div class="usage-bar"><div class="usage-fill" style="width:' + dev.used_percent + '%"></div></div>';
+            html += ' ' + dev.used_percent + '% (' + dev.free_gb + ' GB free)</div>';
+          } else {
+            html += '<div class="device-row"><span class="status-warn">Not mounted</span></div>';
+          }
+          html += '</div>';
+
+          html += '<div class="device-actions mt-2">';
+          if (dev.is_active) {
+            html += '<form method="post" action="/settings/external-storage/disable" class="m-0">';
+            html += '<button class="btn btn--sm btn--secondary" type="submit" ';
+            html += 'onclick="return confirm(\'Revert to internal SD card storage? Data will remain on external device.\')">Disable External Storage</button>';
+            html += '</form>';
+          } else {
+            html += '<form method="post" action="/settings/external-storage/enable" class="m-0">';
+            html += '<input type="hidden" name="device" value="' + dev.device + '">';
+            html += '<button class="btn btn--sm" type="submit" ';
+            if (dev.mounted) {
+              html += 'onclick="return confirm(\'Use this device for data storage? Existing data will be migrated.\')">Use This Device</button>';
+            } else {
+              html += 'onclick="return confirm(\'Mount and use this device for data storage? The device will be formatted if needed.\')">Mount & Use This Device</button>';
+            }
+            html += '</form>';
+          }
+          html += '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      } else {
+        html += '<p class="form-hint mt-3">No external storage devices detected. Insert a USB drive to use external storage.</p>';
+      }
+
+      html += '<button class="btn btn--sm btn--secondary mt-3" type="button" onclick="location.reload()">Refresh</button>';
+      container.innerHTML = html;
+    })
+    .catch(err => {
+      document.getElementById('externalStorageInfo').innerHTML = '<p class="status-bad">Error: ' + err.message + '</p>';
+    });
+})();
+</script>
+
+<!-- ===== SCREEN ROTATION ===== -->
+<div class="card">
+  <h3>Screen Rotation</h3>
+  <form method="post" action="{{ url_for('main.update_screen_rotation') }}">
+    <div class="rotation-options">
+      <label class="rotation-option {% if screen_rotation == 0 %}active{% endif %}" data-rotation="0">
+        <input type="radio" name="screen_rotation" value="0" {% if screen_rotation == 0 %}checked{% endif %}>
+        <span class="rotation-icon">&#9634;</span>
+        <span class="rotation-label">0&deg; Normal</span>
+      </label>
+      <label class="rotation-option {% if screen_rotation == 90 %}active{% endif %}" data-rotation="90">
+        <input type="radio" name="screen_rotation" value="90" {% if screen_rotation == 90 %}checked{% endif %}>
+        <span class="rotation-icon">&#9634;</span>
+        <span class="rotation-label">90&deg; CCW</span>
+      </label>
+      <label class="rotation-option {% if screen_rotation == 180 %}active{% endif %}" data-rotation="180">
+        <input type="radio" name="screen_rotation" value="180" {% if screen_rotation == 180 %}checked{% endif %}>
+        <span class="rotation-icon">&#9634;</span>
+        <span class="rotation-label">180&deg;</span>
+      </label>
+      <label class="rotation-option {% if screen_rotation == 270 %}active{% endif %}" data-rotation="270">
+        <input type="radio" name="screen_rotation" value="270" {% if screen_rotation == 270 %}checked{% endif %}>
+        <span class="rotation-icon">&#9634;</span>
+        <span class="rotation-label">270&deg; CW</span>
+      </label>
+    </div>
+    <button class="btn btn--full mt-3" type="submit">Apply Rotation</button>
+    <p class="form-hint mt-2">Touchscreen calibration may require a reboot.</p>
+  </form>
+</div>
+
+<script>
+document.querySelectorAll('input[name="screen_rotation"]').forEach(input => {
+  input.addEventListener('change', function() {
+    document.querySelectorAll('.rotation-option').forEach(opt => opt.classList.remove('active'));
+    this.closest('.rotation-option').classList.add('active');
+  });
+});
+</script>
+
+<!-- ===== PROTECTED SETTINGS ===== -->
+<div class="card">
+  <h3>Protected Settings</h3>
+  <div id="protected-unlock">
+    <p class="form-hint mb-3">Enter password to access advanced configuration.</p>
+    <div class="input-row">
+      <input type="password" id="protected-password" placeholder="Password" style="max-width:200px;">
+      <button class="btn btn--sm" type="button" onclick="unlockProtectedSettings()">Unlock</button>
+    </div>
+    <p id="protected-error" class="status-bad mt-2" style="display:none;">Incorrect password</p>
+  </div>
+
+  <div id="protected-content" style="display:none;">
+
+    <!-- SSH -->
+    <div class="settings-section settings-section--highlight">
+      <h4 class="settings-section__title">Remote Access (SSH)</h4>
+      <p class="form-hint mb-3">Enable SSH for remote terminal access.</p>
+      <div class="btn-row">
+        <form method="post" action="{{ url_for('main.manage_ssh') }}" class="m-0">
+          <input type="hidden" name="action" value="enable">
+          <button class="btn btn--sm" onclick="return confirm('Enable SSH for remote access?')">Enable SSH</button>
+        </form>
+        <form method="post" action="{{ url_for('main.manage_ssh') }}" class="m-0">
+          <input type="hidden" name="action" value="disable">
+          <button class="btn btn--sm btn--secondary" onclick="return confirm('Disable SSH?')">Disable SSH</button>
+        </form>
+      </div>
+
+      <details class="mt-3">
+        <summary class="summary--muted">SSH Key Management</summary>
+        <div class="form-stack mt-2">
+          <form method="post" action="{{ url_for('main.manage_ssh_keys') }}">
+            <input type="hidden" name="action" value="add">
+            <div class="form-field">
+              <label>Add SSH Public Key</label>
+              <textarea name="ssh_pubkey" placeholder="Paste your SSH public key here..." rows="3" class="mono text-sm"></textarea>
+            </div>
+            <button class="btn btn--sm btn--full" type="submit">Add Key</button>
+          </form>
+          <form method="post" action="{{ url_for('main.manage_ssh_keys') }}" class="mt-2">
+            <input type="hidden" name="action" value="restore">
+            <button class="btn btn--sm btn--secondary btn--full" type="submit"
+                    onclick="return confirm('Restore SSH keys from backup?')">Restore Keys from Backup</button>
+          </form>
+          <p class="form-hint">Default: <code>ssh poolai@[ip]</code> password: <code>12345678</code></p>
+        </div>
+      </details>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <!-- Device Identity -->
+    <div class="settings-section">
+      <h4 class="settings-section__title">Device Identity</h4>
+      <div class="form-stack">
+        <div class="form-field">
+          <label>Device ID</label>
+          <code class="device-id">{{ device_id }}</code>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <!-- Chart Performance -->
+    <div class="settings-section">
+      <h4 class="settings-section__title">Chart Performance</h4>
+      <form method="post" action="{{ url_for('main.update_chart_performance') }}">
+        <label>Maximum data points per chart</label>
+        <div class="input-row">
+          <select name="chart_max_points" class="input--flex">
+            <option value="1000" {% if chart_max_points == 1000 %}selected{% endif %}>1,000 (fastest)</option>
+            <option value="2500" {% if chart_max_points == 2500 %}selected{% endif %}>2,500</option>
+            <option value="5000" {% if chart_max_points == 5000 %}selected{% endif %}>5,000 (default)</option>
+            <option value="10000" {% if chart_max_points == 10000 %}selected{% endif %}>10,000</option>
+            <option value="25000" {% if chart_max_points == 25000 %}selected{% endif %}>25,000</option>
+            <option value="50000" {% if chart_max_points == 50000 %}selected{% endif %}>50,000 (most detail)</option>
+          </select>
+          <button class="btn btn--sm" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <!-- Remote Sync -->
+    <div class="settings-section">
+      <h4 class="settings-section__title">Remote Sync (MOD Projects)</h4>
+      <p class="form-hint mb-2">
+        Upload database snapshots to your MOD Projects dashboard.
+        {% if last_remote_sync_ts %}<br><small>Last sync: {{ last_remote_sync_ts }}</small>{% endif %}
+      </p>
+      <form method="post" action="{{ url_for('main.update_remote_sync') }}">
+        <div class="form-stack">
+          <label class="checkbox-label">
+            <input type="checkbox" name="remote_sync_enabled" {% if remote_sync_enabled %}checked{% endif %}>
+            <span>Enable remote sync</span>
+          </label>
+          <div class="form-field">
+            <label>Server URL</label>
+            <input type="url" name="remote_sync_url" value="{{ remote_sync_url }}" placeholder="https://...">
+          </div>
+          <div class="form-field">
+            <label>API Key</label>
+            <input type="text" name="remote_api_key" value="{{ remote_api_key }}" placeholder="64-character key" class="mono text-sm">
+          </div>
+          <div class="form-field">
+            <label>Schedule</label>
+            <select name="remote_sync_schedule" id="syncSchedule" onchange="toggleCustomInterval()">
+              <option value="daily" {% if remote_sync_schedule == 'daily' %}selected{% endif %}>Daily</option>
+              <option value="3days" {% if remote_sync_schedule == '3days' %}selected{% endif %}>Every 3 days</option>
+              <option value="weekly" {% if remote_sync_schedule == 'weekly' %}selected{% endif %}>Weekly</option>
+              <option value="custom" {% if remote_sync_schedule == 'custom' %}selected{% endif %}>Custom</option>
+            </select>
+          </div>
+          <div id="customIntervalDiv" class="form-field" style="{% if remote_sync_schedule != 'custom' %}display:none;{% endif %}">
+            <label>Custom interval (hours)</label>
+            <input type="number" name="remote_sync_interval_hours" value="{{ remote_sync_interval_hours }}" min="1" max="720" style="width:100px;">
+          </div>
+        </div>
+        <div class="btn-row mt-3">
+          <button class="btn btn--sm" type="submit">Save</button>
+          <button class="btn btn--sm btn--secondary" type="submit" name="action" value="reset"
+                  onclick="return confirm('Reset sync settings?')">Reset</button>
+        </div>
+      </form>
+      <form method="post" action="{{ url_for('main.trigger_remote_sync') }}" class="mt-3">
+        <button class="btn btn--sm btn--secondary btn--full" type="submit"
+                onclick="return confirm('Start a manual sync now?')"
+                {% if not remote_sync_enabled or not remote_api_key %}disabled title="Enable sync first"{% endif %}>
+          Sync Now
+        </button>
+      </form>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <!-- Data Retention -->
+    <div class="settings-section">
+      <h4 class="settings-section__title">Data Retention</h4>
+      <form method="post" action="{{ url_for('main.update_data_retention') }}">
+        <label class="checkbox-label mb-3">
+          <input type="checkbox" name="data_retention_enabled" {% if data_retention_enabled %}checked{% endif %}>
+          <span>Enable automatic data cleanup</span>
+        </label>
+        <div class="retention-grid">
+          <div class="form-field">
+            <label>Full resolution</label>
+            <div class="input-row">
+              <input type="number" name="data_retention_full_days" value="{{ data_retention_full_days }}" min="1" max="365" style="width:70px;">
+              <span>days</span>
+            </div>
+          </div>
+          <div class="form-field">
+            <label>Hourly averages</label>
+            <div class="input-row">
+              <input type="number" name="data_retention_hourly_days" value="{{ data_retention_hourly_days }}" min="1" max="730" style="width:70px;">
+              <span>days</span>
+            </div>
+          </div>
+          <div class="form-field">
+            <label>Daily averages</label>
+            <div class="input-row">
+              <input type="number" name="data_retention_daily_days" value="{{ data_retention_daily_days }}" min="1" max="3650" style="width:70px;">
+              <span>days</span>
+            </div>
+          </div>
+        </div>
+        <div class="btn-row mt-3">
+          <button class="btn btn--sm" type="submit">Save</button>
+          <button class="btn btn--sm btn--secondary" type="submit" name="action" value="reset"
+                  onclick="return confirm('Reset retention settings?')">Reset</button>
+        </div>
+      </form>
+      <form method="post" action="{{ url_for('main.trigger_data_cleanup') }}" class="mt-3">
+        <button class="btn btn--sm btn--secondary btn--full" type="submit"
+                onclick="return confirm('Run data cleanup now?')"
+                {% if not data_retention_enabled %}disabled title="Enable retention first"{% endif %}>
+          Run Cleanup Now
+        </button>
+      </form>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <!-- Backend Credentials (Debug) -->
+    <details>
+      <summary class="summary--muted">Backend Credentials (Debug)</summary>
+      <form method="post" action="{{ url_for('main.update_backend_credentials') }}" class="form-stack mt-2">
+        <div class="form-field">
+          <label>Server URL</label>
+          <input type="text" name="backend_url" value="{{ backend_url }}" placeholder="https://...">
+        </div>
+        <div class="form-field">
+          <label>Bootstrap Secret</label>
+          <div class="input-row">
+            <input type="password" name="bootstrap_secret" value="{{ bootstrap_secret }}" id="bootstrap-secret" class="input--flex">
+            <button class="btn btn--sm btn--secondary" type="button" onclick="toggleSecretVisibility()">Show</button>
+          </div>
+        </div>
+        <button class="btn btn--sm btn--full">Save</button>
+      </form>
+    </details>
+
+    <div class="settings-divider"></div>
+
+    <!-- Setup Wizard -->
+    <div class="settings-section">
+      <h4 class="settings-section__title">Setup Wizard</h4>
+      <p class="form-hint mb-3">Run the initial setup wizard again to reconfigure language, theme, WiFi, and controllers.</p>
+      <form method="post" action="{{ url_for('main.restart_wizard') }}" class="m-0">
+        <button class="btn btn--secondary btn--full" type="submit"
+                onclick="return confirm('This will restart the setup wizard. Your existing settings will be preserved. Continue?')">
+          Run Setup Wizard Again
+        </button>
+      </form>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <!-- Danger Zone -->
+    <details>
+      <summary class="summary--danger">Danger Zone</summary>
+      <div class="card card--danger mt-3">
+        <p class="form-hint mb-3">These actions cannot be undone.</p>
+        <div class="btn-row">
+          <form method="post" action="{{ url_for('main.clear_alarms') }}" class="m-0" onsubmit="return confirm('Clear all active alarms?')">
+            <button class="btn btn--sm btn--danger">Clear Alarms</button>
+          </form>
+          <form method="post" action="{{ url_for('main.clear_db') }}" class="m-0" onsubmit="return confirm('DELETE all maintenance logs?')">
+            <input type="hidden" name="target" value="maintenance">
+            <button class="btn btn--sm btn--danger">Clear Maintenance</button>
+          </form>
+          <form method="post" action="{{ url_for('main.clear_db') }}" class="m-0" onsubmit="return confirm('DELETE all readings? This is permanent!')">
+            <input type="hidden" name="target" value="readings">
+            <button class="btn btn--sm btn--danger">Clear Readings</button>
+          </form>
+        </div>
+
+        <div class="settings-divider mt-3 mb-3"></div>
+
+        <h4 class="settings-section__title" style="color: var(--danger);">Factory Reset</h4>
+        <p class="form-hint mb-3">Reset device to factory defaults. This will delete ALL data, clear ALL settings, and restart the setup wizard.</p>
+        <form method="post" action="{{ url_for('main.factory_reset') }}" class="m-0" onsubmit="return confirm('FACTORY RESET: This will DELETE all data and settings. The device will restart and show the setup wizard. Are you absolutely sure?')">
+          <input type="hidden" name="password" id="factory-reset-password" value="">
+          <button class="btn btn--danger btn--full">Factory Reset</button>
+        </form>
+      </div>
+    </details>
+
+    <div class="settings-divider"></div>
+
+    <!-- System Actions -->
+    <div class="settings-section">
+      <h4 class="settings-section__title">System Actions</h4>
+      <div class="btn-row">
+        <form method="post" action="{{ url_for('main.restart_logger') }}" class="m-0" onsubmit="return confirm('Restart the logger?')">
+          <button class="btn btn--sm btn--secondary">Restart Logger</button>
+        </form>
+        <a class="btn btn--sm btn--secondary" href="{{ url_for('main.export_data') }}">Export Data</a>
+        <form method="post" action="{{ url_for('main.reboot_device') }}" class="m-0" onsubmit="return confirm('Reboot now?')">
+          <button class="btn btn--sm btn--secondary">Reboot</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <!-- Debug Info -->
+    <div class="settings-section">
+      <h4 class="settings-section__title">Debug Info</h4>
+      <div class="debug-grid">
+        <div class="debug-row">
+          <span class="muted">Backend URL</span>
+          <code>{{ backend_url or '-' }}</code>
+        </div>
+        <div class="debug-row">
+          <span class="muted">Device ID</span>
+          <code>{{ device_id or '-' }}</code>
+        </div>
+        <div class="debug-row">
+          <span class="muted">Software Version</span>
+          <code>{{ app_version or '-' }}</code>
+        </div>
+        <div class="debug-row">
+          <span class="muted">Modbus Profile</span>
+          <code>{{ modbus_profile or '-' }}</code>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function unlockProtectedSettings() {
+  var pwd = document.getElementById('protected-password').value;
+  if (pwd === 'PoolAI') {
+    document.getElementById('protected-unlock').style.display = 'none';
+    document.getElementById('protected-content').style.display = 'block';
+    document.getElementById('protected-error').style.display = 'none';
+    // Store password for factory reset form
+    document.getElementById('factory-reset-password').value = pwd;
+    // Scroll to protected content
+    document.getElementById('protected-content').scrollIntoView({behavior: 'smooth', block: 'start'});
+  } else {
+    document.getElementById('protected-error').style.display = 'block';
+  }
+}
+document.getElementById('protected-password').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); unlockProtectedSettings(); }
+});
+
+function toggleCustomInterval() {
+  document.getElementById('customIntervalDiv').style.display =
+    (document.getElementById('syncSchedule').value === 'custom') ? 'block' : 'none';
+}
+
+function toggleSecretVisibility() {
+  const input = document.getElementById('bootstrap-secret');
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+</script>
+
+{% endblock %}

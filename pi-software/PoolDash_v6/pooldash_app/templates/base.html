@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="en" data-theme="{{ appearance_theme or 'light' }}" data-accent="{{ appearance_accent_color or 'blue' }}" data-font-size="{{ appearance_font_size or 'medium' }}"{% if appearance_compact_mode %} data-compact="true"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="PoolAIssistant - Pool monitoring and control dashboard">
+  <title>PoolAIssistant</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#4a90e2">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="PoolAI">
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+
+  <!-- Icons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/favicon-32.png') }}">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/touch.css') }}">
+  {# Theme CSS variable overrides based on appearance settings #}
+  <style>
+    :root {
+      {% if appearance_theme == 'dark' %}
+      --color-bg: #0d1b2a;
+      --color-bg-subtle: #1b2838;
+      --color-surface: #1e3a5f;
+      --color-surface-raised: #254670;
+      --color-text: #e6f2ff;
+      --color-text-muted: #9cccff;
+      --color-border: #3d5a80;
+      --color-border-strong: #5d8bc7;
+      --color-accent-light: #1e3a5f;
+      {% endif %}
+
+      {% if appearance_accent_color == 'green' %}
+      --color-accent: #10b981;
+      --color-accent-light: {% if appearance_theme == 'dark' %}#0a4d3a{% else %}#d1fae5{% endif %};
+      {% elif appearance_accent_color == 'purple' %}
+      --color-accent: #8b5cf6;
+      --color-accent-light: {% if appearance_theme == 'dark' %}#3b2d6e{% else %}#ede9fe{% endif %};
+      {% elif appearance_accent_color == 'orange' %}
+      --color-accent: #f97316;
+      --color-accent-light: {% if appearance_theme == 'dark' %}#5c2d0a{% else %}#ffedd5{% endif %};
+      {% elif appearance_accent_color == 'teal' %}
+      --color-accent: #14b8a6;
+      --color-accent-light: {% if appearance_theme == 'dark' %}#0a4d47{% else %}#ccfbf1{% endif %};
+      {% endif %}
+
+      {% if appearance_font_size == 'small' %}
+      --text-xs: 10px;
+      --text-sm: 12px;
+      --text-base: 14px;
+      --text-md: 15px;
+      --text-lg: 16px;
+      --text-xl: 17px;
+      --text-2xl: 20px;
+      --text-3xl: 24px;
+      {% elif appearance_font_size == 'large' %}
+      --text-xs: 13px;
+      --text-sm: 15px;
+      --text-base: 17px;
+      --text-md: 18px;
+      --text-lg: 19px;
+      --text-xl: 21px;
+      --text-2xl: 26px;
+      --text-3xl: 32px;
+      {% endif %}
+    }
+    {% if appearance_compact_mode %}
+    .card { padding: var(--space-3); }
+    .settings-section { margin-bottom: var(--space-3); }
+    .btn { min-height: 40px; }
+    .tab { min-height: 40px; padding: var(--space-2) var(--space-4); }
+    {% endif %}
+  </style>
+  {# Optional extra <head> content (e.g., Plotly) provided by routes like charts.py #}
+  {% if head_extra %}{{ head_extra|safe }}{% endif %}
+</head>
+<body>
+  <!-- Skip to main content link for accessibility -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- TABS (edit names in config.py) -->
+  <nav class="tabs" role="navigation" aria-label="Main navigation">
+    {% for p in pools %}
+      <a class="tab {{ 'active' if active_tab==p else '' }}" href="{{ url_for('main.pool_page', pool=p) }}" {% if active_tab==p %}aria-current="page"{% endif %}>{{ p }}</a>
+    {% endfor %}
+    <a class="tab {{ 'active' if active_tab=='AI' else '' }}" href="{{ url_for('ai.index') }}" {% if active_tab=='AI' %}aria-current="page"{% endif %}>AI</a>
+    <a class="tab {{ 'active' if active_tab=='Settings' else '' }}" href="{{ url_for('main.settings') }}" {% if active_tab=='Settings' %}aria-current="page"{% endif %}>Settings</a>
+  </nav>
+
+  <!-- ALARM STATUS STRIP (color-based, non-intrusive) -->
+  <div id="alarmStrip" class="alarm-strip" role="status" aria-live="polite" aria-atomic="true">
+    <span class="alarm-strip__icon"></span>
+    <span class="alarm-strip__text"></span>
+    <button class="alarm-strip__dismiss" onclick="dismissAlarmStrip()" aria-label="Dismiss">×</button>
+  </div>
+
+  <!-- FLASH MESSAGES -->
+  {% include '_flash.html' %}
+
+  <main id="main-content" class="wrap card scrollable" role="main">
+{% block content %}
+    {% if content_template %}
+      {# Normal: supply a template path like "pool.html" #}
+      {% include content_template %}
+    {% elif content_template_string %}
+      {# Advanced: render a raw template string with variables #}
+      {{ render_template_string(content_template_string, **(template_vars or {})) }}
+    {% elif content_html %}
+      {# Direct HTML (used by charts to inject the Plotly div) #}
+      {{ content_html|safe }}
+    {% else %}
+      <!-- fallback -->
+      <p>No content provided.</p>
+    {% endif %}
+{% endblock %}
+
+  </main>
+
+  <footer class="card">
+    <div class="muted small">{{ app_version }}</div>
+  </footer>
+  {# Optional: allow routes to inject tail scripts without touching the head #}
+  {% if body_extra %}{{ body_extra|safe }}{% endif %}
+  <noscript><div class="noscript-warning">This page requires JavaScript for charts.</div></noscript>
+
+  <!-- Alarm strip styles (non-intrusive color-based indicator) -->
+  <style>
+    /* Alarm strip - thin bar below tabs, doesn't cover content */
+    .alarm-strip {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: white;
+      text-align: center;
+      position: relative;
+    }
+    .alarm-strip.critical {
+      display: flex;
+      background: linear-gradient(90deg, #b00020 0%, #d32f2f 50%, #b00020 100%);
+      background-size: 200% 100%;
+      animation: alarmStripPulse 2s ease-in-out infinite;
+    }
+    .alarm-strip.warning {
+      display: flex;
+      background: linear-gradient(90deg, #e65100, #ff9800);
+    }
+    .alarm-strip__icon { font-size: 14px; }
+    .alarm-strip__text { flex: 1; }
+    .alarm-strip__dismiss {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0;
+    }
+    .alarm-strip__dismiss:hover { background: rgba(255,255,255,0.3); }
+
+    /* Tab badges */
+    .alarm-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      background: #b00020;
+      color: white;
+      border-radius: 9px;
+      padding: 0 5px;
+      font-size: 10px;
+      font-weight: 700;
+      margin-left: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .alarm-badge.warning { background: #e65100; }
+    .alarm-badge.critical { animation: badgePulse 1.5s ease-in-out infinite; }
+
+    /* Body background tint for alarms */
+    body.alarm-critical { background-color: #1a0a0a; }
+    body.alarm-warning { background-color: #1a1408; }
+
+    /* Tab highlight when alarms active */
+    .tab.has-alarm {
+      border-bottom: 3px solid #b00020;
+      padding-bottom: calc(var(--space-2) - 3px);
+    }
+    .tab.has-alarm.warning-only { border-bottom-color: #e65100; }
+
+    @keyframes alarmStripPulse {
+      0%, 100% { background-position: 0% 50%; opacity: 1; }
+      50% { background-position: 100% 50%; opacity: 0.9; }
+    }
+    @keyframes badgePulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+      50% { transform: scale(1.1); box-shadow: 0 2px 8px rgba(176,0,32,0.5); }
+    }
+  </style>
+
+  <script>
+    (function() {
+      const POLL_INTERVAL = 15000; // 15 seconds
+      const pools = {{ pools | tojson }};
+      let dismissed = false;
+      let currentSeverity = null;
+
+      // Escape HTML to prevent XSS attacks
+      function escapeHtml(s) {
+        if (s == null) return "";
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      // PROPER ALARM SEVERITY MAPPING - matches alarm_descriptions.py
+      // This fixes the issue where string matching failed for labels like "Status_LimitContactStates:b1"
+      const ALARM_SEVERITY_MAP = {
+        // pH Controller
+        "Status_Mode_Controller2_pH:b0": "warning",   // Manual Mode
+        "Status_Mode_Controller2_pH:b1": "critical",  // Error
+        "Status_Mode_Controller2_pH:b2": "critical",  // Probe Fault
+        "Status_Mode_Controller2_pH:b3": "critical",  // Pump Fault
+
+        // Chlorine Controller
+        "Status_Mode_Controller1_Chlorine:b0": "warning",   // Manual Mode
+        "Status_Mode_Controller1_Chlorine:b1": "critical",  // Error
+        "Status_Mode_Controller1_Chlorine:b2": "critical",  // Probe Fault
+        "Status_Mode_Controller1_Chlorine:b3": "critical",  // Pump Fault
+        "Status_Mode_Controller1_Chlorine:b4": "warning",   // Low Chemical
+
+        // ORP Controller
+        "Status_Mode_Controller3_ORP:b0": "warning",   // Manual Mode
+        "Status_Mode_Controller3_ORP:b2": "critical",  // Probe Fault
+
+        // Channel 4 Controller
+        "Status_Mode_Controller4_Ch4:b0": "warning",   // Manual Mode
+        "Status_Mode_Controller4_Ch4:b2": "critical",  // Probe Fault
+
+        // Limit Contacts - CRITICAL: Flow Switch is here!
+        "Status_LimitContactStates:b0": "warning",    // Limit Contact 1
+        "Status_LimitContactStates:b1": "critical",   // Flow Switch Open (FLOW FAILURE)
+        "Status_LimitContactStates:b2": "critical",   // High Level Alarm
+        "Status_LimitContactStates:b3": "warning",    // Low Level Alarm
+
+        // System Alarms
+        "Status_SystemAlarm:b0": "critical",  // General System Alarm
+        "Status_SystemAlarm:b1": "critical",  // Communication Error
+        "Status_SystemAlarm:b2": "critical",  // Power Fault
+
+        // Relay/Output states - these are INFO (not alarms)
+        "Status_RelayOutputs_K1_8:b0": "info",
+        "Status_RelayOutputs_K1_8:b1": "info",
+        "Status_RelayOutputs_K1_8:b2": "info",
+        "Status_RelayOutputs_K1_8:b3": "info",
+        "Status_RelayOutputs_K9_16:b0": "info",
+        "Status_RelayOutputs_K9_16:b1": "info",
+        "Status_RelayOutputs_K9_16:b2": "info",
+        "Status_RelayOutputs_K9_16:b3": "info",
+      };
+
+      // Get alarm severity from mapping, with fallback heuristics
+      function getAlarmSeverity(label) {
+        if (!label) return 'info';
+
+        // First check exact mapping
+        if (ALARM_SEVERITY_MAP[label]) {
+          return ALARM_SEVERITY_MAP[label];
+        }
+
+        // Fallback heuristics for unmapped alarms
+        // :b2 bits are usually probe faults (critical)
+        if (label.includes(':b2') && !label.includes('Relay')) {
+          return 'critical';
+        }
+        // :b0 bits on Mode registers are usually Manual Mode (warning)
+        if (label.includes('Mode') && label.includes(':b0')) {
+          return 'warning';
+        }
+        // Relay states are info
+        if (label.includes('Relay') || label.includes('K1_8') || label.includes('K9_16')) {
+          return 'info';
+        }
+
+        // Default to warning for unknown alarms (safer than ignoring)
+        return 'warning';
+      }
+
+      async function checkAlarms() {
+        if (!pools || pools.length === 0) return;
+
+        try {
+          let maxSeverity = null;
+          let totalCritical = 0;
+          let totalWarning = 0;
+          let poolsWithAlarms = [];
+
+          // Check each pool for alarms
+          for (const pool of pools) {
+            try {
+              const response = await fetch(`/alarms/api/${encodeURIComponent(pool)}?limit=10`, {
+                cache: 'no-store'
+              });
+              const data = await response.json();
+
+              if (data.active && data.active.length > 0) {
+                let poolCritical = 0;
+                let poolWarning = 0;
+
+                for (const alarm of data.active) {
+                  const severity = getAlarmSeverity(alarm.label);
+                  if (severity === 'critical') {
+                    totalCritical++;
+                    poolCritical++;
+                    maxSeverity = 'critical';
+                  } else if (severity === 'warning') {
+                    totalWarning++;
+                    poolWarning++;
+                    if (maxSeverity !== 'critical') {
+                      maxSeverity = 'warning';
+                    }
+                  }
+                }
+
+                const alarmCount = poolCritical + poolWarning;
+                if (alarmCount > 0) {
+                  poolsWithAlarms.push({pool, count: alarmCount, critical: poolCritical > 0});
+                }
+              }
+            } catch (e) {
+              console.error(`Failed to check alarms for ${pool}:`, e);
+            }
+          }
+
+          // Update alarm strip and body styling
+          updateAlarmStrip(maxSeverity, totalCritical, totalWarning, poolsWithAlarms);
+
+          // Update tab badges and highlights
+          updateTabBadges(poolsWithAlarms, maxSeverity);
+
+        } catch (e) {
+          console.error('Failed to check alarms:', e);
+        }
+
+        setTimeout(checkAlarms, POLL_INTERVAL);
+      }
+
+      function updateAlarmStrip(severity, critical, warning, poolsWithAlarms) {
+        const strip = document.getElementById('alarmStrip');
+        const icon = strip.querySelector('.alarm-strip__icon');
+        const text = strip.querySelector('.alarm-strip__text');
+
+        // Update body class for background tint
+        document.body.classList.remove('alarm-critical', 'alarm-warning');
+
+        if (dismissed && severity === currentSeverity) {
+          return;
+        }
+
+        if (!severity) {
+          strip.className = 'alarm-strip';
+          currentSeverity = null;
+          return;
+        }
+
+        if (severity !== currentSeverity) {
+          dismissed = false;
+          currentSeverity = severity;
+        }
+
+        if (dismissed) return;
+
+        const isCritical = severity === 'critical';
+        const poolList = poolsWithAlarms.map(p => p.pool).join(', ');
+
+        let message = '';
+        if (critical > 0 && warning > 0) {
+          message = `${critical} critical, ${warning} warning alarm${(critical + warning) > 1 ? 's' : ''} — ${poolList}`;
+        } else if (critical > 0) {
+          message = `${critical} critical alarm${critical > 1 ? 's' : ''} — ${poolList}`;
+        } else {
+          message = `${warning} warning${warning > 1 ? 's' : ''} — ${poolList}`;
+        }
+
+        icon.textContent = isCritical ? '🚨' : '⚠️';
+        text.textContent = message;
+        strip.className = `alarm-strip ${severity}`;
+
+        // Add subtle background tint
+        document.body.classList.add(isCritical ? 'alarm-critical' : 'alarm-warning');
+      }
+
+      function updateTabBadges(poolsWithAlarms, maxSeverity) {
+        // Remove existing badges and highlights
+        document.querySelectorAll('.alarm-badge').forEach(el => el.remove());
+        document.querySelectorAll('.tab').forEach(tab => {
+          tab.classList.remove('has-alarm', 'warning-only');
+        });
+
+        // Add badges to tabs with alarms
+        poolsWithAlarms.forEach(({pool, count, critical}) => {
+          const tabs = document.querySelectorAll('.tab');
+          tabs.forEach(tab => {
+            // Match tab text (excluding any existing badge text)
+            const tabText = tab.childNodes[0]?.textContent?.trim() || tab.textContent.trim();
+            if (tabText === pool) {
+              // Add badge
+              const badge = document.createElement('span');
+              badge.className = 'alarm-badge' + (critical ? ' critical' : ' warning');
+              badge.textContent = count;
+              tab.appendChild(badge);
+
+              // Add tab highlight
+              tab.classList.add('has-alarm');
+              if (!critical) {
+                tab.classList.add('warning-only');
+              }
+            }
+          });
+        });
+      }
+
+      window.dismissAlarmStrip = function() {
+        dismissed = true;
+        const strip = document.getElementById('alarmStrip');
+        strip.className = 'alarm-strip';
+        document.body.classList.remove('alarm-critical', 'alarm-warning');
+      };
+
+      // Start monitoring
+      if (pools && pools.length > 0) {
+        checkAlarms();
+      }
+    })();
+  </script>
+
+  <!-- Floating Home Button for Kiosk Mode -->
+  <a href="/" id="kioskHomeBtn" class="kiosk-home-btn" title="Home">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+      <polyline points="9 22 9 12 15 12 15 22"></polyline>
+    </svg>
+  </a>
+
+  <style>
+    .kiosk-home-btn {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 10000;
+      width: 44px;
+      height: 44px;
+      background: var(--color-accent, #4a90e2);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      text-decoration: none;
+      opacity: 0.7;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    .kiosk-home-btn:hover, .kiosk-home-btn:active {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+    /* Hide on home page */
+    body[data-page="home"] .kiosk-home-btn { display: none; }
+    /* Hide when tabs are visible (non-kiosk browsers) */
+    @media (min-width: 768px) {
+      .kiosk-home-btn { display: none; }
+    }
+  </style>
+
+  <!-- Scroll buttons for kiosk mode (only shown when content is scrollable) -->
+  <div id="scrollControls" style="position:fixed; right:15px; bottom:80px; z-index:9999; display:none; flex-direction:column; gap:8px;">
+    <button ontouchstart="scrollUp()" onclick="scrollUp()"
+            style="width:50px; height:50px; font-size:24px; background:#4a90e2; color:white;
+                   border:none; border-radius:10px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.3); opacity:0.85;">
+      ▲
+    </button>
+    <button ontouchstart="scrollDown()" onclick="scrollDown()"
+            style="width:50px; height:50px; font-size:24px; background:#4a90e2; color:white;
+                   border:none; border-radius:10px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.3); opacity:0.85;">
+      ▼
+    </button>
+  </div>
+
+  <!-- On-Screen Keyboard for Touch Devices -->
+  <div id="virtualKeyboard" class="virtual-keyboard">
+    <div class="vk-row">
+      <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+      <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+      <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+      <button data-key="0">0</button>
+    </div>
+    <div class="vk-row">
+      <button data-key="q">q</button><button data-key="w">w</button><button data-key="e">e</button>
+      <button data-key="r">r</button><button data-key="t">t</button><button data-key="y">y</button>
+      <button data-key="u">u</button><button data-key="i">i</button><button data-key="o">o</button>
+      <button data-key="p">p</button>
+    </div>
+    <div class="vk-row">
+      <button data-key="a">a</button><button data-key="s">s</button><button data-key="d">d</button>
+      <button data-key="f">f</button><button data-key="g">g</button><button data-key="h">h</button>
+      <button data-key="j">j</button><button data-key="k">k</button><button data-key="l">l</button>
+    </div>
+    <div class="vk-row">
+      <button data-action="shift" class="vk-wide">&#8679;</button>
+      <button data-key="z">z</button><button data-key="x">x</button><button data-key="c">c</button>
+      <button data-key="v">v</button><button data-key="b">b</button><button data-key="n">n</button>
+      <button data-key="m">m</button>
+      <button data-action="backspace" class="vk-wide">&#9003;</button>
+    </div>
+    <div class="vk-row">
+      <button data-action="symbols" class="vk-wide">123</button>
+      <button data-key="@">@</button>
+      <button data-key=" " class="vk-space">space</button>
+      <button data-key=".">.</button>
+      <button data-action="hide" class="vk-wide">&#9660;</button>
+    </div>
+  </div>
+
+  <!-- Symbols keyboard layer -->
+  <div id="virtualKeyboardSymbols" class="virtual-keyboard" style="display:none;">
+    <div class="vk-row">
+      <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+      <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+      <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+      <button data-key="0">0</button>
+    </div>
+    <div class="vk-row">
+      <button data-key="!">!</button><button data-key="@">@</button><button data-key="#">#</button>
+      <button data-key="$">$</button><button data-key="%">%</button><button data-key="^">^</button>
+      <button data-key="&">&amp;</button><button data-key="*">*</button><button data-key="(">(</button>
+      <button data-key=")">)</button>
+    </div>
+    <div class="vk-row">
+      <button data-key="-">-</button><button data-key="_">_</button><button data-key="=">=</button>
+      <button data-key="+">+</button><button data-key="[">[</button><button data-key="]">]</button>
+      <button data-key="{">{</button><button data-key="}">}</button><button data-key="|">|</button>
+    </div>
+    <div class="vk-row">
+      <button data-key=";">;​</button><button data-key=":">:</button><button data-key="'">'</button>
+      <button data-key='"'>"</button><button data-key=",">,</button><button data-key=".">.</button>
+      <button data-key="/">/</button><button data-key="?">?</button>
+      <button data-action="backspace" class="vk-wide">&#9003;</button>
+    </div>
+    <div class="vk-row">
+      <button data-action="abc" class="vk-wide">ABC</button>
+      <button data-key="@">@</button>
+      <button data-key=" " class="vk-space">space</button>
+      <button data-key=".">.</button>
+      <button data-action="hide" class="vk-wide">&#9660;</button>
+    </div>
+  </div>
+
+  <style>
+    .virtual-keyboard {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--color-surface, #2a2a2a);
+      border-top: 1px solid var(--color-border, #444);
+      padding: 8px;
+      z-index: 10001;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+    }
+    .virtual-keyboard.active {
+      display: block;
+    }
+    .vk-row {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+    .virtual-keyboard button {
+      min-width: 32px;
+      height: 44px;
+      border: none;
+      border-radius: 6px;
+      background: var(--color-surface-raised, #3a3a3a);
+      color: var(--color-text, #fff);
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.1s;
+      flex: 1;
+      max-width: 48px;
+    }
+    .virtual-keyboard button:active {
+      background: var(--color-accent, #4a90e2);
+    }
+    .virtual-keyboard button.vk-wide {
+      min-width: 50px;
+      max-width: 70px;
+      font-size: 14px;
+    }
+    .virtual-keyboard button.vk-space {
+      min-width: 120px;
+      max-width: 200px;
+      flex: 3;
+    }
+    .virtual-keyboard button.vk-shift-active {
+      background: var(--color-accent, #4a90e2);
+    }
+    /* Adjust main content when keyboard is open */
+    body.keyboard-open #main-content {
+      margin-bottom: 220px;
+    }
+    body.keyboard-open #scrollControls {
+      bottom: 240px;
+    }
+    /* Hide keyboard by default - JS will show it on touch devices */
+    .virtual-keyboard { display: none !important; }
+    /* When active class is added, show it */
+    .virtual-keyboard.active { display: flex !important; }
+  </style>
+
+  <script>
+  (function() {
+    // Virtual Keyboard Controller
+    const keyboard = document.getElementById('virtualKeyboard');
+    const symbolsKeyboard = document.getElementById('virtualKeyboardSymbols');
+    let activeInput = null;
+    let shiftActive = false;
+    let isTouchDevice = false;
+    let keyboardEnabled = false;
+
+    // Detect touch device - more robust detection
+    function detectTouch() {
+      // Check multiple indicators of touch capability
+      isTouchDevice = ('ontouchstart' in window) ||
+                      (navigator.maxTouchPoints > 0) ||
+                      (navigator.msMaxTouchPoints > 0) ||
+                      window.matchMedia('(pointer: coarse)').matches ||
+                      /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                      // Pi kiosk detection - Chromium on arm with small screen
+                      (navigator.userAgent.includes('Linux') && window.screen.width <= 1024);
+      return isTouchDevice;
+    }
+
+    // Initialize keyboard on page load
+    if (detectTouch()) {
+      keyboardEnabled = true;
+      console.log('Virtual keyboard enabled - touch device detected');
+    }
+
+    function showKeyboard(input) {
+      if (!keyboardEnabled) return;
+      activeInput = input;
+      keyboard.classList.add('active');
+      symbolsKeyboard.classList.remove('active');
+      document.body.classList.add('keyboard-open');
+      // Scroll input into view
+      setTimeout(() => {
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+
+    function hideKeyboard() {
+      keyboard.classList.remove('active');
+      symbolsKeyboard.classList.remove('active');
+      document.body.classList.remove('keyboard-open');
+      activeInput = null;
+      shiftActive = false;
+      updateShiftState();
+    }
+
+    function insertChar(char) {
+      if (!activeInput) return;
+      const start = activeInput.selectionStart;
+      const end = activeInput.selectionEnd;
+      const value = activeInput.value;
+
+      if (shiftActive && char.length === 1 && char.match(/[a-z]/)) {
+        char = char.toUpperCase();
+        shiftActive = false;
+        updateShiftState();
+      }
+
+      activeInput.value = value.substring(0, start) + char + value.substring(end);
+      activeInput.selectionStart = activeInput.selectionEnd = start + char.length;
+      activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function doBackspace() {
+      if (!activeInput) return;
+      const start = activeInput.selectionStart;
+      const end = activeInput.selectionEnd;
+      const value = activeInput.value;
+
+      if (start === end && start > 0) {
+        activeInput.value = value.substring(0, start - 1) + value.substring(end);
+        activeInput.selectionStart = activeInput.selectionEnd = start - 1;
+      } else if (start !== end) {
+        activeInput.value = value.substring(0, start) + value.substring(end);
+        activeInput.selectionStart = activeInput.selectionEnd = start;
+      }
+      activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function updateShiftState() {
+      document.querySelectorAll('[data-action="shift"]').forEach(btn => {
+        btn.classList.toggle('vk-shift-active', shiftActive);
+      });
+    }
+
+    // Handle keyboard button clicks
+    function handleKeyboardClick(e) {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const key = btn.dataset.key;
+      const action = btn.dataset.action;
+
+      if (key) {
+        insertChar(key);
+      } else if (action === 'backspace') {
+        doBackspace();
+      } else if (action === 'shift') {
+        shiftActive = !shiftActive;
+        updateShiftState();
+      } else if (action === 'symbols') {
+        keyboard.classList.remove('active');
+        symbolsKeyboard.classList.add('active');
+      } else if (action === 'abc') {
+        symbolsKeyboard.classList.remove('active');
+        keyboard.classList.add('active');
+      } else if (action === 'hide') {
+        hideKeyboard();
+      }
+    }
+
+    keyboard.addEventListener('click', handleKeyboardClick);
+    keyboard.addEventListener('touchend', handleKeyboardClick);
+    symbolsKeyboard.addEventListener('click', handleKeyboardClick);
+    symbolsKeyboard.addEventListener('touchend', handleKeyboardClick);
+
+    // Show keyboard on input focus (touch devices only)
+    document.addEventListener('focusin', function(e) {
+      if (e.target.matches('input[type="text"], input[type="password"], input[type="email"], input[type="search"], input[type="url"], input[type="tel"], textarea')) {
+        showKeyboard(e.target);
+      }
+    });
+
+    // Hide keyboard on tap outside
+    document.addEventListener('touchstart', function(e) {
+      if (!keyboard.contains(e.target) &&
+          !symbolsKeyboard.contains(e.target) &&
+          !e.target.matches('input, textarea')) {
+        hideKeyboard();
+      }
+    });
+
+    // Also handle Enter key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        hideKeyboard();
+      }
+    });
+  })();
+  </script>
+  <script>
+    function scrollUp() {
+      var main = document.getElementById('main-content');
+      if (main) main.scrollTop -= 150;
+    }
+    function scrollDown() {
+      var main = document.getElementById('main-content');
+      if (main) main.scrollTop += 150;
+    }
+    function checkScrollable() {
+      var main = document.getElementById('main-content');
+      var controls = document.getElementById('scrollControls');
+      if (main && controls) {
+        var canScroll = main.scrollHeight > main.clientHeight;
+        controls.style.display = canScroll ? 'flex' : 'none';
+      }
+    }
+    // Check on load and after content changes
+    window.addEventListener('load', function() {
+      setTimeout(checkScrollable, 500);
+    });
+    window.addEventListener('resize', checkScrollable);
+    // Re-check periodically in case content changes dynamically
+    setInterval(checkScrollable, 2000);
+  </script>
+
+  <!-- Scroll position preservation for settings forms -->
+  <script>
+    (function() {
+      const SCROLL_KEY = 'scrollPos_' + window.location.pathname;
+      const main = document.getElementById('main-content');
+
+      // Restore scroll position on page load
+      if (main) {
+        const savedPos = sessionStorage.getItem(SCROLL_KEY);
+        if (savedPos) {
+          // Use requestAnimationFrame to ensure DOM is ready
+          requestAnimationFrame(function() {
+            main.scrollTop = parseInt(savedPos, 10);
+          });
+          // Clear after restoring
+          sessionStorage.removeItem(SCROLL_KEY);
+        }
+      }
+
+      // Save scroll position before form submission
+      document.addEventListener('submit', function(e) {
+        if (main && e.target.tagName === 'FORM') {
+          sessionStorage.setItem(SCROLL_KEY, main.scrollTop);
+        }
+      });
+
+      // Also save on button clicks that might trigger page reload
+      document.addEventListener('click', function(e) {
+        const btn = e.target.closest('button[type="submit"], input[type="submit"]');
+        if (btn && main) {
+          sessionStorage.setItem(SCROLL_KEY, main.scrollTop);
+        }
+      });
+    })();
+  </script>
+
+  <!-- Service Worker Registration for PWA -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/static/sw.js')
+          .then(function(registration) {
+            console.log('SW registered:', registration.scope);
+          })
+          .catch(function(error) {
+            console.log('SW registration failed:', error);
+          });
+      });
+    }
+  </script>
+</body>
+</html>

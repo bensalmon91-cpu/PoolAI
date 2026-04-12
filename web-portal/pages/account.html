@@ -1,0 +1,59 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Account | PoolDash_v6</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-mark">PoolDash_v6</span>
+      <span class="brand-sub">Account Overview</span>
+    </div>
+    <nav class="site-nav">
+      <a href="../index.html">Home</a>
+      <a href="advertising.html">Advertising & Sales</a>
+      <a href="login.html">Login</a>
+    </nav>
+  </header>
+
+  <main class="content">
+    <section class="hero">
+      <h1>Account Overview</h1>
+      <p class="lead">Placeholder account details for the initial portal draft.</p>
+    </section>
+
+    <section class="card">
+      <form class="upload-form" action="/api/logout" method="post">
+        <button type="submit">Sign out</button>
+      </form>
+      <p class="helper-text">Backend endpoint placeholder: <code>/api/logout</code></p>
+      <p class="helper-text"><a href="/portal">Open client portal</a></p>
+      <p class="helper-text"><a href="/admin">Admin console (admin only)</a></p>
+    </section>
+
+    <section class="card-grid">
+      <article class="card">
+        <h2>Account Status</h2>
+        <p>Active</p>
+      </article>
+      <article class="card">
+        <h2>Service Schedule</h2>
+        <p>Next visit: TBD</p>
+      </article>
+      <article class="card">
+        <h2>Billing</h2>
+        <p>Outstanding balance: $0.00</p>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>PoolDash_v6 &copy; <span id="year"></span></span>
+  </footer>
+
+  <script src="../js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-header-row">
+  <a href="{{ url_for('main.settings') }}" class="back-link">&larr; {{ _('back') }}</a>
+</div>
+
+<h2>{{ pool_name }}</h2>
+<p class="subtitle">{{ _('maintenance_actions') }}</p>
+
+<div class="card">
+  <form method="post" action="{{ url_for('main.pool_actions_page', pool=pool_name) }}">
+    <div class="form-field">
+      <label>{{ _('actions_hint') }}</label>
+      <textarea name="actions_text" class="textarea--lg" rows="12" placeholder="Backwash Filter&#10;Clean pump strainers&#10;Check chemical levels">{{ actions_text }}</textarea>
+    </div>
+
+    <div class="form-hint-box mt-3">
+      <strong>Tip:</strong> These actions will appear as quick-tap buttons on the Maintenance page for this pool.
+      Leave empty to use the global default actions.
+    </div>
+
+    <div class="btn-row mt-4">
+      <button type="submit" class="btn">{{ _('save') }}</button>
+      <a href="{{ url_for('main.settings') }}" class="btn btn--secondary">{{ _('cancel') }}</a>
+    </div>
+  </form>
+</div>
+
+{% if global_actions %}
+<div class="card mt-4">
+  <h3>Global Default Actions</h3>
+  <p class="form-hint">These are used when no pool-specific actions are set:</p>
+  <ul class="default-actions-list">
+    {% for action in global_actions %}
+    <li>{{ action }}</li>
+    {% endfor %}
+  </ul>
+  <p class="form-hint mt-2">
+    <a href="{{ url_for('main.settings') }}#quick-log-actions">Edit global actions</a>
+  </p>
+</div>
+{% endif %}
+
+<style>
+.page-header-row {
+  margin-bottom: var(--space-3);
+}
+.back-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: var(--text-sm);
+}
+.back-link:hover {
+  color: var(--color-accent);
+}
+.subtitle {
+  color: var(--color-text-muted);
+  margin-top: calc(-1 * var(--space-2));
+  margin-bottom: var(--space-4);
+}
+.form-hint-box {
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.default-actions-list {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.default-actions-list li {
+  margin-bottom: var(--space-1);
+}
+</style>
+
+{% endblock %}

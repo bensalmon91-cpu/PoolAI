@@ -1,0 +1,47 @@
+#!/bin/bash
+# PoolAIssistant Daily Maintenance Script
+# Install to: /etc/cron.daily/poolaissistant-maintenance
+#
+# This script runs daily to:
+# 1. Optimize the database (add indexes, update statistics)
+# 2. Monitor storage and cleanup if needed
+
+set -e
+
+VENV="/opt/PoolAIssistant/venv/bin/python"
+APP_DIR="/opt/PoolAIssistant/app"
+LOG_FILE="/var/log/poolaissistant-maintenance.log"
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
+}
+
+log "=== Starting daily maintenance ==="
+
+# Run database optimization (non-interactive, just indexes and analyze)
+if [ -f "$APP_DIR/tools/optimize_database.py" ]; then
+    log "Running database optimization..."
+    # Run with timeout to prevent hanging
+    timeout 300 $VENV "$APP_DIR/tools/optimize_database.py" --db-path /opt/PoolAIssistant/data/pool_readings.sqlite3 <<< "yes" >> "$LOG_FILE" 2>&1 || {
+        log "Database optimization failed or timed out"
+    }
+else
+    log "optimize_database.py not found, skipping"
+fi
+
+# Run storage monitor check
+if [ -f "$APP_DIR/scripts/storage_monitor.py" ]; then
+    log "Running storage monitor..."
+    timeout 120 $VENV "$APP_DIR/scripts/storage_monitor.py" --once >> "$LOG_FILE" 2>&1 || {
+        log "Storage monitor failed or timed out"
+    }
+else
+    log "storage_monitor.py not found, skipping"
+fi
+
+# Cleanup old log entries (keep last 1000 lines)
+if [ -f "$LOG_FILE" ]; then
+    tail -n 1000 "$LOG_FILE" > "$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE"
+fi
+
+log "=== Daily maintenance complete ==="

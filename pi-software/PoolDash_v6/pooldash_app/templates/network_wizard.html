@@ -1,0 +1,974 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-header">
+  <h2>Network Setup Wizard</h2>
+  <a href="{{ url_for('main.settings') }}" class="btn btn--sm btn--secondary">&larr; Back to Settings</a>
+</div>
+
+<div class="wizard-container">
+  <!-- Progress Indicator -->
+  <div class="wizard-progress">
+    <div class="progress-step" data-step="cable">
+      <span class="step-number">1</span>
+      <span class="step-label">Cable</span>
+    </div>
+    <div class="progress-step" data-step="controller">
+      <span class="step-number">2</span>
+      <span class="step-label">Controller</span>
+    </div>
+    <div class="progress-step" data-step="configure">
+      <span class="step-number">3</span>
+      <span class="step-label">Configure</span>
+    </div>
+    <div class="progress-step" data-step="verify">
+      <span class="step-number">4</span>
+      <span class="step-label">Verify</span>
+    </div>
+    <div class="progress-step" data-step="complete">
+      <span class="step-number">5</span>
+      <span class="step-label">Complete</span>
+    </div>
+  </div>
+
+  <!-- Step 0: Cable Check -->
+  <div class="wizard-step" id="step-cable">
+    <div class="wizard-card">
+      <h3>Step 1: Check Ethernet Cable</h3>
+
+      <div class="cable-diagram">
+        <div class="diagram-box pi-box">
+          <span class="device-icon">&#128187;</span>
+          <span class="device-label">Pi</span>
+          <span class="port-label">[eth0]</span>
+        </div>
+        <div class="cable-line" id="cableLine">
+          <span class="cable-status" id="cableStatusIcon">...</span>
+        </div>
+        <div class="diagram-box controller-box">
+          <span class="device-icon">&#9881;</span>
+          <span class="device-label">Controller</span>
+          <span class="port-label">[Network]</span>
+        </div>
+      </div>
+
+      <div id="cableStatus" class="status-message">
+        <p>Checking ethernet connection...</p>
+      </div>
+
+      <div class="wizard-actions">
+        <button class="btn btn--secondary" onclick="checkCableStatus()">Refresh</button>
+        <button class="btn" id="cableNextBtn" onclick="goToStep('controller')" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 1: Controller IP -->
+  <div class="wizard-step" id="step-controller" style="display: none;">
+    <div class="wizard-card">
+      <h3>Step 2: Enter Controller IP</h3>
+      <p class="wizard-description">
+        The Pi needs to know your controller's IP address to connect to it.
+        This is usually set during installation.
+      </p>
+
+      <div class="form-field">
+        <label>Controller IP Address</label>
+        <input type="text" id="wizardControllerIp" placeholder="e.g. 192.168.200.11" class="mono input-lg">
+      </div>
+
+      <div class="help-options">
+        <button class="btn btn--sm btn--secondary" onclick="showFindHelp()">Help me find it</button>
+        <button class="btn btn--sm btn--secondary" onclick="startScan()">Scan for controllers</button>
+      </div>
+
+      <!-- Find Help Panel -->
+      <div id="findHelpPanel" class="help-panel" style="display: none;">
+        <h4>Finding Your Controller IP</h4>
+
+        <details open>
+          <summary><strong>Ezetrol Touch</strong></summary>
+          <ol>
+            <li>Press <strong>Menu</strong> on the controller touchscreen</li>
+            <li>Navigate to <strong>Network</strong> or <strong>Ethernet Settings</strong></li>
+            <li>The IP address is displayed (e.g., 192.168.200.11)</li>
+          </ol>
+        </details>
+
+        <details>
+          <summary><strong>BAYROL</strong></summary>
+          <ol>
+            <li>Press <strong>Settings</strong> button</li>
+            <li>Navigate to <strong>Network Info</strong></li>
+            <li>IP Address is shown on screen</li>
+          </ol>
+        </details>
+
+        <details>
+          <summary><strong>DULCOPOOL</strong></summary>
+          <ol>
+            <li>Go to <strong>System</strong> menu</li>
+            <li>Select <strong>IP Config</strong></li>
+            <li>The IP address is displayed</li>
+          </ol>
+        </details>
+
+        <div class="installer-note">
+          <strong>Don't know?</strong> Your pool installer should have this information.
+          The controller IP was set during installation.
+        </div>
+
+        <button class="btn btn--sm" onclick="hideFindHelp()">Close</button>
+      </div>
+
+      <!-- Scan Panel -->
+      <div id="scanPanel" class="help-panel" style="display: none;">
+        <h4>Scanning for Controllers</h4>
+        <div id="scanProgress" class="scan-progress">
+          <div class="progress-bar"><div class="progress-fill" id="scanProgressFill"></div></div>
+          <p id="scanStatusText">Scanning...</p>
+        </div>
+        <div id="scanResults"></div>
+      </div>
+
+      <div class="wizard-actions">
+        <button class="btn btn--secondary" onclick="goToStep('cable')">Back</button>
+        <button class="btn" onclick="validateAndProceed()">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Configure -->
+  <div class="wizard-step" id="step-configure" style="display: none;">
+    <div class="wizard-card">
+      <h3>Step 3: Configure Network</h3>
+      <p class="wizard-description">
+        We'll configure the Pi to communicate with your controller.
+      </p>
+
+      <div class="config-preview">
+        <div class="preview-row">
+          <span class="preview-label">Your Controller:</span>
+          <code id="configControllerIp" class="preview-value"></code>
+        </div>
+        <div class="preview-arrow">&#8595;</div>
+        <div class="preview-row">
+          <span class="preview-label">We'll set Pi to:</span>
+          <code id="configPiIp" class="preview-value"></code>
+        </div>
+      </div>
+
+      <div id="ipAvailability" class="status-message">
+        <p>Checking if this IP is available...</p>
+      </div>
+
+      <div id="configWarning" class="warning-message" style="display: none;">
+        <p><strong>Warning:</strong> <span id="configWarningText"></span></p>
+      </div>
+
+      <div class="wizard-actions">
+        <button class="btn btn--secondary" onclick="goToStep('controller')">Back</button>
+        <button class="btn" id="configApplyBtn" onclick="applyConfiguration()" disabled>Configure Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Verify -->
+  <div class="wizard-step" id="step-verify" style="display: none;">
+    <div class="wizard-card">
+      <h3>Step 4: Testing Connection</h3>
+
+      <div class="verification-status">
+        <div class="verify-item" id="verifyConfig">
+          <span class="verify-icon">&#8987;</span>
+          <span class="verify-text">Applying network configuration...</span>
+        </div>
+        <div class="verify-item" id="verifyCable">
+          <span class="verify-icon">&#8987;</span>
+          <span class="verify-text">Checking cable connection...</span>
+        </div>
+        <div class="verify-item" id="verifyPing">
+          <span class="verify-icon">&#8987;</span>
+          <span class="verify-text">Testing controller reachability...</span>
+        </div>
+        <div class="verify-item" id="verifyModbus">
+          <span class="verify-icon">&#8987;</span>
+          <span class="verify-text">Testing Modbus connection...</span>
+        </div>
+      </div>
+
+      <div id="verifyResult" class="verify-result" style="display: none;"></div>
+
+      <div class="wizard-actions">
+        <button class="btn btn--secondary" onclick="goToStep('configure')">Back</button>
+        <button class="btn" id="verifyNextBtn" onclick="goToStep('complete')" style="display: none;">Continue</button>
+        <button class="btn btn--secondary" id="verifyRetryBtn" onclick="applyConfiguration()" style="display: none;">Retry</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Add Controller -->
+  <div class="wizard-step" id="step-complete" style="display: none;">
+    <div class="wizard-card success-card">
+      <div class="success-icon">&#127881;</div>
+      <h3>Connected Successfully!</h3>
+      <p class="wizard-description">
+        The Pi is now connected to your controller.
+      </p>
+
+      <div class="form-field">
+        <label>Controller Name</label>
+        <input type="text" id="controllerName" value="Main Pool" placeholder="e.g. Main Pool" class="input-lg">
+      </div>
+
+      <div class="form-field">
+        <label>Pool Volume (litres, optional)</label>
+        <input type="number" id="controllerVolume" placeholder="e.g. 55000" class="input-lg">
+      </div>
+
+      <div class="wizard-actions">
+        <button class="btn" onclick="saveAndFinish()">Save & Go to Dashboard</button>
+        <button class="btn btn--secondary" onclick="addAnother()">Add Another Controller</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.wizard-container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.wizard-progress {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding: 0 10px;
+}
+
+.progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0.4;
+}
+
+.progress-step.active {
+  opacity: 1;
+}
+
+.progress-step.completed {
+  opacity: 0.7;
+}
+
+.progress-step.completed .step-number {
+  background: #10b981;
+}
+
+.step-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.step-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.wizard-card {
+  background: var(--color-surface);
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+}
+
+.wizard-card h3 {
+  margin: 0 0 8px 0;
+}
+
+.wizard-description {
+  color: var(--color-text-muted);
+  margin-bottom: 20px;
+}
+
+.wizard-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Cable Diagram */
+.cable-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 24px 0;
+  margin: 20px 0;
+  background: var(--color-surface-raised);
+  border-radius: 8px;
+}
+
+.diagram-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 24px;
+  background: var(--color-bg);
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  min-width: 100px;
+}
+
+.device-icon {
+  font-size: 32px;
+  margin-bottom: 4px;
+}
+
+.device-label {
+  font-weight: 600;
+}
+
+.port-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-family: monospace;
+}
+
+.cable-line {
+  width: 80px;
+  height: 4px;
+  background: var(--color-border);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cable-line.connected {
+  background: #10b981;
+}
+
+.cable-line.disconnected {
+  background: #ef4444;
+}
+
+.cable-status {
+  position: absolute;
+  top: -24px;
+  font-size: 18px;
+}
+
+/* Status Messages */
+.status-message {
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--color-surface-raised);
+  margin: 16px 0;
+}
+
+.status-message.success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid #10b981;
+}
+
+.status-message.error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+}
+
+.status-message.warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid #f59e0b;
+}
+
+/* Help Panel */
+.help-options {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.help-panel {
+  background: var(--color-surface-raised);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.help-panel h4 {
+  margin: 0 0 12px 0;
+}
+
+.help-panel details {
+  margin-bottom: 8px;
+}
+
+.help-panel ol {
+  margin: 8px 0 12px 0;
+  padding-left: 24px;
+}
+
+.installer-note {
+  background: var(--color-accent-light);
+  padding: 12px;
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+/* Config Preview */
+.config-preview {
+  background: var(--color-surface-raised);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  margin: 20px 0;
+}
+
+.preview-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.preview-label {
+  color: var(--color-text-muted);
+}
+
+.preview-value {
+  font-size: 18px;
+  padding: 8px 16px;
+  background: var(--color-bg);
+  border-radius: 6px;
+}
+
+.preview-arrow {
+  font-size: 24px;
+  color: var(--color-accent);
+  margin: 8px 0;
+}
+
+/* Verification */
+.verification-status {
+  margin: 20px 0;
+}
+
+.verify-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--color-surface-raised);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.verify-icon {
+  font-size: 20px;
+  width: 28px;
+  text-align: center;
+}
+
+.verify-item.pending .verify-icon { color: var(--color-text-muted); }
+.verify-item.checking .verify-icon { color: var(--color-accent); }
+.verify-item.success .verify-icon { color: #10b981; }
+.verify-item.error .verify-icon { color: #ef4444; }
+
+.verify-result {
+  padding: 16px;
+  border-radius: 8px;
+  margin-top: 16px;
+}
+
+.verify-result.success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid #10b981;
+}
+
+.verify-result.error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+}
+
+/* Success Card */
+.success-card {
+  text-align: center;
+}
+
+.success-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.success-card .form-field {
+  text-align: left;
+  max-width: 300px;
+  margin: 16px auto;
+}
+
+/* Scan Progress */
+.scan-progress {
+  padding: 12px;
+}
+
+.progress-bar {
+  height: 8px;
+  background: var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+#scanResults {
+  margin-top: 12px;
+}
+
+.scan-result-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+.input-lg {
+  font-size: 18px;
+  padding: 14px 16px;
+}
+
+.warning-message {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+}
+
+.warning-message p {
+  margin: 0;
+  color: #92400e;
+}
+</style>
+
+<script>
+// Wizard State
+let currentStep = 'cable';
+let wizardData = {
+  controllerIp: '',
+  piIp: '',
+  netmask: '24',
+  gateway: '',
+  configApplied: false,
+  modbusTested: false
+};
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+  checkCableStatus();
+  updateProgressIndicator();
+});
+
+// Step Navigation
+function goToStep(step) {
+  // Hide all steps
+  document.querySelectorAll('.wizard-step').forEach(el => el.style.display = 'none');
+  // Show target step
+  document.getElementById('step-' + step).style.display = 'block';
+  currentStep = step;
+  updateProgressIndicator();
+
+  // Run step-specific actions
+  if (step === 'cable') {
+    checkCableStatus();
+  }
+}
+
+function updateProgressIndicator() {
+  const steps = ['cable', 'controller', 'configure', 'verify', 'complete'];
+  const currentIndex = steps.indexOf(currentStep);
+
+  document.querySelectorAll('.progress-step').forEach(el => {
+    const stepName = el.dataset.step;
+    const stepIndex = steps.indexOf(stepName);
+
+    el.classList.remove('active', 'completed');
+    if (stepIndex === currentIndex) {
+      el.classList.add('active');
+    } else if (stepIndex < currentIndex) {
+      el.classList.add('completed');
+    }
+  });
+}
+
+// Step 0: Cable Check
+function checkCableStatus() {
+  const statusEl = document.getElementById('cableStatus');
+  const lineEl = document.getElementById('cableLine');
+  const iconEl = document.getElementById('cableStatusIcon');
+  const nextBtn = document.getElementById('cableNextBtn');
+
+  statusEl.innerHTML = '<p>Checking ethernet connection...</p>';
+  lineEl.className = 'cable-line';
+  iconEl.textContent = '...';
+  nextBtn.disabled = true;
+
+  fetch('/settings/network/cable-status')
+    .then(r => r.json())
+    .then(data => {
+      if (data.connected) {
+        lineEl.classList.add('connected');
+        iconEl.textContent = '&#10003;';
+        statusEl.className = 'status-message success';
+        statusEl.innerHTML = '<p><strong>Cable connected!</strong> You can proceed to the next step.</p>';
+        nextBtn.disabled = false;
+      } else {
+        lineEl.classList.add('disconnected');
+        iconEl.textContent = '&#10007;';
+        statusEl.className = 'status-message error';
+        statusEl.innerHTML = `
+          <p><strong>No cable detected</strong></p>
+          <p>Please connect an ethernet cable from the Pi to your controller or network switch.</p>
+          <p class="muted">The ethernet port is located on the side of the Pi.</p>
+        `;
+        nextBtn.disabled = true;
+      }
+    })
+    .catch(err => {
+      statusEl.className = 'status-message';
+      statusEl.innerHTML = '<p>Unable to check cable status. Please ensure the Pi has network access.</p>';
+    });
+}
+
+// Step 1: Controller IP
+function showFindHelp() {
+  document.getElementById('findHelpPanel').style.display = 'block';
+  document.getElementById('scanPanel').style.display = 'none';
+}
+
+function hideFindHelp() {
+  document.getElementById('findHelpPanel').style.display = 'none';
+}
+
+function startScan() {
+  document.getElementById('findHelpPanel').style.display = 'none';
+  const scanPanel = document.getElementById('scanPanel');
+  const progressFill = document.getElementById('scanProgressFill');
+  const statusText = document.getElementById('scanStatusText');
+  const resultsEl = document.getElementById('scanResults');
+
+  scanPanel.style.display = 'block';
+  progressFill.style.width = '0%';
+  statusText.textContent = 'Scanning networks...';
+  resultsEl.innerHTML = '';
+
+  let progress = 0;
+  const interval = setInterval(() => {
+    progress += 5;
+    if (progress >= 90) clearInterval(interval);
+    progressFill.style.width = progress + '%';
+  }, 500);
+
+  fetch('/network-wizard/scan')
+    .then(r => r.json())
+    .then(data => {
+      clearInterval(interval);
+      progressFill.style.width = '100%';
+
+      if (data.devices && data.devices.length > 0) {
+        statusText.textContent = 'Found ' + data.devices.length + ' controller(s)';
+        let html = '';
+        data.devices.forEach(dev => {
+          const status = dev.modbus_ok ? '<span class="network-status-ok">&#9679; Modbus OK</span>' : '<span class="muted">Port open</span>';
+          html += `
+            <div class="scan-result-item">
+              <code>${dev.ip}</code>
+              ${status}
+              <button class="btn btn--sm" onclick="selectScannedController('${dev.ip}')">Use</button>
+            </div>
+          `;
+        });
+        resultsEl.innerHTML = html;
+      } else {
+        statusText.textContent = 'No controllers found';
+        resultsEl.innerHTML = '<p class="muted">No Modbus controllers detected. Check that your controller is powered on and connected to the network.</p>';
+      }
+    })
+    .catch(err => {
+      clearInterval(interval);
+      statusText.textContent = 'Scan failed: ' + err.message;
+    });
+}
+
+function selectScannedController(ip) {
+  document.getElementById('wizardControllerIp').value = ip;
+  document.getElementById('scanPanel').style.display = 'none';
+  validateAndProceed();
+}
+
+function validateAndProceed() {
+  const ip = document.getElementById('wizardControllerIp').value.trim();
+  if (!ip) {
+    alert('Please enter a controller IP address');
+    return;
+  }
+
+  // Basic validation
+  const ipPattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  if (!ipPattern.test(ip)) {
+    alert('Invalid IP address format. Use format like 192.168.200.11');
+    return;
+  }
+
+  // Calculate Pi IP
+  fetch('/settings/network/calculate-pi-ip?controller=' + encodeURIComponent(ip))
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      wizardData.controllerIp = ip;
+      wizardData.piIp = data.pi_ip;
+      wizardData.netmask = data.netmask;
+      wizardData.gateway = data.gateway;
+
+      // Update configure step display
+      document.getElementById('configControllerIp').textContent = ip;
+      document.getElementById('configPiIp').textContent = data.pi_ip + '/' + data.netmask;
+
+      goToStep('configure');
+      checkIpAvailability();
+    });
+}
+
+// Step 2: Configure
+function checkIpAvailability() {
+  const statusEl = document.getElementById('ipAvailability');
+  const applyBtn = document.getElementById('configApplyBtn');
+  const warningEl = document.getElementById('configWarning');
+
+  statusEl.innerHTML = '<p>Checking if IP is available...</p>';
+  applyBtn.disabled = true;
+  warningEl.style.display = 'none';
+
+  fetch('/settings/network/check-ip?ip=' + encodeURIComponent(wizardData.piIp))
+    .then(r => r.json())
+    .then(data => {
+      if (data.available) {
+        statusEl.className = 'status-message success';
+        statusEl.innerHTML = '<p><strong>&#10003; IP address is available</strong></p>';
+        applyBtn.disabled = false;
+      } else {
+        statusEl.className = 'status-message warning';
+        statusEl.innerHTML = '<p><strong>&#9888; IP may be in use</strong></p><p>' + data.message + '</p>';
+        warningEl.style.display = 'block';
+        document.getElementById('configWarningText').textContent = 'This IP might conflict with another device. Proceed with caution.';
+        applyBtn.disabled = false;  // Still allow proceeding
+      }
+    })
+    .catch(err => {
+      statusEl.className = 'status-message';
+      statusEl.innerHTML = '<p>Could not check IP availability. You can still proceed.</p>';
+      applyBtn.disabled = false;
+    });
+}
+
+function applyConfiguration() {
+  goToStep('verify');
+  runVerification();
+}
+
+// Step 3: Verify
+function runVerification() {
+  const steps = ['verifyConfig', 'verifyCable', 'verifyPing', 'verifyModbus'];
+
+  // Reset all steps
+  steps.forEach(id => {
+    const el = document.getElementById(id);
+    el.className = 'verify-item pending';
+    el.querySelector('.verify-icon').textContent = '&#8987;';
+  });
+
+  document.getElementById('verifyResult').style.display = 'none';
+  document.getElementById('verifyNextBtn').style.display = 'none';
+  document.getElementById('verifyRetryBtn').style.display = 'none';
+
+  // Step 1: Apply config
+  setVerifyStatus('verifyConfig', 'checking', 'Applying network configuration...');
+
+  fetch('/settings/network/quick-configure', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      controller_ip: wizardData.controllerIp,
+      pi_ip: wizardData.piIp,
+      netmask: wizardData.netmask,
+      gateway: wizardData.gateway
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.success) {
+      setVerifyStatus('verifyConfig', 'error', 'Configuration failed: ' + data.error);
+      showVerifyError('Failed to apply network configuration. ' + data.error);
+      return;
+    }
+
+    setVerifyStatus('verifyConfig', 'success', 'Network configuration applied');
+
+    // Step 2: Check cable
+    setVerifyStatus('verifyCable', 'checking', 'Checking cable connection...');
+    setTimeout(() => {
+      fetch('/settings/network/cable-status')
+        .then(r => r.json())
+        .then(cableData => {
+          if (cableData.connected) {
+            setVerifyStatus('verifyCable', 'success', 'Cable connected');
+          } else {
+            setVerifyStatus('verifyCable', 'error', 'Cable not connected');
+          }
+
+          // Step 3: Ping controller
+          setVerifyStatus('verifyPing', 'checking', 'Testing controller reachability...');
+          fetch('/settings/network/ping?host=' + encodeURIComponent(wizardData.controllerIp))
+            .then(r => r.json())
+            .then(pingData => {
+              if (pingData.reachable) {
+                setVerifyStatus('verifyPing', 'success', 'Controller responds to ping');
+              } else {
+                setVerifyStatus('verifyPing', 'error', pingData.message || 'Controller not reachable');
+              }
+
+              // Step 4: Test Modbus
+              if (data.modbus_ok || pingData.reachable) {
+                setVerifyStatus('verifyModbus', 'checking', 'Testing Modbus connection...');
+
+                // Use the result from quick-configure
+                if (data.modbus_ok) {
+                  setVerifyStatus('verifyModbus', 'success', 'Modbus connection working');
+                  showVerifySuccess();
+                } else if (data.controller_reachable) {
+                  setVerifyStatus('verifyModbus', 'success', 'Controller reachable (Modbus may need power cycle)');
+                  showVerifySuccess();
+                } else {
+                  setVerifyStatus('verifyModbus', 'error', 'Modbus not responding');
+                  showVerifyPartial();
+                }
+              } else {
+                setVerifyStatus('verifyModbus', 'error', 'Cannot test - controller not reachable');
+                showVerifyError('Controller is not reachable. Check that it is powered on and connected to the network.');
+              }
+            });
+        });
+    }, 2000);
+  })
+  .catch(err => {
+    setVerifyStatus('verifyConfig', 'error', 'Error: ' + err.message);
+    showVerifyError('An error occurred: ' + err.message);
+  });
+}
+
+function setVerifyStatus(id, status, text) {
+  const el = document.getElementById(id);
+  el.className = 'verify-item ' + status;
+  el.querySelector('.verify-text').textContent = text;
+
+  const icon = el.querySelector('.verify-icon');
+  if (status === 'checking') icon.textContent = '&#8987;';
+  else if (status === 'success') icon.textContent = '&#10003;';
+  else if (status === 'error') icon.textContent = '&#10007;';
+}
+
+function showVerifySuccess() {
+  const resultEl = document.getElementById('verifyResult');
+  resultEl.className = 'verify-result success';
+  resultEl.innerHTML = '<p><strong>&#127881; Connection successful!</strong></p><p>The Pi can communicate with your controller.</p>';
+  resultEl.style.display = 'block';
+  document.getElementById('verifyNextBtn').style.display = 'inline-block';
+  wizardData.configApplied = true;
+}
+
+function showVerifyPartial() {
+  const resultEl = document.getElementById('verifyResult');
+  resultEl.className = 'verify-result';
+  resultEl.style.background = 'rgba(245, 158, 11, 0.1)';
+  resultEl.style.border = '1px solid #f59e0b';
+  resultEl.innerHTML = '<p><strong>Partial Success</strong></p><p>The Pi is configured and can reach the controller network, but Modbus communication is not responding. Try power cycling the controller.</p>';
+  resultEl.style.display = 'block';
+  document.getElementById('verifyNextBtn').style.display = 'inline-block';
+  document.getElementById('verifyRetryBtn').style.display = 'inline-block';
+  wizardData.configApplied = true;
+}
+
+function showVerifyError(message) {
+  const resultEl = document.getElementById('verifyResult');
+  resultEl.className = 'verify-result error';
+  resultEl.innerHTML = '<p><strong>Connection Failed</strong></p><p>' + message + '</p>';
+  resultEl.style.display = 'block';
+  document.getElementById('verifyRetryBtn').style.display = 'inline-block';
+}
+
+// Step 4: Complete
+function saveAndFinish() {
+  const name = document.getElementById('controllerName').value.trim() || 'Controller';
+  const volume = document.getElementById('controllerVolume').value;
+
+  fetch('/network-wizard/add', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      ip: wizardData.controllerIp,
+      name: name,
+      volume_l: volume ? parseFloat(volume) : null
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      // Mark wizard as complete
+      fetch('/network-wizard/complete', { method: 'POST' })
+        .then(() => {
+          window.location.href = '/';
+        });
+    } else {
+      alert('Failed to add controller: ' + data.error);
+    }
+  })
+  .catch(err => {
+    alert('Error: ' + err.message);
+  });
+}
+
+function addAnother() {
+  // Reset wizard data but keep config
+  wizardData.controllerIp = '';
+  document.getElementById('wizardControllerIp').value = '';
+  goToStep('controller');
+}
+</script>
+
+{% endblock %}

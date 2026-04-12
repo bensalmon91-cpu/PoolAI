@@ -1,0 +1,1782 @@
+PROMINENT DULCOPOOL Pro Controller for 
+public swimming pool (Part Communication)
+Communication programming 
+instructions 
+Rev: 1.0
+
+
+General information Page 2/40 
+ Communication programming instructions 
+Part of the general documentation 
+Part 1: Installation and starting instructions 
+Part 2: General programming instructions 
+Part 3: Communication programming instructions 
+General information: 
+Prominent 2023® Manual of 06/02/2023     Rev 1.0 
+Analysers/Controllers for swimming pools. 
+Product line DULCOPOOL Pro® 
+Part 3: Communication programming instructions (Ref: DOC0669) 
+Editor: 
+ProMinent GmbH 
+Im Schuhmachergewann 5 -11 
+69123 Heidelberg 
+Telephone: +49 6221 842-0 
+Fax: +49 6221 842-419 
+Email: info@prominent.com 
+Internet: www.prominent.com 
+© 2023 by ProMinent GmbH 
+Subject to modification 
+► 
+
+
+Contents Page 3/40 
+ Communication programming instructions 
+Contents 
+I. Generality ......................................................................................................................... 4 
+1) Scope ...............................................................................................................................4 
+2) FCC conformity ..................................................................................................................5 
+3) Use of the document..........................................................................................................6 
+4) Symbols and signs .............................................................................................................6 
+5) Storage and transport ........................................................................................................7 
+6) Packaging .........................................................................................................................7 
+7) Warranty ...........................................................................................................................7 
+II. Safety and environmental instructions ......................................................................... 8 
+1) Use of the equipment ........................................................................................................8 
+2) User obligations .................................................................................................................8 
+3) Risk prevention ..................................................................................................................8 
+4) Identification and localization of the nameplate ...................................................................9 
+5) Disposal and conformity .....................................................................................................9 
+6) Radio technologies in equipment ...................................................................................... 10 
+III. RS485 communication bus connections................................................................. 11 
+1) Connection to a USB port on a computer ........................................................................... 11 
+2) Polarization and termination of the RS485 bus ................................................................... 12 
+3) Connection of the internal GSM Modem ............................................................................. 12 
+4) Ethernet cable connection ................................................................................................ 13 
+IV. ProMinent DULCOPOOL Pro® setting ........................................................................... 14 
+1) « Communication configuration » menu - « COMMUNICATION » ........................................ 14 
+a) Modbus Configuration ...................................................................................................... 15 
+b) WIFI configuration ........................................................................................................... 17 
+c) Ethernet Modem configuration .......................................................................................... 20 
+d) Internet & Web Server configuration ................................................................................. 22 
+e) MYPOOL configuration ..................................................................................................... 26 
+f) Ethernet Modem configuration .......................................................................................... 28 
+g) Modbus Slave configuration .............................................................................................. 29 
+h) Communication info ......................................................................................................... 31 
+V. Modbus communication register ................................................................................. 34 
+1) Address of Modbus registers ............................................................................................. 34 
+2) Data formatting ............................................................................................................... 37 
+
+Generality Page 4/40 
+ Communication programming instructions 
+I. Generality
+1) Scope
+ PROMINENT DULCOPOOL Pro ® analyser/controller you have purchased is a high -tech electronic 
+device. It was designed and created carefully for your enjoyment and your peace of action.  
+Its remarkable faculty to adapt to different swimming pool structures allows it to settle in all difficult 
+environments where mastery of water treatment is most decisive.  
+Thanks to DULCOPOOL Pro ease of use, their user-friendliness, and their remarkable technicality, you 
+will fully enjoy its many possibilities and will be assured of a perfect control and perfect monitoring of 
+the quality of the water in your swimming pool (public, Olympic, nautical stadiums, etc.). 
+You will find in the instructions that follow, all the information needed for the installation, use and 
+maintenance of your new equipment. 
+➢ Packaging
+➢ Installation
+➢ Basic equipment
+➢ Specifications
+➢ Commissioning instructions
+➢ Safety instructions
+If you need more information or if you encounter problems that not have been specified in this guide, 
+please quickly contact your retailer or ProMinent GmbH sales department, either at the agency or office 
+in your area, or at technical/quality service at our head office. We will do our best to help you and make 
+you enjoy our advice and our knowledge in the field of measurement and treatment of pools water . 
+
+Generality Page 5/40 
+ Communication programming instructions 
+2) FCC conformity
+The PROMINENT DULCOPOOL Pro® controller complies with Part 15 of the FCC Rules. 
+Operation is subject to the following two conditions: 
+(1) this device may not cause harmful interference (2) this device must accept any interference received,
+including interference that may cause undesired operation FCC Regulations state that unauthorized
+changes or modifications to this equipment may void the user’s authority to operate it.
+This equipment has been tested and found to comply with the limits for a Class B digital device, pursuant 
+to Part 15 of the FCC Rules. These limits are designed to provide reasonable protection against harmful 
+interference in a residential installation. This equipment generates, uses, and can radiate radio frequency 
+energy and, if not installed and used in accordance with the instructions, may cause harmful interference 
+to radio communications. However, there is no guarantee that interference will not occur  in a particular 
+installation.  
+If this equipment does cause harmful interference to radio or television reception, which can be 
+determined by turning the equipment off and on, the user is encouraged to try and correct the 
+interference by one or more of the following measures: 
+• Reorient or relocate the receiving antenna.
+• Increase the separation between the equipment and receiver.
+• Connect this equipment into an outlet on a circuit different from that to which the receiver is
+connected.
+• Consult the dealer or an experienced radio/TV technician for help.
+Changes and modifications not expressly approved by the manufacturer could void the user’s authority 
+to operate this equipment. 
+Remark: To ensure compliance with the FCC regulations on electromagnetic interference for a class B 
+device, use cables properly shielded and connected to the ground as recommended in this manual. The 
+use of a cable that is not properly shielded or earthed for risk of violating the FCC rules. 
+Radio Frequency (RF) Exposure Compliance of Radiocommunication for mobile Apparatus To satisfy FCC 
+RF Exposure requirements for mobile devices, a separation distance of 20 cm or more should be 
+maintained between the antenna of this device and persons during oper ation. To ensure compliance, 
+operation at closer than this distance is not recommended. This transmitter must not be co -located or 
+operating in conjunction with any other antenna or transmitter. 
+Contains: 
+- WiFi module: FCC ID: 2AC7Z-ESPWROOM02
+This device complies with part 15 of the FCC Rules. Operation is subject to the following two conditions:
+(1) This device may not cause harmful interference, and (2) this device must accept any interference
+received, including interference that may cause undesired operation.
+- GSM module: FCC ID: UDV-0912142009007
+This device complies with part 15 of the FCC Rules. Operation is subject to the following two conditions: 
+(1) This device may not cause harmful interference, and (2) this device must accept any interference
+received, including interference that may cause undesired operation. (For FCC)
+
+Generality  Page 6/40 
+ Communication programming instructions 
+ 
+3) Use of the document 
+Please read carefully the entire document before starting the installation and the commissioning of the 
+controller device, in order to ensure the safety of swimmers, users and equipment’s. 
+ 
+The information provided in this document must be strictly observed. ProMinent GmbH  declines all 
+responsibility in cases where failure to comply with the instructions of this documents.  
+ 
+The following symbols and pictograms will be used to facilitate reading and understanding of these 
+instructions. 
+ 
+● Information 
+ 
+► Action to do 
+ 
+➢ Element of a list or enumeration  
+ 
+ 
+4) Symbols and signs 
+ 
+Identification of a continuous volage or current 
+ 
+ 
+Identification of an alternative voltage or current 
+ 
+ 
+Protective ground 
+ 
+ 
+Functional ground 
+ 
+ 
+Risk of injury or accident. Identifies a warning concerning a potentially dangerous risk. The 
+documentation must be consulted by the user with each time the symbol is notified. If the 
+instructions are not respected, this presents risks of death, physical injuries or property 
+damages. 
+ 
+ 
+ Electric hazard. Identifies a warning statement relative to a mortal electric danger. If the 
+instructions are not strictly respected, this implies an inevitable risk of physical injuries or death. 
+ 
+ 
+ Risk of incorrect operation or damage for the device 
+ 
+ 
+ Comment or information. 
+ 
+ 
+ Recyclable element 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+Generality Page 7/40 
+ Communication programming instructions 
+5) Storage and transport
+It is important to store and to transport the PROMINENT DULCOPOOL Pro controller in its 
+original packaging in order to minimize risk of damage. 
+Furthermore, the package must be stored in an environment that is protected against humidity 
+and exposure to chemical products. 
+Environmental conditions for transport and storage: 
+Temperature: -10 °C to 70 °C 
+Air humidity: Maximum of 90% with no condensation 
+6) Packaging
+The device is delivered without power cable. 
+Caps of the box are pre -drilled and fitted with corresponding cable glands conform to the 
+maintenance of IP65 protection. Cables used must be adapted to them in order to respect the 
+protection index.  
+Shielded cables for connecting pH and ORP electrodes are not supplied. 
+The controller is delivered with: 
+✓ PROMINENT DULCOPOOL Pro® central analyser/controller
+✓ Installation and starting instructions
+✓ General programming instructions
+✓ Communication programming instructions (Option)
+7) Warranty
+The warranty is provided according to the terms of our general conditions of sale and delivery as 
+long as the following conditions are met: 
+➢ Use of the equipment according to the instructions of this notice
+➢ No modifications of the equipment which may modify its behaviour and no incorrect
+manipulation
+➢ Respect for the electrical safety conditions
+Consumable material is no longer covered by warranty as soon as it’s put into service. 
+
+
+Safety and environmental instructions  Page 8/40 
+ Communication programming instructions 
+ 
+II. Safety and environmental instructions 
+ 
+Please: 
+ 
+➢ Read this manual carefully before the unpacking, the installing or the commissioning of this 
+equipment 
+ 
+➢ Consider all the hazards and of recommended precautionary measures 
+ 
+The failure to respect these procedures can result in serious injury to users or damaging the device. 
+ 
+ 
+1) Use of the equipment  
+PROMINENT DULCOPOOL Pro® controllers has been designed to measure and control pH, Chlorine, 
+Bromine (BCDMH) using appropriate sensors and actuator controls within the scope of use described in 
+this manual. 
+ 
+ All other uses are considered to be non-conforming and must therefore be forbidden. ProMinent 
+GmbH will not be responsible in any case for any damage that result from such uses.  
+ 
+The 12V Ext must not be used when the product is connected to an electrical network within 
+the following range: 100 – 208V 
+ 
+ 
+Do not use the device for measurements on the network directly, but only on the secondary 
+circuit under very low safety voltage. 
+ 
+ 
+2) User obligations 
+The user undertakes not to allow its employees to work with the PROMINENT DULCOPOOL Pro ® 
+controller described in this manual unless they: 
+ 
+➢ Are aware of the fundamental instructions relating to work safety and prevention of accidents 
+ 
+➢ Are trained in the use of the device and its environment 
+ 
+➢ Have read and understood these instructions, warnings and manipulation rules 
+ 
+ 
+3) Risk prevention 
+The installation and connection of the PROMINENT DULCOPOOL Pro® controller should be 
+only performed by specialized personnel and qualified for this task. 
+The installation must comply with the current safety standards and instructions! 
+ 
+ 
+Before opening the controller or manipulate the relay outputs, always remember to switch -off 
+the primary power supply! 
+Never open the controller when it is powered on! 
+Maintenance operations and repairs should be only performed by trained and specialized 
+personnel! 
+ 
+ 
+ 
+Take care when choosing the location for installing the controller! 
+
+
+Safety and environmental instructions  Page 9/40 
+ Communication programming instructions 
+ 
+PROMINENT DULCOPOOL Pro ® controller should not be installed in a hazardous 
+environment and should be protected against splashing with water or chemical products. It 
+should be installed in a dry, well-ventilated and isolated location. 
+ 
+Make sure that the chemical sensors used with this controller correspond well to the chemicals 
+used. Refer to the individual technical note of each sensor. Chemistry of water is very complex, 
+in case of doubt, contact immediately our engineering service or  your approved 
+installer/reseller. 
+ 
+Chemical sensors are sensitive elements using consumable parts. They must be supervised, 
+maintained and calibrated regularly using specific calibrator systems not -provided with this 
+equipment. In the event of defect, a surplus possible hazard of chemical injections can be noted. 
+In the doubt, a service contract must be taken near your reseller/installer or failing this near 
+our engineering services.  Contact your approved installer/reseller or our business service for 
+more information.  
+ 
+ 
+4) Identification and localization of the nameplate 
+ 
+Manufacturer’s label Product which can be recycled 
+Model of the product / Trade Mark UKCA approved 
+Reference of the product CE approved 
+Range of power supply Country of manufacture 
+Values of maximum current Manufacturer square code 
+Class of protection FCC ID  
+Identification of the manufacturer cBVus approved 
+Serial number Triman logo 
+Particular risk. Read the manual CSA approved 
+ 
+ 
+  
+ 
+ 
+5) Disposal and conformity 
+Nameplate 
+ 1 
+  2 
+ 3 
+ 4 
+ 5 
+ 6 
+ 9 
+ 7 
+ 8 
+  10 
+ 11 
+ 12 
+  13 
+ 14 
+ 15 
+ 16 
+ 17 
+ 18 
+1 
+2 
+3 
+4 
+5 
+6 
+7 
+8 
+10 
+11 
+12 
+13 
+14 
+15 
+9 
+16 
+17 
+18 
+
+Safety and environmental instructions  Page 10/40 
+ Communication programming instructions 
+ 
+The recyclable packaging of the PROMINENT DULCOPOOL Pro ® equipment must be disposed of 
+according to current regulations. 
+ 
+Elements such as paper, cardboard, plastic or any other recyclable elements must be taken to 
+a suitable sorting centre. 
+ 
+According to European directive 2012/19/EC, this symbol means that as of 4 July 2012 electrical 
+appliances cannot be thrown out together with household or industrial waste. According to 
+current regulations, consumers within the European Union are required, as of thi s date, to 
+return their used devices to the manufacturer, who will take care of disposing them at no extra 
+expense. 
+ 
+According to European directive 2011/65/EC, this symbol means that the PROMINENT 
+DULCOPOOL Pro ® controller is designed in compliance with the restrictions on hazardous 
+substances. 
+ 
+According to low-voltage directive (2014/35/UE) and the electromagnetic compatibility directive 
+(2014/30/UE), this symbol means that the device has been designed in compliance with the 
+previously cited directives. 
+ 
+In accordance with part 15 of the FCC regulation (Federal communications commission), this 
+symbol indicates that the device was tested and approved under the respect and the conditions 
+of the limits for a Class B digital device. 
+ 
+The product complies with the requirements of IEC 61326-1 relating to immunity and emissions 
+concerning electromagnetic compatibility in a basic environment. 
+ 
+ 
+According to low-voltage directive (2014/35/UE) and the electromagnetic compatibility directive 
+(2014/30/UE), this symbol means that the device has been designed in compliance with the 
+previously cited directives. 
+ 
+In accordance with UL61010 and PART 15 class B computing device peripheral, this symbol 
+indicates that the device has been designed in accordance with the above -mentioned 
+directives. 
+ 
+ 
+In accordance with Decree no. 2021 -835 of 29 June 2021 on 
+consumer information on the waste sorting rule 
+ 
+ 
+6) Radio technologies in equipment 
+ 
+Radio technologies 
+Technologies Number of 
+antenna Radiated powers Frequency bands of use 
+WIFI 1 < 20dBm 
+2400 MHz to 2483.5 MHz 
+2.4 GHz Band 
+Exclusion Band:  
+[2280 MHz – 2603.5 MHz] 
+2G  GSM900 0 33dBm 900MHz 
+DCS1800 30dBm 1800MHz 
+
+
+RS485 communication bus connections  Page 11/40 
+ Communication programming instructions 
+ 
+III. RS485 communication bus connections 
+ 
+PROMINENT DULCOPOOL Pro® has a RS485 communication port to connect it to a computer equipped 
+with a 485 port and a communication software to record the measurement values, alarms and different 
+states of the device. 
+1) Connection to a USB port on a computer 
+ 
+ Use a 3-wire cable. 
+ Pass the cable through a cable gland. 
+ Wire AA’ (n°3) of USB/485 converter to RS485 (A) (31). 
+ Wire BB’ (n°4) of USB/485 converter to RS485 (B) (32). 
+ Wire C (n°5) of USB/485 converter to PWR (C) (18) 
+ Tighten the cable gland to seal. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+• Blue (Terminal n°3): AA’ RS485 
+• White (Terminal n°4): BB’ RS485 
+• Black (Terminal n°5): GND RS485 
+ 
+Configuration: All switches on "ON" 
+ 
+Contact us for more information about the product. 
+ 
+ Respect the bus wiring. 
+ 
+ 
+A USB/RS485 converter is recommended to connect the PROMINENT DULCOPOOL Pro® to a 
+computer. Please refer to converter documentation to realize the connection. 
+ 
+Reference Name 
+INF1021 Converter USB => 485  
+ 
+Devices can be chained respecting the order of cables (Parallel wiring). 
+ 
+ 
+ 
+
+
+RS485 communication bus connections  Page 12/40 
+ Communication programming instructions 
+ 
+ 
+2) Polarization and termination of the RS485 bus 
+ 
+ 
+The bus can be polarized from your device if 
+necessary. To do this you must switch the two micro -
+switches (Pol. RS+ (A) and Pol. RS-(B)) of the electronic 
+card in ON position. 
+ 
+If your device is the last on the line on the RS485 bus 
+you can switch the Term. RS switch on ON to activate line 
+termination. 
+ 
+ 
+ 
+For security reasons, it is imperative to turn OFF the power of your device before opening the 
+case to switch the micro-switches! 
+ 
+ 
+3) Connection of the internal GSM Modem 
+ 
+Install the GSM modem socket in the space provided. Position the antenna in a cable gland and 
+connect it to the electronic card using the cable supplied. Position the SIM card in the intended 
+location. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Cell phone contract must be M2M (machine to machine) with the minimum of 5MB/month. 
+Sim card PIN must be disabled. 
+ 
+ 
+GMS MODEM Socket 
+SIM card slot 
+Antenna cable 
+Empty front card 
+Front card with GSM Modem socket 
+RS + (A) 
+RS – (B) 
+Term RS 
+ON 
+OFF 
+
+RS485 communication bus connections  Page 13/40 
+ Communication programming instructions 
+ 
+4) Ethernet cable connection 
+ 
+- Pass Ethernet cable through cable gland. 
+ 
+ 
+- Connect the Ethernet cable to the port mentioned above. 
+ 
+ 
+ 
+ 
+Be careful to connect the connector in the right direction. 
+ 
+ 
+- Tighten the cable gland. 
+ 
+Once the connection is made you must choose the connection via “ETHERNET” in “MYPOOL” 
+configuration. See § IV.1).e) « MYPOOL settings ». 
+ 
+Ethernet port 
+Empty front card 
+Ethernet port view 
+The two «pins» must be towards the inside 
+of the card. 
+
+
+ProMinent DULCOPOOL Pro setting  Page 14/40 
+ Communication programming instructions 
+ 
+IV. ProMinent DULCOPOOL Pro® setting 
+ 
+To connect the ProMinent DULCOPOOL Pro® on the bus, the RS485 communication of 
+DULCOPOOL Pro and other systems, connected on the same bus, must be the same. 
+ 
+1) « Communication configuration » menu - « COMMUNICATION »  
+ 
+ 
+Press then and to open the following screen. 
+ 
+ 
+  
+ 
+ 
+Button MODBUS SLAVES is accessible depending on the configuration of the 
+MYPOOL communication.  
+ 
+Button MODBUS ETHERNET is inactive. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+ProMinent DULCOPOOL Pro setting  Page 15/40 
+ Communication programming instructions 
+ 
+a) Modbus Configuration 
+ 
+ 
+ 
+Press to open following screen. 
+ 
+ 
+ 
+ 
+Modbus sur RS485 
+➢ Mode RTU 
+ 
+- Selection of the Modbus communication mode, on this selection button we find the 
+information of the selected mode (RTU) Press to change it. 
+ 
+➢ Speed 19200 
+ 
+- Selection of the Modbus communication speed, on this selection button we find the 
+information of the selected speed (19200). Press to change it. 
+ 
+➢ Parity SANS 
+ 
+- Selection of the Modbus communication parity, on this selection button we find the 
+information of the selected parity (SANS). Press to change it. 
+ 
+➢ Stop bit(s) 2 
+ 
+- Information on the configuration of the number of stop bit(s). This option is not 
+configurable, it adapts according to the parity configuration and here is just information to 
+help you configure your connection. 
+ 
+➢ Address 1 
+ 
+- Modbus address input of your regulator. Here the current value is (1). 
+Press it to open the numeric keypad and enter the desired value. 
+Possible adjustment from 1 to 247. 
+
+
+ProMinent DULCOPOOL Pro setting  Page 16/40 
+ Communication programming instructions 
+ 
+Modbus TCP 
+➢ Port 520 
+ 
+- TCP port selection, on this selection button we find the information of the selected port  
+(520). Press to change it. 
+ 
+➢ Simultaneous connection(s) 1 
+ 
+- Selection of the number of simultaneous Modbus connection(s), on this selection button we 
+find the number of simultaneous connection (1). Press to change it. 
+ 
+➢ Peripheral WIFI 
+ 
+- Selection of the Modbus communication device, on this selection button we find the 
+information of the selected device (WIFI). Press to change it. 
+ 
+➢ Pseudo address 255 
+ 
+- Selection of the pseudo Modbus communication address, on this selection button we find 
+the information of the selected pseudo address (255). Press to change it. 
+ 
+Do not forget to configure the WIFI parameters if the device associated with your Modbus is 
+WIFI type. 
+ 
+Save: 
+When a modification is made, the « Save » button appears (floppy disk icon), you must press it 
+to save your configuration. 
+
+
+ProMinent DULCOPOOL Pro setting  Page 17/40 
+ Communication programming instructions 
+ 
+b) WIFI configuration 
+ 
+ 
+Press to open following screen. 
+ 
+ 
+ 
+➢ WIFI Active 
+ 
+- Activation of the WIFI integrated in your regulator. When the box is checked the WIFI module 
+is activated.  
+Press it to change its state. 
+ 
+➢ SSID ---- 
+ 
+- Enter the name of the WIFI network on which you want to connect. 
+Press to open the alphanumeric keyboard and enter the desired value. 
+ 
+➢ Scan of available networks 
+ 
+ 
+- By pressing this key, the search for networks is launched and a 
+list with the networks found nearby is displayed. 
+- Press to open the list of networks. 
+ 
+Password-secure network with excellent signal level 
+ 
+ 
+Open network with low signal level 
+ 
+
+
+ProMinent DULCOPOOL Pro setting  Page 18/40 
+ Communication programming instructions 
+ 
+➢ Security Disabled 
+ 
+- Selection of type of security key by your WIFI network, on this selection button we find the 
+information of the selected type (Disabled).  
+ Press to change it. 
+When selecting a network using the search window for available networks, the network 
+security mode is automatically selected. 
+ 
+➢ Key - - - - 
+ 
+- If you have selected a security mode this option is activated and you must enter the security 
+key of the WIFI network on which you want to connect. 
+Press it to open the alphanumeric keyboard and enter the desired value. 
+ 
+➢ DHCP Active 
+ 
+- Choice of the DHCP configuration of your network. 
+Press it to ACTIVATE / DEACTIVATE DHCP 
+ 
+➢ IP address - - - - 
+ 
+- If you disable DHCP you must enter the fixed IP address of your regulator. 
+Press it to open the numeric keyboard and enter the desired value. 
+ 
+➢ Mask - - - - 
+ 
+- If you disable DHCP you must enter the subnet mask of your network. 
+Press it to open the numeric keyboard and enter the desired value. 
+ 
+➢ Gateway - - - - 
+ 
+- If you disable DHCP you must enter the gateway of your network. 
+Press it to open the numeric keyboard and enter the desired value. 
+ 
+➢ Automatic DNS  
+ 
+- Choice of DNS configuration. 
+Press it to ACTIVATE / DEACTIVATE DNS 
+ 
+➢ Preferred DNS 8.8.8.8 
+ 
+- If the DNS management is not automatic, you must enter the IP address of the Primary DNS. 
+Press it to open the numeric keyboard and enter the desired value. 
+ 
+➢ Auxiliary DNS 8.8.4.4 
+ 
+- If the DNS management is not automatic, you must enter the IP address of the Auxiliary DNS. 
+Press it to open the numeric keyboard and enter the desired value. 
+ 
+Save: 
+- When a modification is made, the « Save » button appears (floppy disk icon), you must 
+press it to save your configuration. 
+
+
+ProMinent DULCOPOOL Pro setting  Page 19/40 
+ Communication programming instructions 
+ 
+➢ WIFI configuration test 
+ 
+ 
+ 
+Press the button to open the test window 
+ 
+Connection phases, module initialization and connection request on the selected network. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+When the connection is successfully completed, the icon is displayed in green and the IP address 
+assigned to the WIFI is displayed. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+In the event of an error, the icon is displayed in red and a message corresponding to the type of error 
+is displayed. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+➢ List of errors 
+ 
+- « Password error »   => Password is not correct 
+- « Timeout »    => Connection failed within the limit time 
+- « Network not found »  => SSID network was not found 
+- « Unknown error »  => An unknown error has occurred 
+CANCEL 
+Initialization of  
+the module… 
+CANCEL 
+Connection request  
+on the network… 
+CLOSE 
+Successfully connected. 
+192.168.1.88 
+CLOSE 
+Connection refused. 
+Password error. 
+
+ProMinent DULCOPOOL Pro setting  Page 20/40 
+ Communication programming instructions 
+ 
+c) Ethernet Modem configuration 
+ 
+ 
+ 
+Press to open the following screen. 
+ 
+ 
+ 
+➢ DHCP Activated 
+ 
+- Choice of the DHCP configuration of your network. 
+- Press it to ACTIVATE / DEACTIVATE DNS. 
+ 
+ If you uncheck the "Active DHCP" in order to fill in the information, the "Automatic DNS" will 
+automatically uncheck and you should fill in the preferred and auxiliary DNS. 
+ 
+➢ IP address - - - - 
+ 
+- If your disable DHCP you must enter the fixed IP address of your regulator. 
+Press to open the numeric keyboard and enter the desired value. 
+ 
+➢ Mask - - - - 
+ 
+- If you disable DHCP you must enter the subnet mask of your network. 
+Press to open the numeric keyboard and enter the desired value. 
+ 
+➢ Gateway - - - - 
+ 
+- If you disable DHCP you must enter the gateway of your network. 
+Press to open the numeric keyboard and enter the desired value. 
+ 
+ 
+
+
+ProMinent DULCOPOOL Pro setting  Page 21/40 
+ Communication programming instructions 
+ 
+➢ Automatic DNS  
+ 
+- Choice the DNS configuration 
+Press it to ACTIVATE / DEACTIVATE DNS. 
+➢ Preferred DNS 8.8.8.8 
+ 
+- If the DNS management is not automatic, you must enter the IP address of the primary 
+DNS. 
+Press to open the numeric keyboard and enter the desired value. 
+ 
+➢ Auxiliary DNS 8.8.4.4 
+ 
+-  If the DNS management is not automatic, you must enter the IP address of the Auxiliary 
+DNS. 
+Press to open the numeric keyboard and enter the desired value. 
+ 
+Save: 
+When a modification is made, the « Save » button appears (floppy disk icon), you must press it 
+to save your configuration. 
+ 
+
+
+ProMinent DULCOPOOL Pro setting  Page 22/40 
+ Communication programming instructions 
+ 
+d) Internet & Web Server configuration 
+ 
+i. Configuration 
+ 
+ 
+Press to open the following screen. 
+ 
+ 
+ 
+ 
+➢ Embedded Web Server        WIFI        ETHERNET 
+ 
+- Check the « WIFI » or « ETHERNET » box to activate the Embedded Web Server.  
+ 
+➢ Port    8080 
+ 
+- If you activate the Embedded Web Server, you must enter the port number of your 
+regulator. 
+Press in the rectangle to open the numeric keyboard and enter the desired value. 
+ 
+➢ Display locked by password 
+ 
+- You can enable this option to lock the web server display with a password. 
+Press in the rectangle to open the numeric keyboard and enter the desired value 
+ 
+The values that can be changed on the web page are the high and low alarms and the 
+instructions if they are not "OFF". 
+ 
+ 
+ 
+
+
+ProMinent DULCOPOOL Pro setting  Page 23/40 
+ Communication programming instructions 
+ 
+➢ Automatic time setting 
+ 
+- If this option is activated, your regulator will regularly check the time on the internet using the 
+SNTP protocol. So, your regulator must be connected and have internet access. 
+ 
+➢ Customize SNTP server #1 
+ 
+- Your regulator already has an SNTP server address. You can however customize the servers 
+used for the setting and enter the first address here. 
+ 
+➢ Customize SNTP server #2 
+ 
+- When setting if server #1 cannot be reached, your regulator will try to this second server if the 
+box is checked and the address is entered. 
+ 
+ii. Web page 
+ 
+Enter, in the search bar of your browser, the IP address of your regulator, which you will find in the 
+communication information, followed by the port number you entered above (ex: 10.10.1.2:8080) to 
+display the web page below. 
+ 
+ 
+The web page above will include the main information of your regulator (Date, time, operating 
+status, windows of the different parameters filled in, etc.) 
+ 
+ 
+ 
+Active locking no changes possible. 
+ 
+ 
+ 
+Inactive locking change possible. 
+ 
+ 
+ 
+7.20 
+ 236 
+ 1.95 
+
+
+ProMinent DULCOPOOL Pro setting  Page 24/40 
+ Communication programming instructions 
+ 
+Click on it to display the window below where you must enter the password you entered in 
+the “Web Settings”. 
+ 
+ 
+ 
+Use your computer’s numeric keyboard to enter the 
+password entered in the “Web Settings”. 
+ 
+ 
+ 
+Once you have entered and validated the password new information will appear on the web page. 
+ 
+ 
+ 
+If the button is active then downloading the history is possible 
+ 
+ 
+If the button is inactive then downloading the history is not possible 
+ 
+ 
+Click on the history button you want to 
+download. The download will start automatically 
+and the next window will open.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+7.20 
+ 236 
+ 1.95 
+
+ProMinent DULCOPOOL Pro setting  Page 25/40 
+ Communication programming instructions 
+ 
+Example: 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  
+When an orange bubble with a question mark appears on the calendar icon, it means 
+that a maintenance operation is scheduled in the coming week. 
+ 
+When a red bubble with a question mark appears on the calendar icon, it means that 
+the date of a scheduled maintenance operation is exceeded. 
+ 
+If there is no bubble, this means that no maintenance task is scheduled for this month. 
+ 
+ 
+Click on the calendar to open the next window. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+When the date is highlighted in red it means that a 
+maintenance operation was planned on that date but that it 
+was either not carried out or indicated as carried out. 
+ 
+When the date is highlighted in orange it means that a 
+maintenance operation is planned in the next week. 
+ 
+When the date is highlighted in orange it means that a 
+maintenance operation is planned in more than 1 week.
+ 
+Maintenance calendar 
+pH (PI1) 
+10/06/2022 - Cleaning 
+16/06/2022 – Sensor replacement 
+01/08/2022 – Injection replacement 
+10/06/2022 - Cleaning 
+16/06/2022 – Sensor replacement 
+01/08/2022 – Injection replacement 
+1905 
+Type of measurement 
+Measured value & Unit 
+ 
+Servitude notifications 
+area 
+Large window switch 
+Mini window 
+1905 
+Setpoint OFF => not 
+modifiable 
+Adjustable high and 
+low alarms 
+ 
+µs/cm 
+Small window switch 
+Type of measurement 
+Measured value & Unit 
+ 
+Servitude notifications 
+area 
+Large window 
+
+ProMinent DULCOPOOL Pro setting  Page 26/40 
+ Communication programming instructions 
+ 
+e) MYPOOL configuration 
+ 
+ 
+ 
+Press to open the following screen. 
+ 
+          
+      
+➢ Server address mypool.prominent.com 
+ 
+- Entering the address of mypool web server. Here the address is 
+(mypool.prominent.com). 
+Press to open the alphanumeric keyboard and enter the desired value. 
+ 
+➢ Port 18882 
+ 
+- Entering the TCP connection port to mypool site. Here the connection port is (18882). 
+Press to open the alphanumeric keyboard and enter the desired value. 
+ 
+➢ Remote code 1234 
+ 
+- Entering the remote connection code from mypool to your controller. Here the remote code 
+is (1234). 
+Press to open the numeric keyboard and enter the desired value. 
+ 
+➢ Connection GSM SOCKET 
+ 
+- Selection of the connection mode to mypool (type of modem), on this selection button we 
+find the information of the selected mode (GSM SOCKET).  
+Press to change it.  
+ 
+
+
+ProMinent DULCOPOOL Pro setting  Page 27/40 
+ Communication programming instructions 
+ 
+➢ APN GSM connection --- 
+ 
+- If you select a connection with a GSM modem you will have to enter the APN code of your 
+data card here. 
+Press to open the alphanumeric keyboard and enter the desired value. 
+ 
+Save: 
+When a modification is made, the « Save » button appears (floppy disk icon), you must 
+press it to save your configuration.
+
+
+ProMinent DULCOPOOL Pro setting  Page 28/40 
+ Communication programming instructions 
+ 
+f) Ethernet Modem configuration  
+ 
+ 
+ 
+Inactive. 
+ 
+ 
+
+
+ProMinent DULCOPOOL Pro setting  Page 29/40 
+ Communication programming instructions 
+ 
+g) Modbus Slave configuration  
+ 
+ 
+ 
+Press to open the following screen. 
+ 
+ 
+ 
+➢ Slave type CONTROLLER 
+ 
+- Selection of the type of slave connected on the RS485 bus, on this selection button we find the 
+information of the selected type (CONTROLLER). Press to change it. 
+ 
+➢ Address 
+ 
+- Entering the slave’s Modbus address. Caution it must be different from the Modbus address of 
+your regulator. 
+Press to open the numeric keyboard and enter the desired value. 
+Possible adjustment from 1 to 247. 
+ 
+➢ Test 
+ 
+- Pressing the Test button verifies that the slave is correctly connected. You must first make the 
+RS485 wired connection between the 2 devices and check that the Modbus configuration is 
+identical on the 2 devices. 
+ 
+ 
+ 
+ 
+ 
+
+
+ProMinent DULCOPOOL Pro setting  Page 30/40 
+ Communication programming instructions 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Both windows above appear after the configuration. 
+ 
+Save: 
+- When a modification is made, the « Save » button appears (floppy disk icon), you must 
+press it to save your configuration 
+RS485 Bus busy… 
+CLOSE 
+xxxxxxxx 
+Device ID 
+CLOSE 
+
+
+ProMinent DULCOPOOL Pro setting  Page 31/40 
+ Communication programming instructions 
+ 
+h) Communication info 
+ 
+ 
+Press to open the following screen. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+SSID: XXXXX-Etage 
+State: Connected 
+Signal: Good 
+Unique ID         00:00:F3:EB:35:E5 
+Host Name        ODT_W194120973 
+DHCP Activated                      OUI 
+IP address                   10.10.1.90 
+Mask                      255.255.255.0 
+Gateway                    10.10.1.200 
+DNS 1                       10.10.1.100 
+DNS 2                       10.10.1.200 
+Speed: 19200 
+Parity: WITHOUT 
+Address: 1 
+Port: 502 
+Peripheral: WIFI 
+ 
+Server: 
+www.xxxxx.com 
+Port: 18882 
+Conf.: Connected via WIFI 
+ 
+Connected 
+PIN: PIN OK 
+State: Connected 
+Signal: Medium 
+Network: F SFR 
+APN: m2minternet 
+Unique ID       00:08:00:D3:EA:FC 
+Host Name        ODT_S194120972 
+DHCP Activated                     YES 
+IP address                     10.10.1.2 
+Mask                      255.255.255.0 
+Gateway                    10.10.1.200 
+DNS 1                        10.10.1.100 
+DNS 2                        10.10.1.200 
+SSID: XXXXX-Etage 
+State: Connected 
+Signal: Good 
+Unique ID         00:00:F3:EB:35:E5 
+Host Name        ODT_W194120973 
+DHCP Activated                      YES 
+IP address                   10.10.1.90 
+Mask                      255.255.255.0 
+Gateway                    10.10.1.200 
+DNS 1                       10.10.1.100 
+DNS 2                       10.10.1.200 
+Speed: 19200 
+Parity: WITHOUT 
+Address: 1 
+Port: 502 
+Peripheral: WIFI 
+ 
+PIN: PIN OK 
+State: Connected 
+Signal: Medium 
+Server: 
+www.xxxxx.com 
+Port: 18882 
+Conf.: Connected via Socket 
+ 
+Connected 
+State: Connected 
+Link: UP 
+Signal: UP 
+Unique ID       00:08:00:D3:EA:FC 
+Host Name        ODT_S194120972 
+DHCP Activated                     YES 
+IP address                     10.10.1.2 
+Mask                      255.255.255.0 
+Gateway                    10.10.1.200 
+DNS 1                        10.10.1.100 
+DNS 2                        10.10.1.200 
+Server: 
+WIFI: NO 
+ETHERNET: YES 
+Port: 8080 
+ 
+State: Searching 
+Link: DOWN 
+Signal: DOWN 
+Unique ID       00:08:00:D3:EA:FC 
+Host Name         
+DHCP Activated                      
+IP address                      
+Mask                       
+Gateway                     
+DNS 1                         
+DNS 2                         
+Server: 
+WIFI: NO 
+ETHERNET: YES 
+Port: 8080 
+ 
+
+ProMinent DULCOPOOL Pro setting  Page 32/40 
+ Communication programming instructions 
+ 
+➢ Wifi 
+ 
+ 
+Name of the programmed SSID 
+Connection status 
+Signal level 
+ 
+Unique ID or MAC address of the WIFI chip 
+Identification name on the Ethernet network 
+DHCP configuration 
+WIFI module IP address * 
+Subnet mask * 
+Gateway * 
+DNS 1 * 
+DNS 2 * 
+ 
+* The values displayed correspond either to the values set in the case of DHCP mode disabled, or to the 
+values received by DHCP from the network to which the module is connected. 
+ 
+➢ Eth. 
+ 
+Connection status on the Ethernet network 
+Physical connection status (wiring) 
+Configuration status 
+ 
+Unique ID or MAC address of the module 
+Identification name on the Ethernet network 
+DHCP configuration 
+Module IP address * 
+Subnet mask * 
+Gateway * 
+DNS 1 * 
+DNS 2 * 
+ 
+* The values displayed correspond either to the values set in the case of DHCP mode disabled, or to the 
+values received by DHCP from the network to which the module is connected. 
+ 
+ 
+➢ Socket 
+    GSM Socket version 
+ 
+Pin code status 
+DATA network connection status 
+Signal level 
+ 
+Name of the operator to which the chip is connected 
+Programmed APN 
+ 
+ 
+PIN: PIN OK 
+State: Connected 
+Signal: Medium 
+ 
+Network: F SFR 
+APN: m2minternet 
+ 
+SSID: XXXXXX-Etage 
+State: Connected 
+Signal: Good 
+ 
+Unique ID         00:00:F3:EB:35:E5 
+Host Name        ODT_W194120972 
+DHCP Activated                       YES 
+IP address                      10.10.1.2 
+Mask                       255.255.255.0 
+Gateway                     10.10.1.200 
+DNS 1                        10.10.1.100 
+DNS 2                        10.10.1.200 
+State: Connected 
+Link: UP 
+Interface: UP 
+Unique ID       00:08:00:D3:EA:FC 
+Host Name        ODT_S194120972 
+DHCP Activated                     YES 
+IP address                     10.10.1.2 
+Mask                      255.255.255.0 
+Gateway                    10.10.1.200 
+DNS 1                        10.10.1.100 
+DNS 2                        10.10.1.200 
+ 
+
+ProMinent DULCOPOOL Pro setting  Page 33/40 
+ Communication programming instructions 
+ 
+➢ Modbus 
+ 
+- Reminder of the Modbus configuration. 
+ 
+➢ Webserver 
+ 
+- Reminder of the Webserver configuration. 
+ 
+➢ MyPool 
+ 
+- Reminder of the configuration and status of the connection. 
+ 
+ 
+Identification of the machine on the Ethernet network: 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ODT_ : Root 
+W : WIFI 
+E : Ethernet 
+S : Socket 
+194120973 : Serial number of the device 
+
+Notes  Page 34/40 
+ 
+ Communication programming instructions 
+ 
+V. Modbus communication register 
+1) Address of Modbus registers 
+ 
+The registers are numbered in accordance with the Modbus standard. These are “HOLDINGS REGISTER” 
+on the range of registers from 40001 to 49999. 
+ 
+Some software and Modbus controllers use an address from 0 to 65535. 
+ 
+Modbus register 40001 therefore corresponds to Modbus address 0, register 40002 corresponds to 
+address 1 and so on and so forth. 
+ 
+ 
+Modbus 
+register 
+Number of 
+registers 
+Name Access Format Description 
+Interfaces 
+41001 2 signal_POT1 r REAL Signal on POT PI1 input [mV] 
+41003 2 signal_POT2 r REAL Signal on POT PI2 input [mV] 
+41005 2 signal_AI1 r REAL Current on input AI1 [mA] 
+41007 2 signal_AI2 r REAL Current on input AI2 [mA] 
+41009 2 signal_AI3 r REAL Current on input AI3 [mA] 
+41011 2 signal_AI4 r REAL Current on input AI4 [mA] 
+41013 2 signal_MI1 r REAL Signal on MI1 input [Depends on module] 
+41015 2 signal_MI2 r REAL Signal on MI2 input [Depends on module] 
+41017 2 signal_K1 r REAL Signal on DIx input [Depends switch config] 
+41019 2 signal_K2 r REAL Signal on DIx input [Depends switch config] 
+41031 1 signal_DI1 r BOOL 0=OPEN / 1=CLOSE 
+41032 1 signal_DI2 r BOOL 0=OPEN / 1=CLOSE 
+41033 1 signal_DI3 r BOOL 0=OPEN / 1=CLOSE 
+41034 1 signal_DI3 r BOOL 0=OPEN / 1=CLOSE 
+41041 1 state_PO1 r BOOL 0=OPEN / 1=CLOSE 
+41042 1 state_PO2 r BOOL 0=OPEN / 1=CLOSE 
+41043 1 state_FO1 r BOOL 0=OPEN / 1=CLOSE 
+41044 1 state_FO2 r BOOL 0=OPEN / 1=CLOSE 
+41045 1 state_RO1 r BOOL 0=OPEN / 1=CLOSE 
+41046 1 state_RO2 r BOOL 0=OPEN / 1=CLOSE 
+41056 2 signal_AO1 r REAL Signal on AO1 output [mA] 
+41058 2 signal_AO2 r REAL Signal on AO2 output [mA] 
+41060 2 signal_AO3 r REAL Signal on AO3 output [mA] 
+41062 2 signal_AO4 r REAL Signal on AO4 output [mA] 
+41076 1 state_HI1 r BOOL 0=Out of range / 1=In range (Schedule) 
+41077 1 state_HI2 r BOOL 0=Out of range / 1=In range (Schedule) 
+41078 1 state_HI3 r BOOL 0=Out of range / 1=In range (Schedule) 
+41079 1 state_HI4 r BOOL 0=Out of range / 1=In range (Schedule) 
+41080 1 state_HI5 r BOOL 0=Out of range / 1=In range (Schedule) 
+41081 1 state_HI6 r BOOL 0=Out of range / 1=In range (Schedule) 
+41082 1 state_HI7 r BOOL 0=Out of range / 1=In range (Schedule) 
+
+ProMinent DULCOPOOL Pro setting  Page 35/40 
+ Communication programming instructions 
+ 
+41083 1 state_HI8 r BOOL 0=Out of range / 1=In range (Schedule) 
+41092 2 Timestamp Local r DWORD Time since January 1 , 1970 00h00 [s] 
+Values and states 
+41101 1 device_state rw WORD Bit 0: device running 
+Bit 1: timer running  
+Bit 2: device strating up 
+Bit 3: device stopped due to timer 
+41201 2 param_E1_state rw DWORD Cf. ParamState 
+41203 2 param_E1_measure_value r REAL Measured value [unit of measure] 
+41205 2 param_E1_control_w rw REAL Regulation setpoint [unit of measure] 
+41207 2 param_E1_dosage_u r REAL Dosing control [1/1] 
+41209 2 param_E1_alarm_high rw REAL High alarm value [unit of measure] (1) (2) 
+41211 2 param_E1_alarm_low rw REAL Low alarm value [unit of measure] (1) (2) 
+41251 2 param_E2_state rw DWORD Cf. ParamState 
+41253 2 param_E2_measure_value r REAL Measured value [unit of measure] 
+41255 2 param_E2_control_w rw REAL Regulation setpoint [unit of measure] 
+41257 2 param_E2_dosage_u r REAL Dosing control [1/1] 
+41259 2 param_E2_alarm_high rw REAL High alarm value [unit of measure] (1) (2) 
+41261 2 param_E2_alarm_low rw REAL Low alarm value [unit of measure] (1) (2) 
+41301 2 param_E3_state rw DWORD Cf. ParamState 
+41303 2 param_E3_measure_value r REAL Measured value [unit of measure] 
+41305 2 param_E3_control_w rw REAL Regulation setpoint [unit of measure] 
+41307 2 param_E3_dosage_u r REAL Dosing control [1/1] 
+41309 2 param_E3_alarm_high rw REAL High alarm value [unit of measure] (1) (2) 
+41311 2 param_E3_alarm_low rw REAL Low alarm value [unit of measure] (1) (2) 
+41351 2 param_E4_state rw DWORD Cf. ParamState 
+41353 2 param_E4_measure_value r REAL Measured value [unit of measure] 
+41355 2 param_E4_control_w rw REAL Regulation setpoint [unit of measure] 
+41357 2 param_E4_dosage_u r REAL Dosing control [1/1] 
+41359 2 param_E4_alarm_high rw REAL High alarm value [unit of measure] (1) (2) 
+41361 2 param_E4_alarm_low rw REAL Low alarm value [unit of measure] (1) (2) 
+41401 2 param_E5_state rw DWORD Cf. ParamState 
+41403 2 param_E5_measure_value r REAL Measured value [unit of measure] 
+41405 2 param_E5_control_w rw REAL Regulation setpoint [unit of measure] 
+41407 2 param_E5_dosage_u r REAL Dosing control [1/1] 
+41409 2 param_E5_alarm_high rw REAL High alarm value [unit of measure] (1) (2) 
+41411 2 param_E5_alarm_low rw REAL Low alarm value [unit of measure] (1) (2) 
+41451 2 param_E6_state rw DWORD Cf. ParamState 
+41453 2 param_E6_measure_value r REAL Measured value [unit of measure] 
+41455 2 param_E6_control_w rw REAL Regulation setpoint [unit of measure] 
+41457 2 param_E6_dosage_u r REAL Dosing control [1/1] 
+41459 2 param_E6_alarm_high rw REAL High alarm value [unit of measure] (1) (2) 
+41461 2 param_E6_alarm_low rw REAL Low alarm value [unit of measure] (1) (2) 
+41501 2 param_E7_state rw DWORD Cf. ParamState 
+41503 2 param_E7_measure_value r REAL Measured value [unit of measure] 
+41505 2 param_E7_control_w rw REAL Regulation setpoint [unit of measure] 
+41507 2 param_E7_dosage_u r REAL Dosing control [1/1] 
+41509 2 param_E7_alarm_high rw REAL High alarm value [unit of measure] (1) (2) 
+
+ProMinent DULCOPOOL Pro setting  Page 36/40 
+ Communication programming instructions 
+ 
+41511 2 param_E7_alarm_low rw REAL Low alarm value [unit of measure] (1) (2) 
+41551 2 param_E8_state rw DWORD Cf. ParamState 
+41553 2 param_E8_measure_value r REAL Measured value [unit of measure] 
+41555 2 param_E8_control_w rw REAL Regulation setpoint [unit of measure] 
+41557 2 param_E8_dosage_u r REAL Dosing control [1/1] 
+41559 2 param_E8_alarm_high rw REAL High alarm value [unit of measure] (1) (2) 
+41561 2 param_E8_alarm_low rw REAL Low alarm value [unit of measure] (1) (2) 
+      
+42001 2 sensor_PI1_value r REAL PI1 sensor measurement value [sensor unit] 
+42003 2 sensor_PI2_value r REAL PI2 sensor measurement value [sensor unit] 
+42005 2 sensor_AI1_value r REAL AI1 sensor measurement value [sensor unit] 
+42007 2 sensor_AI2_value r REAL AI2 sensor measurement value [sensor unit] 
+42009 2 sensor_AI3_value r REAL AI3 sensor measurement value [sensor unit] 
+42011 2 sensor_AI4_value r REAL AI4 sensor measurement value [sensor unit] 
+42013 2 sensor_MI1_value r REAL MI1 sensor measurement value [sensor unit] 
+42015 2 sensor_MI2_value r REAL MI2 sensor measurement value [sensor unit] 
+42017 2 sensor_KI1_value r REAL DIx sensor measurement value [sensor unit] 
+42019 2 sensor_KI2_value r REAL DIx sensor measurement value [sensor unit] 
+Device 
+42051 14 device r STRUCT Device states and value 
+Channels 
+42101 130 param_E1 r STRUCT E1 channel states and value 
+42301 130 param_E2 r STRUCT E2 channel states and value 
+42501 130 param_E3 r STRUCT E3 channel states and value 
+42701 130 param_E4 r STRUCT E4 channel states and value 
+42901 130 param_E5 r STRUCT E5 channel states and value 
+43101 130 param_E6 r STRUCT E6 channel states and value 
+43301 130 param_E7 r STRUCT E7 channel states and value 
+43501 130 param_E8 r STRUCT E8 channel states and value 
+Sensors 
+45301 36 sensor_PI1 r STRUCT PI1 sensor states and value 
+45351 36 sensor_PI2 r STRUCT PI2 sensor states and value 
+45401 36 sensor_AI1 r STRUCT AI1 sensor states and value 
+45451 36 sensor_AI2 r STRUCT AI2 sensor states and value 
+45501 36 sensor_AI3 r STRUCT AI3 sensor states and value 
+45551 36 sensor_AI4 r STRUCT AI4 sensor states and value 
+45601 36 sensor_MI1 r STRUCT MI1 sensor states and value 
+45651 36 sensor_MI2 r STRUCT MI2 sensor states and value 
+45701 36 sensor_KI1 r STRUCT DIx sensor states and value 
+45751 36 sensor_KI2 r STRUCT DIx sensor states and value 
+Contacts 
+46051 12 switch_DI1 r STRUCT Contact status DI1 
+46076 12 switch_DI2 r STRUCT Contact status DI2 
+46101 12 switch_DI3 r STRUCT Contact status DI3 
+46126 12 switch_DI4 r STRUCT Contact status DI4 
+Relays 
+46301 58 relay_PO1 r STRUCT PO1 relay states and value 
+
+ProMinent DULCOPOOL Pro setting  Page 37/40 
+ Communication programming instructions 
+ 
+46401 58 relay_PO2 r STRUCT PO2 relay states and value 
+46501 58 relay_FO1 r STRUCT FO1 relay states and value 
+46601 58 relay_FO2 r STRUCT FO2 relay states and value 
+46701 58 relay_RO1 r STRUCT RO1 relay states and value 
+46801 58 relay_RO2 r STRUCT RO2 relay states and value 
+4…20mA Outputs 
+47801 18 iout_AO1 r STRUCT States and value of the output 4…20mA AO1 
+47826 18 iout_AO2 r STRUCT States and value of the output 4…20mA AO2 
+47851 18 iout_AO3 r STRUCT States and value of the output 4…20mA AO3 
+47876 18 iout_AO4 r STRUCT States and value of the output 4…20mA AO4 
+Calendar 
+48051 14 Calendar_HO1 r STRUCT HO1 calendar states and value 
+48076 14 Calendar_HO2 r STRUCT HO2 calendar states and value 
+48101 14 Calendar_HO3 r STRUCT HO3 calendar states and value 
+48126 14 Calendar_HO4 r STRUCT HO4 calendar states and value 
+48151 14 Calendar_HO5 r STRUCT HO5 calendar states and value 
+48176 14 Calendar_HO6 r STRUCT HO6 calendar states and value 
+48201 14 Calendar_HO7 r STRUCT HO7 calendar states and value 
+48226 14 Calendar_HO8 r STRUCT HO8 calendar states and value 
+ 
+(1)  : It isn’t possible to set a High alarm lower than a Low alarm and vice versa. 
+(2)  : To disable a low or high alarm you must send a NaN. 
+ 
+2) Data formatting 
+BOOL 
+“bool” uses 1 register and can have two values 0 or 1. 
+ 
+Example: 
+Register 41041 is the state of the PO1relay. 
+REG(41041) = 0: open relay 
+REG(41041) = 1: close relay 
+ 
+REAL 
+“real” uses 2 registers and allows coding of floating point values on 32bits. 
+ 
+Example: 
+Register 41303 is the measurement value of channel E03, the unit of this value is the unit 
+selected in the measurement menu of the device. 
+For a measurement value of 1.94ppm, the hexadecimal encoding is 0x3FF851EC. 
+REG(41303) = 0x51EC 
+REG(41303) = 0x3FF8 
+ 
+WORD 
+“word” uses 1 register to encode a 16bit integer or a bit field. 
+ 
+Example (bits): 
+Register 41101 contains the device status indicators. 
+REG(41101) = b0000000000000101 
+
+ProMinent DULCOPOOL Pro setting  Page 38/40 
+ Communication programming instructions 
+ 
+ 
+REG(41101)(bit00) = 1: the device is running 
+REG(41101)(bit01) = 0: the timer is not running 
+REG(41101)(bit02) = 1: regulation and alarms of a least one measurement channel is being 
+started 
+REG(41101)(bit03) = 0: there is no active timer  
+REG(41101)(bit04) - (bit15)  = 0: not used 
+ 
+DWORD 
+“dword” uses 2 registers and allow to code a 32-bit integer or bit field. 
+ 
+Example: 
+Register 41092 contains the local time of the device, this time corresponds to the number of 
+seconds since January 1, 1970. 
+April 27, 2015 at 3h35min19sec corresponds to 1430141719 seconds since the reference date, 
+the hexadecimal value is 0x553E3B17. 
+REG(41092) = 0x3B17 
+REG(41092) = 0x553E 
+ 
+ParamState 
+“dword” uses 2 registers and allow to code a 32-bit integer or bit field. 
+ 
+Bit 00 = 1 : Parameter ON (Regulation and alarms) 
+Bit 01 = 1 : Associated sensor(s) in start-up phase  (Active delay) 
+Bit 02 = 1 : Parameter paused 
+Bit 03 = 0 : Circulation contact or active flow meter (Ex : No water circulation in the room) 
+Bit 04 = 1 : Associated sensor(s) requiring maintenance (‘Key’ logo displayed) 
+Bit 05 = 1 : Parameter during dosing 
+Bit 06 = 1 : Parameter stop dosing on alarm 
+Bit 07 = 1 : Parameter in pause due to a timer 
+Bit 08 = 1 : Associated sensor(s) out of scale or disconnected 
+Bit 09 = 1 : Associated sensor(s) measuring low out of scale 
+Bit 10 = 1 : Associated sensor(s) measuring high out of scale 
+Bit 11 = 1 : Associated sensor(s) unstable measurement 
+Bit 12 = 1 : Low alarm active parameter (alarm threshold crossed) 
+Bit 13 = 1 : High alarm active parameter (alarm threshold crossed) 
+Bit 14 = 1 : Overdose parameter (maximum dosing time exceeded) 
+Bit 15 = 1 : Empty amount dosing tank 
+Bit 16 = 1 : Dosing tank empty 
+Bit 17 à 31 = X : Internal operating information, ‘random’ values 
+ 
+ 
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ ProMinent GmbH 
+Im Schuhmachergewann 5 -11 
+69123 Heidelberg 
+Telephone: +49 6221 842-0 
+Fax: +49 6221 842-419 
+Email: info@prominent.com 
+Internet: www.prominent.com 
+ 
+© 2023 by ProMinent GmbH 
+Subject to modification.  
+ 

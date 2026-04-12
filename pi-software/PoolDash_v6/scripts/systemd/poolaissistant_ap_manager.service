@@ -1,0 +1,45 @@
+[Unit]
+Description=PoolAIssistant Access Point Manager (Network Fallback)
+Documentation=https://github.com/bensalmon91-cpu/poolaissistant-
+
+# CRITICAL: Start as early as possible - we ARE the network fallback
+# Don't wait for network since we provide network when there is none
+After=basic.target systemd-networkd.service
+Before=network-online.target
+
+# Don't fail if these aren't present
+Wants=systemd-networkd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/poolaissistant_ap_manager.sh
+
+# ALWAYS restart - this is a critical safety service
+Restart=always
+RestartSec=10
+
+# Prevent rapid restart loops (max 5 restarts in 60 seconds)
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# CRITICAL: If AP manager keeps crashing, reboot as last resort
+# This ensures headless units can recover from stuck states
+StartLimitAction=reboot
+
+# Lower priority - don't hog CPU
+Nice=15
+
+# Generous timeouts - script may need to wait for WiFi hardware
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=poolaissistant_ap
+
+# Environment
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target

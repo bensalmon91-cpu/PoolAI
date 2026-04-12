@@ -1,0 +1,8 @@
+Flask>=3.0.0
+requests>=2.31.0
+plotly>=5.22.0
+pymodbus>=3.6.6
+matplotlib>=3.8.0
+python-dateutil>=2.9.0
+qrcode>=7.4.0
+sdnotify>=0.3.0

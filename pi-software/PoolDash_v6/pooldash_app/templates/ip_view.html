@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- templates/ip_view.html -->
+<div class="container" style="padding: 0.5rem 0;">
+  <form method="get" action="{{ url_for('ip_view.ip_view_index') }}" style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+    <label>Pool:</label>
+    <select name="pool" onchange="this.form.submit()">
+      <option value="">— Select —</option>
+      {% for name, ip in pool_ips.items() %}
+        <option value="{{ name }}" {% if selected_pool==name %}selected{% endif %}>
+          {{ name }} ({{ ip }})
+        </option>
+      {% endfor %}
+    </select>
+
+    <label>Host/IP:</label>
+    <input type="text" name="host" placeholder="controller-host or host:port" value="">
+
+    <button type="submit">Go</button>
+  </form>
+
+  <div style="margin-top:0.5rem; height:75vh; border:1px solid #ccc; position:relative;">
+    <iframe
+      id="controllerFrame"
+      src="{{ ip_proxied_src }}"
+      style="width:100%; height:100%; border:0;"
+      sandbox="allow-forms allow-scripts allow-same-origin allow-pointer-lock allow-popups"
+    ></iframe>
+    <div id="frameError" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; padding:20px; background:rgba(255,255,255,0.95); border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.2); max-width:500px;">
+      <h3 style="color:#b00020; margin:0 0 12px 0;">⚠️ Unable to Load Controller</h3>
+      <p id="errorMessage" style="margin:0 0 16px 0; font-size:14px;"></p>
+      <a href="{{ ip_raw_url }}" target="_blank" style="display:inline-block; padding:8px 16px; background:#0b5bd3; color:white; text-decoration:none; border-radius:4px;">
+        Open in New Tab
+      </a>
+    </div>
+  </div>
+
+  <p style="margin-top:0.5rem; font-size:0.9rem;">
+    Target: <code>{{ ip_raw_url }}</code> (proxied via {{ ip_proxied_src }})
+  </p>
+
+  <script>
+    const frame = document.getElementById('controllerFrame');
+    const errorDiv = document.getElementById('frameError');
+    const errorMsg = document.getElementById('errorMessage');
+
+    // Detect iframe load failures
+    let loaded = false;
+    frame.addEventListener('load', () => {
+      loaded = true;
+      errorDiv.style.display = 'none';
+    });
+
+    frame.addEventListener('error', (e) => {
+      errorMsg.textContent = 'The controller interface failed to load. This may be due to browser security restrictions when accessing remotely.';
+      errorDiv.style.display = 'block';
+    });
+
+    // Timeout check - if not loaded in 10 seconds, show error
+    setTimeout(() => {
+      if (!loaded) {
+        errorMsg.textContent = 'The controller interface is taking too long to load. Try opening in a new tab using the button below.';
+        errorDiv.style.display = 'block';
+      }
+    }, 10000);
+
+    // Check for CSP violations
+    window.addEventListener('securitypolicyviolation', (e) => {
+      console.error('CSP Violation:', e);
+      errorMsg.textContent = 'Content Security Policy blocked the iframe. Your browser or remote session has security restrictions preventing embedded content.';
+      errorDiv.style.display = 'block';
+    });
+  </script>
+</div>
+
+{% endblock %}

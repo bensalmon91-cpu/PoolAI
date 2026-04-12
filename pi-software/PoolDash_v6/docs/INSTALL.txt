@@ -1,0 +1,72 @@
+POOL DASH - INSTALLATION GUIDE
+===============================
+
+This system can be installed directly from an SD card with no internet access required.
+Assumes Raspberry Pi OS and the repo located at /opt/PoolAIssistant/app on the Pi.
+
+------------------------------------
+STEP 1 - PREPARE SD CARD
+------------------------------------
+1. Insert SD card into your computer.
+2. Copy the folder:
+   PoolAIssistant_v6/
+   onto the SD card.
+
+(If on Windows, you may only see the BOOT partition - that is fine.)
+
+------------------------------------
+STEP 2 - BOOT THE PI
+------------------------------------
+1. Insert SD card into Raspberry Pi
+2. Power on
+3. Log in as your configured user
+
+------------------------------------
+STEP 3 - COPY REPO
+------------------------------------
+Open a terminal and run:
+
+    sudo mkdir -p /opt/PoolAIssistant
+    sudo cp -r /path/to/PoolAIssistant_v6 /opt/PoolAIssistant/app
+
+------------------------------------
+STEP 4 - FIX LINE ENDINGS
+------------------------------------
+Run:
+
+    cd /opt/PoolAIssistant/app
+    sed -i 's/
+$//' scripts/*.sh
+
+------------------------------------
+STEP 5 - CONFIGURE ENV
+------------------------------------
+Edit the environment file:
+
+    sudo nano /etc/PoolAIssistant/poolaissistant.env
+
+At minimum, set:
+- POOLS_JSON to your controller IPs/hostnames
+
+------------------------------------
+STEP 6 - RUN POST-INSTALL
+------------------------------------
+Run:
+
+    sudo bash /opt/PoolAIssistant/app/scripts/post_install.sh
+
+------------------------------------
+STEP 7 - VERIFY
+------------------------------------
+Check services:
+
+    sudo systemctl status poolaissistant_logger
+    sudo systemctl status poolaissistant_ui
+    sudo systemctl status poolaissistant_ap_manager
+
+Access the UI at:
+http://192.168.4.1:8080 (AP) or http://192.168.2.1:8080 (LAN)
+
+------------------------------------
+END
+------------------------------------

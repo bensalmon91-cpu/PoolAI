@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Client Portal | PoolDash_v6</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-mark">PoolDash_v6</span>
+      <span class="brand-sub">Client Portal</span>
+    </div>
+    <nav class="site-nav">
+      <a href="../index.html">Home</a>
+      <a href="advertising.html">Advertising & Sales</a>
+      <a href="/account">Account</a>
+      <form action="/api/logout" method="post">
+        <button class="link-button" type="submit">Sign out</button>
+      </form>
+    </nav>
+  </header>
+
+  <main class="content">
+    <section class="hero">
+      <h1>Your PoolDash overview</h1>
+      <p class="lead">Select a pool to view the latest readings and recent history.</p>
+    </section>
+
+    <section class="tabs" id="pool-tabs"></section>
+
+    <section class="card" id="pool-summary">
+      <h2 id="pool-title">Select a pool</h2>
+      <p class="muted" id="pool-meta"></p>
+      <div class="summary-grid" id="summary-grid"></div>
+    </section>
+
+    <section class="card" id="pool-charts">
+      <h2>Trends</h2>
+      <div id="chart"></div>
+    </section>
+
+    <section class="card" id="ai-summary">
+      <h2>AI Summary</h2>
+      <ul class="list" id="ai-list"></ul>
+    </section>
+
+    <section class="card" id="alarm-summary">
+      <h2>Active Alarms</h2>
+      <ul class="list" id="alarm-list"></ul>
+    </section>
+
+    <section class="card" id="recent-readings">
+      <h2>Recent readings</h2>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Metric</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody id="recent-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>PoolDash_v6 &copy; <span id="year"></span></span>
+  </footer>
+
+  <script src="../js/app.js"></script>
+  <!-- Using specific version for stability; consider self-hosting for production -->
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" crossorigin="anonymous"></script>
+  <script src="../js/portal.js"></script>
+</body>
+</html>

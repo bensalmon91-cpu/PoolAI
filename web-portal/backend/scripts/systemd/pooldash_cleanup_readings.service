@@ -1,0 +1,10 @@
+[Unit]
+Description=PoolDash Cleanup Old Device Readings
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/pooldash/portal/backend
+EnvironmentFile=/opt/pooldash/portal/backend/.env
+ExecStart=/usr/bin/npm run cleanup-readings

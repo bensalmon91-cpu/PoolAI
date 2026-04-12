@@ -1,0 +1,357 @@
+ 
+ 
+ 
+ 
+ 
+Modbus-TCP 
+Protocol Specification 
+for swimming pool controllers 
+PoolManager® 
+Analyt 
+ 
+Status as at 20.05.2013 
+ 
+ 
+ 
+ 
+ 
+ 
+  
+
+
+Modbus-TCP Protocol Specification for swimming pool controllers PoolManager ® / Analyt  
+   
+1 Term Definitions 
+This document refers to all members of the 5 th  generation of the 
+BAYROL PoolManager ® and Analyt swimming pool controller families 
+(from 2012). 
+In the following chapters, the term PoolManager 
+® will be used, 
+representing all members of the BAYROL PoolManager ® and Analyt 
+swimming pool controller families: 
+• PoolManager 
+® Chlorine / Bromine / Oxygen 
+• PoolManager ® PRO 
+• Analyt 2 
+• Analyt 3 / Analyt 3 Hotel 
+2 Overview 
+The PoolManager ® swimming pool controllers support a Modbus-TCP 
+protocol, which allows Building Management or other external systems 
+to read out measurement readings, parameter values and alarm 
+statuses from the controller. 
+It provides a Modbus-TCP server. The PoolManager 
+® swimming pool 
+controller must be connected to the same TCP/IP net work as the 
+Modbus-TCP client, which reads out the data. 
+Refer to the PoolManager 
+® user manual for details about the network 
+connection (chapter Network Connection and following chapters). 
+ 
+ 
+Important Notice 
+Software Release 4.3.0 or late required 
+The Modbus-
+TCP protocol is available from software 
+release 4.3.0 (May 2013). Controllers with a previo us 
+software release can easily be updated with a USB 
+memory stick. 
+The latest software release can be downloaded from 
+ 
+http://www.poolmanager.info  
+ Menu Service 
+User name = partner 
+Password = pool 
+ 
+3 Addressing 
+Modbus-TCP uses IP network addresses. The PoolManag er ® 
+controller uses a static IP address within the local network. 
+Press  and then  to display a help page which indic ates the 
+IP address of the PoolManager ® (amongst others). 
+ 
+  
+
+
+Modbus-TCP Protocol Specification for swimming pool controllers PoolManager ® / Analyt  
+   
+4 Read Parameter Values (Modbus Function 04) 
+Modbus Function Read Input Registers (Function Code = 04)  
+Device ID = Not Relevant (use e.g. 1) 
+Number of registers = 1 (reading multiple registers is NOT supported) 
+4.1  Register Data Adresses 
+“Adr. ” indicates the Modbus-TCP register address (decimal). 
+“Decimals ” indicates the number of decimals. 
+If the number of decimals is 2, a value of 720 must be displayed as”7.20”. 
+If the number of decimals is 1, a value of 250 must be displayed as”25.0”. 
+If the number of decimals is 0, a value of 650 must be displayed as”650”. 
+ 
+Adr. English German French Spanish Unit Decimals  Min.  Max.  
+3001 Setpoint pH Sollwert pH Valeur de consigne pH Valor nominal de pH pH 2  600  850  
+3002 
+Lower Alarm threshold 
+pH 
+Untere Alarmgrenze 
+pH 
+Seuil d’alarme inférieur 
+pH 
+Umbral inferior de 
+alarma de pH pH 2  0 850  
+3003 
+Upper Alarm threshold 
+pH Obere Alarmgrenze pH 
+Seuil d’alarme 
+supérieur pH 
+Umbral superior de 
+alarma de pH pH 2  600  999  
+3017 
+Setpoint Chlorine / 
+Bromine Sollwert Chlor / Brom 
+Valeur de consigne 
+chlore / brome 
+Valor nominal de cloro 
+/ bromo mg/l 2  0 999  
+3018 
+Lower Alarm threshold 
+Chlorine / Bromine 
+Untere Alarmgrenze 
+Chlor / Brom 
+Seuil d’alarme inférieur 
+chlore / brome 
+Umbral  inferior de 
+alarma de cloro / 
+bromo mg/l 2
+ 0 999  
+3019 
+Upper Alarm threshold 
+Chlorine / Bromine 
+Obere Alarmgrenze 
+Chlor / Brom 
+Seuil d’alarme 
+supérieur chlore / 
+brome 
+Umbral sup. de alarma 
+de cloro / bromo mg/l 2
+ 0 999  
+3049 Setpoint Redox (mV) Sollwert Redox (mV) 
+Valeur de consigne 
+Redox (mV) 
+Valor nominal de redox 
+(mV) mV 0  0 999  
+3050 Setpoint Redox (mV) Sollwert Redox (mV) 
+Valeur de consigne 
+Redox (mV) 
+Valor nominal de redox 
+(mV) mV 0  0 999  
+3051 
+Lower Alarm threshold 
+Redox (mV) 
+Untere Alarmgrenze 
+Redox (mV) 
+Seuil d’alarme inférieur 
+Redox (mV) 
+Umbral inferior de 
+alarma de redox (mV) mV 0  0 999  
+3052 
+Lower Alarm threshold 
+Redox (mV) 
+Untere Alarmgrenze 
+Redox (mV) 
+Seuil d’alarme inférieur 
+Redox (mV) 
+Umbral inferior de 
+alarma de redox (mV) mV 0  0 999  
+3053 
+Upper Alarm threshold 
+Redox (mV) 
+Obere Alarmgrenze 
+Redox (mV) 
+Seuil d’alarme 
+supérieur Redox (mV) 
+Umbral sup. de alarma 
+de redox (mV) mV 0  0 999  
+3054 
+Upper Alarm threshold 
+Redox (mV) 
+Obere Alarmgrenze 
+Redox (mV) 
+Seuil d’alarme 
+supérieur Redox (mV) 
+Umbral sup. de alarma 
+de redox (mV) mV 0  0 999  
+3069 
+Lower Alarm Threshold 
+T1 Untere Alarmgrenze T1  
+Seuil d’alarme inférieur 
+T1 
+Umbral inferior de 
+alarma de T1 °C 1  0 500  
+3070 
+Upper Alarm Threshold 
+T1 Obere Alarmgrenze T1 
+Seuil d’alarme 
+supérieur T1 
+Umbral superior de 
+alarma de T1 °C 1  0 500  
+3074 
+Lower Alarm Threshold 
+T2 Untere Alarmgrenze T2  
+Seuil d’alarme inférieur 
+T2 
+Umbral inferior de 
+alarma de T2 °C 1  0 500  
+3075 
+Upper Alarm Threshold 
+T2 Obere Alarmgrenze T2 
+Seuil d’alarme 
+supérieur T2 
+Umbral  superior de 
+alarma de T2 °C 1  0 500  
+3079 
+Lower Alarm Threshold 
+T3 Untere Alarmgrenze T3  
+Seuil d’alarme inférieur 
+T3 
+Umbral inferior de 
+alarma de T3 °C 1  0 500  
+3080 
+Upper Alarm Threshold 
+T3 Obere Alarmgrenze T3 
+Seuil d’alarme 
+supérieur T3 
+Umbral  superior de 
+alarma de T3 °C 1  0 500  
+3084 
+Basic dosing amount 
+O2 (BayroSoft) 
+Grund -Dosiermenge 
+O2 (BayroSoft) 
+Dosage de base O2 
+(BayroSoft) 
+Cantidad dosif. de 
+base O2 (Bayrosoft) l 1  0 999  
+4.2  Example 
+Read pH setpoint at address 3001 (0x0BB9): 
+Request: [00h] [00h] [00h] [00h] [00h] [06h] [01h] [04h] [0Bh] [B9h] [00h] [01h] 
+Reply:   [00h] [00h] [00h] [00h] [00h] [05h] [01h] [04h] [02h] [02h] [D0h]  
+The value is 0x02D0 = 720 (display „7.20“ with two decimals) 
+ 
+ 
+ 
+
+Modbus-TCP Protocol Specification for swimming pool controllers PoolManager ® / Analyt  
+   
+5 Read Measurement Readings (Modbus Function 04) 
+Modbus Function Read Input Registers (Function Code = 04)  
+Device ID = Not Relevant (use e.g. 1) 
+Number of registers = 1 (reading multiple registers is NOT supported) 
+5.1  Register Data Adresses 
+“Adr. ” indicates the Modbus-TCP register address (decimal). 
+“Decimals ” indicates the number of decimals. 
+If the number of decimals is 2, a value of 720 must be displayed as”7.20”. 
+If the number of decimals is 1, a value of 250 must be displayed as”25.0”. 
+If the number of decimals is 0, a value of 650 must be displayed as”650”. 
+ 
+Adr. English German French Spanish Unit Decimals  Min.  Max.  
+4001 pH pH pH pH pH 2  0 999  
+4008 Cl (free chlorine) / 
+Br (free bromine) 
+Cl (freies Chlor) / 
+Br (freies Brom) 
+Cl (chlore libre) / 
+Br (brome libre) 
+Cl (free chlorine) / 
+Br (free bromine) 
+mg/l 2
+ 0 999  
+4022 Redox Redox Redox Redox mV 0  0 999  
+4033 T1 (temperature 1) T1 (Temperatur 1) T1 (tempe rature 1) T1 (temperature 1) °C 1  100  500  
+4047 Battery Batterie Batterie Batería V 2  0 500  
+4069 T2 (temperature 2) T2 (Temperatur 2) T2 (tempe rature 2) T2 (temperature 2) °C 1  100  500  
+4071 T3 (temperature 3) T3 (Temperatur 3) T3 (tempe rature 3) T3 (temperature 3) °C 1  100  500  
+4077 O2 (dosed amount O2) O2 (dosierte Menge 
+O2) 
+O2 (quantité dosée O2)  O2 (dosed amount O2) l 1  0 999  
+5.2  Example 
+Read current pH measurement at address 4001 (0x0FA1): 
+Request: [00h] [00h] [00h] [00h] [00h] [06h] [01h] [04h] [0Fh] [A1h] [00h] [01h] 
+Reply:   [00h] [00h] [00h] [00h] [00h] [05h] [01h] [04h] [02h] [02h] [DBh] 
+The value is 0x02DB = 731 (display „7.31“ with two decimals) 
+  
+
+Modbus-TCP Protocol Specification for swimming pool controllers PoolManager ® / Analyt  
+   
+6 Read Alarm Statuses (Modbus Function 02) 
+Modbus Function Read Input Status (Function Code = 02)  
+Device ID = Not Relevant (use e.g. 1) 
+Number of inputs = 1 (reading multiple inputs is NOT supported) 
+6.1  Register Data Adresses 
+“Adr. ” indicates the Modbus-TCP register address (decimal). 
+Value = 1 indicates, that the requested alarm is currently active. 
+Value = 0 indicates, that the requested alarm is currently NOT active. 
+ 
+Adr. English German French Spanish 
+2001 Collective alarm Sammelalarm Alarme collective  Collective alarm 
+2002 Power-on Delay Einschaltverzögerung Temporisat ion de l'activation Inicio retardado 
+2003 No flow signal (input flow) Kein Flow-Signal ( Eingang Flow) Aucun signal débit (entrée débit) No hay señal de caudal (entrada 
+Flow) 
+2004 No flow signal (input IN 1) Kein Flow-Signal ( Eingang IN 1) Aucun signal débit (entrée IN1) No ha y señal de caudal (entrada 
+IN 1) 
+2005 Upper Alarm pH Oberer Alarm pH Alarme supérieu re pH Alarma superior de pH 
+2006 Lower Alarm pH Unterer Alarm pH Alarme inférie ure pH Alarma inferior de pH 
+2009 Dosing Alarm pH Dosier-Alarm pH Alarme de dosa ge pH Alarma de dosificación de pH 
+2010 Upper Alarm Chlorine / Bromine Oberer Alarm Ch lor / Brom Alarme supérieure chlore / 
+brome 
+Alarma superior de cloro / bromo 
+2011 Lower Alarm Chlorine / Bromine Unterer Alarm C hlor / Brom Alarme inférieure chlore / brome Alarma  inferior de cloro / bromo 
+2012 Level Alarm Chlorine Niveau Alarm Chlor Alarme  niveau chlore Alarma de nivel de cloro 
+2013 Level Warning Chlorine Niveau-Warnung Chlor Av ertissement niveau chlore Aviso de nivel de cloro 
+2014 Dosing Alarm Chlorine / Bromine Dosier-Alarm C hlor / Brom Alarme de dosage chlore / brome  Alarma de dosificación de cloro / 
+bromo 
+2019 Upper Alarm Redox Oberer Alarm Redox Alarme su périeure Redox (mV) Alarma superior de redox 
+2020 Lower Alarm Redox Unterer Alarm Redox Alarme i nférieure Redox (mV) Alarma inferior de redox 
+2021 Level Alarm Redox Niveau Alarm Redox Alarme ni veau de Redox (chlore) Alarma de nivel de redox 
+2022 Level Warning Redox Niveau-Warnung Redox Avert issement de niveau Redox 
+(chlore) 
+Aviso de nivel de redox 
+2023 Dosing Alarm Redox Dosier-Alarm Redox Alarme d e dosage Redox Alarma de dosificación de redox 
+2024 Level Alarm O2 (BayroSoft) Niveau Alarm O2 (Ba yroSoft) Alarme niveau O2 (BayroSoft) Alarma de niv el de O2 
+(BayroSoft) 
+2025 Level Warning O2 Niveau-Warnung O2 (BayroSoft)  Avertissement niveau O2 
+(BayroSoft) 
+Aviso de nivel de O2 (BayroSoft) 
+2028 Upper Alarm Temperature T1 Oberer Alarm Temper atur T1 Alarme supérieure température 
+T1 
+Alarma superior de temperatura 
+T1 
+2029 Lower Alarm Temperature T1 Unterer Alarm Tempe ratur T1 Alarme inférieure température T1  Alarma inferior de temperatura 
+T1 
+2030 Upper Alarm Temperature T2 Oberer Alarm Temper atur T2 Alarme supérieure température 
+T2 
+Alarma superior de temperatura 
+T2 
+2031 Lower Alarm Temperature T2 Unterer Alarm Tempe ratur T2 Alarme inférieure température T2  Alarma inferior de temperatura 
+T2 
+2032 Upper Alarm Temperature T3 Oberer Alarm Temper atur T3 Alarme supérieure température 
+T3 
+Alarma superior de temperatura 
+T3 
+2033 Lower Alarm Temperature T3 Unterer Alarm Tempe ratur T3 Alarme inférieure température T3  Alarma inferior de temperatura 
+T3 
+2034 Battery Alarm Batterie-Alarm Alarme batterie A larma de batería 
+2035 Level Alarm pH+ Niveau Alarm pH+ Alarme niveau  pH+ Alarma de nivel de pH-Plus 
+2036 Level Warning pH+ Niveau-Warnung pH+ Avertisse ment niveau pH+ Avisa de nivel de pH-Plus 
+2037 Level Alarm pH- Niveau Alarm pH- Alarme niveau  pH- Alarma de nivel de pH-Minus 
+2038 Level Warning pH- Niveau-Warnung pH- Avertisse ment niveau pH- Avisa de nivel de pH-Minus 
+2039 Level Alarm Flockmatic Niveau Alarm Flockmatic  Alarme niveau Flockmatic Alarma de nivel de Flockm atic 
+
+Modbus-TCP Protocol Specification for swimming pool controllers PoolManager ® / Analyt  
+   
+6.2  Example 
+Read the collective alarm status (summary of all alarms) at address 2001 (0x07D1): 
+Request: [00h] [00h] [00h] [00h] [00h] [06h] [01h] [02h] [07h] [D1h] [00h] [01h] 
+Reply:   [00h] [00h] [00h] [00h] [00h] [04h] [01h] [02h] [01h] [01h] 
+The value is 0x01 (the last byte in the frame), i.e. the collective alarm is currently active (one or more alarms are active). 
+ 
+ 
+ 
+ 
+ 

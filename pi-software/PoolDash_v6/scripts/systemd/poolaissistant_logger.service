@@ -1,0 +1,37 @@
+[Unit]
+Description=PoolAIssistant Modbus Logger
+After=network-online.target
+Wants=network-online.target
+# Prevent rapid restart loops
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=notify
+User=poolai
+Group=poolai
+WorkingDirectory=/opt/PoolAIssistant/app
+EnvironmentFile=-/etc/PoolAIssistant/poolaissistant.env
+ExecStart=/opt/PoolAIssistant/venv/bin/python /opt/PoolAIssistant/app/tools/modbus_logger.py
+Restart=on-failure
+RestartSec=5
+# Exponential backoff for restarts
+RestartMaxDelaySec=60
+RestartSteps=4
+Nice=10
+CPUWeight=50
+# Watchdog - service must ping within this time or be restarted
+WatchdogSec=120
+# Resource limits
+MemoryMax=256M
+MemoryHigh=192M
+LimitNOFILE=2048
+TimeoutStopSec=30
+# Security hardening
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/PoolAIssistant/data /tmp
+
+[Install]
+WantedBy=multi-user.target

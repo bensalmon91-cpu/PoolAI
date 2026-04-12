@@ -1,0 +1,11 @@
+[Unit]
+Description=PoolAIssistant Data Cleanup Timer
+
+[Timer]
+# Run daily at 3 AM
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=1800
+
+[Install]
+WantedBy=timers.target

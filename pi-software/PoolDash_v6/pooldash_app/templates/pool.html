@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>{{ pool }}</h2>
+
+<!-- Controller Access Box -->
+{% set controller_ip = pool_ips.get(pool, '') %}
+{% if controller_ip %}
+<div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid #0f3460;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+    <div>
+      <div style="color: #8892b0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Controller IP Address</div>
+      <div style="color: #64ffda; font-family: monospace; font-size: 20px; font-weight: 600;">{{ controller_ip }}</div>
+    </div>
+    <a href="/proxy/ui/?host={{ controller_ip }}" target="_blank" rel="noopener"
+       style="background: #4a90e2; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(74,144,226,0.3);">
+      <span style="font-size: 18px;">&#x1F310;</span> Open Controller
+    </a>
+  </div>
+</div>
+{% endif %}
+
+<!-- Controller Status Banner -->
+<div id="controller-status-banner" style="background: #1e1e2e; border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; border: 1px solid #333; display: none;">
+  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+    <span style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Controller Status</span>
+    <span id="status-update-time" style="color: #666; font-size: 10px;"></span>
+  </div>
+  <div id="controller-status-chips" style="display: flex; flex-wrap: wrap; gap: 10px;">
+    <!-- Controller status chips will be inserted here -->
+  </div>
+</div>
+
+<script>
+(function() {
+  const pool = "{{ pool }}";
+  const banner = document.getElementById("controller-status-banner");
+  const chipsContainer = document.getElementById("controller-status-chips");
+  const updateTimeEl = document.getElementById("status-update-time");
+
+  function fetchControllerStates() {
+    fetch(`/alarms/api/${encodeURIComponent(pool)}/controller-states`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.controllers && data.controllers.length > 0) {
+          banner.style.display = "block";
+          renderControllerChips(data.controllers);
+        } else {
+          banner.style.display = "none";
+        }
+      })
+      .catch(err => {
+        console.error("Failed to fetch controller states:", err);
+        banner.style.display = "none";
+      });
+  }
+
+  function renderControllerChips(controllers) {
+    chipsContainer.innerHTML = "";
+
+    controllers.forEach(c => {
+      const chip = document.createElement("div");
+      chip.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: ${c.color}22;
+        border: 1px solid ${c.color};
+        border-radius: 20px;
+        padding: 6px 14px;
+      `;
+
+      // Channel name
+      const channelSpan = document.createElement("span");
+      channelSpan.style.cssText = "color: #ccc; font-weight: 600; font-size: 13px;";
+      channelSpan.textContent = c.channel;
+
+      // Mode badge
+      const modeSpan = document.createElement("span");
+      modeSpan.style.cssText = `
+        background: ${c.color};
+        color: white;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+      `;
+      modeSpan.textContent = c.primary_mode;
+
+      chip.appendChild(channelSpan);
+      chip.appendChild(modeSpan);
+      chipsContainer.appendChild(chip);
+    });
+
+    // Update timestamp
+    updateTimeEl.textContent = new Date().toLocaleTimeString();
+  }
+
+  // Initial fetch
+  fetchControllerStates();
+
+  // Refresh every 10 seconds
+  setInterval(fetchControllerStates, 10000);
+})();
+</script>
+
+<div class="grid-2">
+  <a class="btn" href="{{ url_for('charts.chart_page', pool=pool, metric='chlorine') }}">Chlorine History</a>
+  <a class="btn" href="{{ url_for('charts.chart_page', pool=pool, metric='ph') }}">pH History</a>
+  <a class="btn" href="{{ url_for('charts.chart_page', pool=pool, metric='orp') }}">ORP History</a>
+  <a class="btn" href="{{ url_for('charts.chart_page', pool=pool, metric='temp') }}">Temp History</a>
+  <a class="btn" href="{{ url_for('charts.trends_page', pool=pool) }}" style="grid-column: span 2;">All Trends (Comparison)</a>
+  <a class="btn secondary" href="{{ url_for('main.maintenance_page', pool=pool) }}">Maintenance</a>
+  <a class="btn" href="{{ url_for('alarms.alarms_page', pool=pool) }}">Alarms</a>
+</div>
+
+{% endblock %}

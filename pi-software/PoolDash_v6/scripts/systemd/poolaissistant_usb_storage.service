@@ -1,0 +1,15 @@
+[Unit]
+Description=PoolAIssistant USB Storage Detection
+DefaultDependencies=no
+After=local-fs.target
+Before=poolaissistant_logger.service poolaissistant_ui.service poolaissistant_provision.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/PoolAIssistant/app/scripts/usb_data_mount.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

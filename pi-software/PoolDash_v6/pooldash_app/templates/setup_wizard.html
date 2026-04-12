@@ -1,0 +1,2047 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PoolAIssistant Setup</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/touch.css') }}">
+  <style>
+    :root {
+      --wizard-bg-light: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+      --wizard-bg-dark: linear-gradient(135deg, #0d1b2a 0%, #1b263b 100%);
+      --wizard-surface-light: #ffffff;
+      --wizard-surface-dark: var(--color-surface, #1e2a3a);
+      --wizard-text-light: #1a1a2e;
+      --wizard-text-dark: #e8e8e8;
+      --wizard-muted-light: #666;
+      --wizard-muted-dark: #9ca3af;
+      --wizard-border-light: #e0e0e0;
+      --wizard-border-dark: #374151;
+      --wizard-accent: #4a90e2;
+      --wizard-accent-light: rgba(74, 144, 226, 0.15);
+      --wizard-success: #10b981;
+    }
+
+    body {
+      background: var(--wizard-bg-dark);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      margin: 0;
+      transition: background 0.3s ease;
+    }
+
+    body[data-wizard-theme="light"] {
+      background: var(--wizard-bg-light);
+    }
+
+    .setup-container {
+      max-width: 500px;
+      width: 100%;
+    }
+
+    .setup-card {
+      background: var(--wizard-surface-dark);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      color: var(--wizard-text-dark);
+      transition: all 0.3s ease;
+    }
+
+    body[data-wizard-theme="light"] .setup-card {
+      background: var(--wizard-surface-light);
+      color: var(--wizard-text-light);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+
+    .setup-logo {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .setup-logo h1 {
+      color: var(--wizard-accent);
+      font-size: 28px;
+      margin: 0;
+    }
+
+    .setup-logo .version {
+      color: var(--wizard-muted-dark);
+      font-size: 12px;
+    }
+
+    body[data-wizard-theme="light"] .setup-logo .version {
+      color: var(--wizard-muted-light);
+    }
+
+    .setup-progress {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+
+    .progress-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--wizard-border-dark);
+      transition: all 0.3s;
+    }
+
+    body[data-wizard-theme="light"] .progress-dot {
+      background: var(--wizard-border-light);
+    }
+
+    .progress-dot.active {
+      background: var(--wizard-accent);
+      transform: scale(1.2);
+    }
+
+    .progress-dot.completed {
+      background: var(--wizard-success);
+    }
+
+    .setup-step {
+      display: none;
+    }
+
+    .setup-step.active {
+      display: block;
+    }
+
+    .setup-title {
+      font-size: 20px;
+      margin: 0 0 8px 0;
+      text-align: center;
+    }
+
+    .setup-description {
+      color: var(--wizard-muted-dark);
+      text-align: center;
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    body[data-wizard-theme="light"] .setup-description {
+      color: var(--wizard-muted-light);
+    }
+
+    /* Subtitles */
+    .setup-subtitle {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--wizard-muted-dark);
+      margin: 16px 0 8px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    body[data-wizard-theme="light"] .setup-subtitle {
+      color: var(--wizard-muted-light);
+    }
+
+    .setup-hint {
+      font-size: 12px;
+      color: var(--wizard-muted-dark);
+      margin-bottom: 12px;
+    }
+
+    body[data-wizard-theme="light"] .setup-hint {
+      color: var(--wizard-muted-light);
+    }
+
+    /* Language Grid */
+    .language-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    /* Rotation Grid */
+    .rotation-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .rotation-btn {
+      padding: 12px 8px;
+      border: 2px solid var(--wizard-border-dark);
+      border-radius: 10px;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      color: inherit;
+    }
+
+    body[data-wizard-theme="light"] .rotation-btn {
+      border-color: var(--wizard-border-light);
+    }
+
+    .rotation-btn:hover {
+      border-color: var(--wizard-accent);
+    }
+
+    .rotation-btn.selected {
+      border-color: var(--wizard-accent);
+      background: var(--wizard-accent-light);
+    }
+
+    .rotation-btn .rotation-icon {
+      font-size: 24px;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .rotation-btn .rotation-label {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .rotation-btn .rotation-hint {
+      font-size: 10px;
+      color: var(--wizard-muted-dark);
+    }
+
+    body[data-wizard-theme="light"] .rotation-btn .rotation-hint {
+      color: var(--wizard-muted-light);
+    }
+
+    /* Storage Info */
+    .storage-status {
+      padding: 20px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.05);
+      margin: 16px 0;
+      text-align: center;
+    }
+
+    body[data-wizard-theme="light"] .storage-status {
+      background: rgba(0,0,0,0.03);
+    }
+
+    .storage-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .storage-found {
+      background: var(--wizard-accent-light);
+      border: 2px solid var(--wizard-accent);
+    }
+
+    .storage-details {
+      font-size: 14px;
+      margin-top: 12px;
+    }
+
+    .storage-details .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+
+    /* Update Status */
+    .update-status {
+      padding: 24px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.05);
+      margin: 16px 0;
+      text-align: center;
+    }
+
+    body[data-wizard-theme="light"] .update-status {
+      background: rgba(0,0,0,0.03);
+    }
+
+    .update-available {
+      background: var(--wizard-accent-light);
+      border: 2px solid var(--wizard-accent);
+    }
+
+    .update-version {
+      font-size: 24px;
+      font-weight: bold;
+      color: var(--wizard-accent);
+      margin: 8px 0;
+    }
+
+    .update-description {
+      font-size: 13px;
+      color: var(--wizard-muted-dark);
+      margin: 8px 0;
+    }
+
+    body[data-wizard-theme="light"] .update-description {
+      color: var(--wizard-muted-light);
+    }
+
+    .update-progress {
+      margin-top: 16px;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: var(--wizard-border-dark);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    body[data-wizard-theme="light"] .progress-bar {
+      background: var(--wizard-border-light);
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--wizard-accent);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .language-btn {
+      padding: 16px;
+      border: 2px solid var(--wizard-border-dark);
+      border-radius: 12px;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      color: inherit;
+    }
+
+    body[data-wizard-theme="light"] .language-btn {
+      border-color: var(--wizard-border-light);
+    }
+
+    .language-btn:hover {
+      border-color: var(--wizard-accent);
+    }
+
+    .language-btn.selected {
+      border-color: var(--wizard-accent);
+      background: var(--wizard-accent-light);
+    }
+
+    .language-btn .flag {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    .language-btn .label {
+      font-weight: 600;
+    }
+
+    /* Theme Selection */
+    .theme-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .theme-btn {
+      padding: 24px 16px;
+      border: 2px solid var(--wizard-border-dark);
+      border-radius: 12px;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      color: inherit;
+    }
+
+    body[data-wizard-theme="light"] .theme-btn {
+      border-color: var(--wizard-border-light);
+    }
+
+    .theme-btn:hover {
+      border-color: var(--wizard-accent);
+    }
+
+    .theme-btn.selected {
+      border-color: var(--wizard-accent);
+      background: var(--wizard-accent-light);
+    }
+
+    .theme-btn .theme-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .theme-btn .theme-label {
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .theme-btn .theme-hint {
+      font-size: 12px;
+      color: var(--wizard-muted-dark);
+      margin-top: 4px;
+    }
+
+    body[data-wizard-theme="light"] .theme-btn .theme-hint {
+      color: var(--wizard-muted-light);
+    }
+
+    /* WiFi Section */
+    .wifi-list {
+      max-height: 400px;
+      overflow-y: auto;
+      margin: 16px 0;
+    }
+
+    .wifi-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      border: 1px solid var(--wizard-border-dark);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    body[data-wizard-theme="light"] .wifi-item {
+      border-color: var(--wizard-border-light);
+    }
+
+    .wifi-item:hover {
+      border-color: var(--wizard-accent);
+      background: var(--wizard-accent-light);
+    }
+
+    .wifi-item.selected {
+      border-color: var(--wizard-accent);
+      background: var(--wizard-accent-light);
+    }
+
+    .wifi-item .wifi-icon {
+      font-size: 20px;
+      margin-right: 12px;
+    }
+
+    .wifi-item .wifi-name {
+      flex: 1;
+      font-weight: 500;
+    }
+
+    .wifi-item .wifi-signal {
+      color: var(--wizard-muted-dark);
+      font-size: 12px;
+    }
+
+    body[data-wizard-theme="light"] .wifi-item .wifi-signal {
+      color: var(--wizard-muted-light);
+    }
+
+    .wifi-password {
+      margin-top: 16px;
+    }
+
+    .wifi-password label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    /* Account Linking */
+    .link-code-box {
+      background: var(--wizard-accent-light);
+      border: 2px dashed var(--wizard-accent);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      margin: 16px 0;
+    }
+
+    .link-code {
+      font-family: monospace;
+      font-size: 2.5rem;
+      font-weight: bold;
+      letter-spacing: 0.4rem;
+      color: var(--wizard-accent);
+    }
+
+    .link-code-hint {
+      font-size: 13px;
+      color: var(--wizard-muted-dark);
+      margin-top: 12px;
+    }
+
+    body[data-wizard-theme="light"] .link-code-hint {
+      color: var(--wizard-muted-light);
+    }
+
+    .provisioning-status {
+      padding: 20px;
+      text-align: center;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.05);
+      margin: 16px 0;
+    }
+
+    body[data-wizard-theme="light"] .provisioning-status {
+      background: rgba(0,0,0,0.03);
+    }
+
+    .provisioning-spinner {
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+
+    /* App/Browser Choice */
+    .app-choice-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .app-choice-card {
+      padding: 20px;
+      border: 2px solid var(--wizard-border-dark);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    body[data-wizard-theme="light"] .app-choice-card {
+      border-color: var(--wizard-border-light);
+    }
+
+    .app-choice-card:hover {
+      border-color: var(--wizard-accent);
+    }
+
+    .app-choice-card.selected {
+      border-color: var(--wizard-accent);
+      background: var(--wizard-accent-light);
+    }
+
+    .app-choice-icon {
+      font-size: 32px;
+      flex-shrink: 0;
+    }
+
+    .app-choice-content h4 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .app-choice-content p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--wizard-muted-dark);
+    }
+
+    body[data-wizard-theme="light"] .app-choice-content p {
+      color: var(--wizard-muted-light);
+    }
+
+    .app-choice-content ol {
+      margin: 8px 0 0 0;
+      padding-left: 20px;
+      font-size: 13px;
+      color: var(--wizard-muted-dark);
+    }
+
+    body[data-wizard-theme="light"] .app-choice-content ol {
+      color: var(--wizard-muted-light);
+    }
+
+    /* Controller Section */
+    .controller-found {
+      background: var(--wizard-accent-light);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    .controller-item {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--wizard-border-dark);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      gap: 12px;
+    }
+
+    body[data-wizard-theme="light"] .controller-item {
+      border-color: var(--wizard-border-light);
+    }
+
+    .controller-item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+    }
+
+    .controller-ip {
+      font-family: monospace;
+      color: var(--wizard-accent);
+      flex-shrink: 0;
+    }
+
+    .controller-name-input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--wizard-border-dark);
+      border-radius: 6px;
+      background: transparent;
+      color: inherit;
+      font-size: 14px;
+    }
+
+    body[data-wizard-theme="light"] .controller-name-input {
+      border-color: var(--wizard-border-light);
+      background: #fff;
+    }
+
+    .controller-name-input:focus {
+      outline: none;
+      border-color: var(--wizard-accent);
+    }
+
+    .manual-entry {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--wizard-border-dark);
+    }
+
+    body[data-wizard-theme="light"] .manual-entry {
+      border-color: var(--wizard-border-light);
+    }
+
+    .manual-entry label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .manual-entry-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Actions */
+    .setup-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .setup-actions .btn {
+      flex: 1;
+      padding: 14px 20px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+
+    .btn--primary {
+      background: var(--wizard-accent);
+      color: #fff;
+    }
+
+    .btn--primary:hover {
+      background: #3a7bc8;
+    }
+
+    .btn--secondary {
+      background: transparent;
+      border: 2px solid var(--wizard-border-dark);
+      color: inherit;
+    }
+
+    body[data-wizard-theme="light"] .btn--secondary {
+      border-color: var(--wizard-border-light);
+    }
+
+    .btn--secondary:hover {
+      border-color: var(--wizard-accent);
+      color: var(--wizard-accent);
+    }
+
+    .skip-link {
+      display: block;
+      text-align: center;
+      margin-top: 16px;
+      color: var(--wizard-muted-dark);
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    body[data-wizard-theme="light"] .skip-link {
+      color: var(--wizard-muted-light);
+    }
+
+    .skip-link:hover {
+      color: var(--wizard-accent);
+    }
+
+    /* Scanning */
+    .scanning {
+      text-align: center;
+      padding: 32px;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--wizard-border-dark);
+      border-top-color: var(--wizard-accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    body[data-wizard-theme="light"] .spinner {
+      border-color: var(--wizard-border-light);
+      border-top-color: var(--wizard-accent);
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Success Animation */
+    .success-animation {
+      text-align: center;
+      padding: 32px;
+    }
+
+    .success-animation .checkmark {
+      font-size: 64px;
+      color: var(--wizard-success);
+      animation: popIn 0.5s ease;
+    }
+
+    @keyframes popIn {
+      0% { transform: scale(0); }
+      70% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
+    /* Summary */
+    .setup-summary {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    body[data-wizard-theme="light"] .setup-summary {
+      background: rgba(0,0,0,0.03);
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+
+    .summary-row:not(:last-child) {
+      border-bottom: 1px solid var(--wizard-border-dark);
+    }
+
+    body[data-wizard-theme="light"] .summary-row:not(:last-child) {
+      border-color: var(--wizard-border-light);
+    }
+
+    .summary-label {
+      color: var(--wizard-muted-dark);
+    }
+
+    body[data-wizard-theme="light"] .summary-label {
+      color: var(--wizard-muted-light);
+    }
+
+    .summary-value {
+      font-weight: 600;
+    }
+
+    /* Form inputs */
+    .name-input {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 16px;
+      border: 2px solid var(--wizard-border-dark);
+      border-radius: 10px;
+      background: transparent;
+      color: inherit;
+      text-align: center;
+    }
+
+    body[data-wizard-theme="light"] .name-input {
+      border-color: var(--wizard-border-light);
+      background: #fff;
+    }
+
+    .name-input:focus {
+      outline: none;
+      border-color: var(--wizard-accent);
+    }
+
+    .name-input::placeholder {
+      color: var(--wizard-muted-dark);
+    }
+
+    body[data-wizard-theme="light"] .name-input::placeholder {
+      color: var(--wizard-muted-light);
+    }
+
+    /* Hostname input with suffix */
+    .hostname-input {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .hostname-input .name-input {
+      text-align: right;
+      width: auto;
+    }
+    .hostname-suffix {
+      font-size: 16px;
+      color: var(--wizard-muted-dark);
+      font-weight: 500;
+    }
+    body[data-wizard-theme="light"] .hostname-suffix {
+      color: var(--wizard-muted-light);
+    }
+
+    /* Muted text */
+    .muted {
+      color: var(--wizard-muted-dark);
+    }
+
+    body[data-wizard-theme="light"] .muted {
+      color: var(--wizard-muted-light);
+    }
+  </style>
+</head>
+<body data-wizard-theme="dark">
+  <div class="setup-container">
+    <div class="setup-card">
+      <div class="setup-logo">
+        <h1>PoolAIssistant</h1>
+        <span class="version">v{{ app_version }}</span>
+      </div>
+
+      <div class="setup-progress">
+        <div class="progress-dot" data-step="0"></div>
+        <div class="progress-dot" data-step="1"></div>
+        <div class="progress-dot" data-step="2"></div>
+        <div class="progress-dot" data-step="3"></div>
+        <div class="progress-dot" data-step="4"></div>
+        <div class="progress-dot" data-step="5"></div>
+        <div class="progress-dot" data-step="6"></div>
+      </div>
+
+      <!-- Step 0: Language & Screen Rotation -->
+      <div class="setup-step active" id="step-0">
+        <h2 class="setup-title">Welcome!</h2>
+        <p class="setup-description">Let's get your PoolAIssistant set up.</p>
+
+        <h3 class="setup-subtitle">Language</h3>
+        <div class="language-grid">
+          <div class="language-btn selected" data-lang="en" onclick="selectLanguage('en')">
+            <div class="flag">&#127468;&#127463;</div>
+            <div class="label">English</div>
+          </div>
+          <div class="language-btn" data-lang="fr" onclick="selectLanguage('fr')">
+            <div class="flag">&#127467;&#127479;</div>
+            <div class="label">Francais</div>
+          </div>
+          <div class="language-btn" data-lang="de" onclick="selectLanguage('de')">
+            <div class="flag">&#127465;&#127466;</div>
+            <div class="label">Deutsch</div>
+          </div>
+          <div class="language-btn" data-lang="es" onclick="selectLanguage('es')">
+            <div class="flag">&#127466;&#127480;</div>
+            <div class="label">Espanol</div>
+          </div>
+        </div>
+
+        <h3 class="setup-subtitle">Screen Rotation</h3>
+        <p class="setup-hint">If using the touchscreen, select orientation to match mounting.</p>
+        <div class="rotation-grid">
+          <div class="rotation-btn selected" data-rotation="0" onclick="selectRotation(0)">
+            <span class="rotation-icon">&#128250;</span>
+            <div class="rotation-label">Normal</div>
+            <div class="rotation-hint">0&deg;</div>
+          </div>
+          <div class="rotation-btn" data-rotation="90" onclick="selectRotation(90)">
+            <span class="rotation-icon" style="transform: rotate(-90deg);">&#128250;</span>
+            <div class="rotation-label">Left</div>
+            <div class="rotation-hint">90&deg;</div>
+          </div>
+          <div class="rotation-btn" data-rotation="180" onclick="selectRotation(180)">
+            <span class="rotation-icon" style="transform: rotate(180deg);">&#128250;</span>
+            <div class="rotation-label">Flipped</div>
+            <div class="rotation-hint">180&deg;</div>
+          </div>
+          <div class="rotation-btn" data-rotation="270" onclick="selectRotation(270)">
+            <span class="rotation-icon" style="transform: rotate(90deg);">&#128250;</span>
+            <div class="rotation-label">Right</div>
+            <div class="rotation-hint">270&deg;</div>
+          </div>
+        </div>
+
+        <h3 class="setup-subtitle">Device Name</h3>
+        <p class="setup-hint">Give this device a unique name for easy identification on your network.</p>
+        <div class="hostname-input">
+          <input type="text" id="hostname-input" class="name-input" placeholder="poolai" value="poolai" maxlength="63" style="max-width: 250px;">
+          <span class="hostname-suffix">.local</span>
+        </div>
+        <p class="setup-hint muted" style="font-size: 12px;">Use lowercase letters, numbers, and hyphens only.</p>
+
+        <div class="setup-actions">
+          <button class="btn btn--primary" onclick="nextStep()">Continue</button>
+        </div>
+      </div>
+
+      <!-- Step 1: Appearance -->
+      <div class="setup-step" id="step-1">
+        <h2 class="setup-title">Choose Your Look</h2>
+        <p class="setup-description">Select a theme for the interface. You can change this later in Settings.</p>
+
+        <div class="theme-grid">
+          <div class="theme-btn selected" data-theme="light" onclick="selectTheme('light')">
+            <span class="theme-icon">&#9728;&#65039;</span>
+            <div class="theme-label">Light</div>
+            <div class="theme-hint">Bright &amp; clear</div>
+          </div>
+          <div class="theme-btn" data-theme="dark" onclick="selectTheme('dark')">
+            <span class="theme-icon">&#127769;</span>
+            <div class="theme-label">Dark</div>
+            <div class="theme-hint">Easy on the eyes</div>
+          </div>
+        </div>
+
+        <div class="setup-actions">
+          <button class="btn btn--secondary" onclick="prevStep()">Back</button>
+          <button class="btn btn--primary" onclick="nextStep()">Continue</button>
+        </div>
+      </div>
+
+      <!-- Step 2: WiFi -->
+      <div class="setup-step" id="step-2">
+        <h2 class="setup-title">WiFi Connection</h2>
+        <p class="setup-description">Connect to your WiFi network for remote access.</p>
+
+        <div id="wifi-scanning" class="scanning">
+          <div class="spinner"></div>
+          <p>Scanning for networks...</p>
+        </div>
+
+        <div id="wifi-list" class="wifi-list" style="display: none;"></div>
+
+        <div id="wifi-password" class="wifi-password" style="display: none;">
+          <label>Password for "<span id="wifi-selected-name"></span>"</label>
+          <input type="password" id="wifi-psk" class="name-input" placeholder="Enter WiFi password">
+        </div>
+
+        <div class="setup-actions">
+          <button class="btn btn--secondary" onclick="prevStep()">Back</button>
+          <button class="btn btn--primary" onclick="connectWifi()">Connect</button>
+        </div>
+        <div class="skip-link" onclick="skipWifi()">Skip - I'll use ethernet only</div>
+      </div>
+
+      <!-- Step 3: External Storage -->
+      <div class="setup-step" id="step-3">
+        <h2 class="setup-title">External Storage</h2>
+        <p class="setup-description">USB storage extends database capacity and protects the SD card.</p>
+
+        <div id="storage-scanning" class="scanning">
+          <div class="spinner"></div>
+          <p>Checking for USB storage...</p>
+        </div>
+
+        <div id="storage-result" style="display: none;">
+          <div id="storage-found" class="storage-status storage-found" style="display: none;">
+            <div class="storage-icon">&#128190;</div>
+            <p><strong>USB Storage Detected!</strong></p>
+            <div class="storage-details">
+              <div class="detail-row">
+                <span>Device:</span>
+                <span id="storage-device">-</span>
+              </div>
+              <div class="detail-row">
+                <span>Size:</span>
+                <span id="storage-size">-</span>
+              </div>
+              <div class="detail-row">
+                <span>Status:</span>
+                <span id="storage-status-text">Ready</span>
+              </div>
+            </div>
+            <p class="muted" style="margin-top: 12px; font-size: 12px;">Data will be automatically stored on USB for better performance.</p>
+          </div>
+
+          <div id="storage-not-found" class="storage-status" style="display: none;">
+            <div class="storage-icon">&#128421;</div>
+            <p><strong>No USB Storage Detected</strong></p>
+            <p class="muted">Data will be stored on the SD card.<br>You can add USB storage anytime for extended capacity.</p>
+          </div>
+        </div>
+
+        <div class="setup-actions">
+          <button class="btn btn--secondary" onclick="prevStep()">Back</button>
+          <button class="btn btn--primary" onclick="nextStep()">Continue</button>
+        </div>
+      </div>
+
+      <!-- Step 4: Account Linking -->
+      <div class="setup-step" id="step-4">
+        <h2 class="setup-title">Link to Your Account</h2>
+        <p class="setup-description">Access your pool from anywhere via the web portal.</p>
+
+        <div id="account-status">
+          <div class="provisioning-status">
+            <div class="provisioning-spinner">&#128260;</div>
+            <p>Checking connection status...</p>
+          </div>
+        </div>
+
+        <div id="link-code-container" style="display: none;">
+          <div class="link-code-box">
+            <div>Your Link Code:</div>
+            <div class="link-code" id="link-code-value">------</div>
+            <p class="link-code-hint">
+              Enter this code at<br>
+              <strong>poolaissistant.modprojects.co.uk/portal</strong><br>
+              <span id="link-code-expiry">Expires in 15 minutes</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="setup-actions">
+          <button class="btn btn--secondary" onclick="prevStep()">Back</button>
+          <button class="btn btn--primary" onclick="nextStep()">Continue</button>
+        </div>
+        <div class="skip-link" onclick="nextStep()">Skip - I'll do this later</div>
+      </div>
+
+      <!-- Step 5: Software Updates -->
+      <div class="setup-step" id="step-5">
+        <h2 class="setup-title">Software Updates</h2>
+        <p class="setup-description">Check for the latest version of PoolAIssistant.</p>
+
+        <div id="update-scanning" class="scanning">
+          <div class="spinner"></div>
+          <p>Checking for updates...</p>
+        </div>
+
+        <div id="update-result" style="display: none;">
+          <div id="update-available" class="update-status update-available" style="display: none;">
+            <div class="storage-icon">&#128229;</div>
+            <p><strong>Update Available!</strong></p>
+            <div class="update-version" id="update-new-version">-</div>
+            <p class="update-description" id="update-description">-</p>
+            <div id="update-progress" class="update-progress" style="display: none;">
+              <p id="update-progress-text">Downloading...</p>
+              <div class="progress-bar">
+                <div class="progress-bar-fill" id="update-progress-fill"></div>
+              </div>
+            </div>
+            <button class="btn btn--primary" id="update-install-btn" onclick="installUpdate()" style="margin-top: 16px;">
+              Install Update
+            </button>
+          </div>
+
+          <div id="update-current" class="update-status" style="display: none;">
+            <div class="storage-icon">&#9989;</div>
+            <p><strong>You're Up to Date!</strong></p>
+            <div class="update-version" id="current-version">v{{ app_version }}</div>
+            <p class="muted">No updates available at this time.</p>
+          </div>
+
+          <div id="update-error" class="update-status" style="display: none;">
+            <div class="storage-icon">&#9888;&#65039;</div>
+            <p><strong>Could Not Check for Updates</strong></p>
+            <p class="muted" id="update-error-text">Check your internet connection and try again.</p>
+            <button class="btn btn--secondary" onclick="checkForUpdates()" style="margin-top: 12px;">
+              Try Again
+            </button>
+          </div>
+        </div>
+
+        <div class="setup-actions">
+          <button class="btn btn--secondary" onclick="prevStep()">Back</button>
+          <button class="btn btn--primary" id="update-next-btn" onclick="nextStep()">Continue</button>
+        </div>
+        <div class="skip-link" onclick="nextStep()">Skip - I'll check later</div>
+      </div>
+
+      <!-- Step 6: Controllers -->
+      <div class="setup-step" id="step-6">
+        <h2 class="setup-title">Find Controllers</h2>
+        <p class="setup-description">Looking for pool controllers on your network...</p>
+
+        <div id="controller-scanning" class="scanning">
+          <div class="spinner"></div>
+          <p>Scanning for controllers...</p>
+        </div>
+
+        <div id="controller-list" style="display: none;"></div>
+
+        <div id="controller-manual" class="manual-entry" style="display: none;">
+          <label>Add controller manually:</label>
+          <div class="manual-entry-row">
+            <input type="text" id="manual-controller-ip" class="name-input" placeholder="192.168.200.11" style="text-align: left;">
+            <button class="btn btn--secondary" onclick="addManualController()" style="flex-shrink: 0;">Add</button>
+          </div>
+        </div>
+
+        <div class="setup-actions">
+          <button class="btn btn--secondary" onclick="prevStep()">Back</button>
+          <button class="btn btn--primary" id="controller-next-btn" onclick="nextStep()">Finish Setup</button>
+        </div>
+        <div class="skip-link" onclick="showManualEntry()">Enter IP manually</div>
+      </div>
+
+      <!-- Step 7: Complete -->
+      <div class="setup-step" id="step-7">
+        <div class="success-animation">
+          <div class="checkmark">&#127881;</div>
+        </div>
+        <h2 class="setup-title">Setup Complete!</h2>
+        <p class="setup-description">Your PoolAIssistant is ready to use.</p>
+
+        <div class="setup-summary">
+          <div class="summary-row">
+            <span class="summary-label">Language:</span>
+            <span class="summary-value" id="summary-language">English</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Screen:</span>
+            <span class="summary-value" id="summary-rotation">Normal</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Theme:</span>
+            <span class="summary-value" id="summary-theme">Light</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Device Name:</span>
+            <span class="summary-value" id="summary-hostname">poolai.local</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">WiFi:</span>
+            <span class="summary-value" id="summary-wifi">Not connected</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Storage:</span>
+            <span class="summary-value" id="summary-storage">SD Card</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Account:</span>
+            <span class="summary-value" id="summary-account">Not linked</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Controllers:</span>
+            <span class="summary-value" id="summary-controllers">-</span>
+          </div>
+        </div>
+
+        <div class="setup-actions">
+          <button class="btn btn--primary" onclick="finishSetup()">Go to Dashboard</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Setup state
+    let currentStep = 0;
+    const totalSteps = 8;  // 0-7
+
+    let setupData = {
+      language: 'en',
+      screen_rotation: 0,
+      hostname: 'poolai',
+      theme: 'light',
+      wifi_ssid: '',
+      wifi_psk: '',
+      usb_storage: false,
+      link_code: '',
+      linked: false,
+      update_applied: false,
+      controllers: []  // [{ip, name, enabled}]
+    };
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      updateProgress();
+      // Start with light theme preview
+      document.body.setAttribute('data-wizard-theme', 'light');
+    });
+
+    function updateProgress() {
+      document.querySelectorAll('.progress-dot').forEach((dot, i) => {
+        dot.classList.remove('active', 'completed');
+        if (i === currentStep) {
+          dot.classList.add('active');
+        } else if (i < currentStep) {
+          dot.classList.add('completed');
+        }
+      });
+    }
+
+    function showStep(step) {
+      document.querySelectorAll('.setup-step').forEach(el => el.classList.remove('active'));
+      document.getElementById('step-' + step).classList.add('active');
+      currentStep = step;
+      updateProgress();
+
+      // Step-specific initialization
+      if (step === 2) {
+        scanWifi();
+      } else if (step === 3) {
+        detectStorage();
+      } else if (step === 4) {
+        checkProvisioningStatus();
+      } else if (step === 5) {
+        checkForUpdates();
+      } else if (step === 6) {
+        scanControllers();
+      } else if (step === 7) {
+        updateSummary();
+      }
+    }
+
+    function nextStep() {
+      // Capture hostname from step 0 before advancing
+      if (currentStep === 0) {
+        const hostnameInput = document.getElementById('hostname-input');
+        if (hostnameInput) {
+          const hostname = hostnameInput.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+          if (hostname) {
+            setupData.hostname = hostname;
+            // Apply hostname in background
+            fetch('/setup/set-hostname', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({hostname: hostname})
+            }).catch(err => console.error('Hostname error:', err));
+          }
+        }
+      }
+
+      if (currentStep < totalSteps - 1) {
+        showStep(currentStep + 1);
+      }
+    }
+
+    function prevStep() {
+      if (currentStep > 0) {
+        showStep(currentStep - 1);
+      }
+    }
+
+    // Language selection
+    function selectLanguage(lang) {
+      setupData.language = lang;
+      document.querySelectorAll('.language-btn').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.lang === lang);
+      });
+    }
+
+    // Screen rotation selection
+    function selectRotation(rotation) {
+      setupData.screen_rotation = rotation;
+      document.querySelectorAll('.rotation-btn').forEach(btn => {
+        btn.classList.toggle('selected', parseInt(btn.dataset.rotation) === rotation);
+      });
+      // Apply rotation immediately
+      fetch('/settings/screen-rotation', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({rotation: rotation})
+      }).catch(err => console.error('Failed to apply rotation:', err));
+    }
+
+    // Theme selection
+    function selectTheme(theme) {
+      setupData.theme = theme;
+      document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.theme === theme);
+      });
+      // Live preview
+      document.body.setAttribute('data-wizard-theme', theme);
+    }
+
+    // WiFi functions
+    function scanWifi() {
+      document.getElementById('wifi-scanning').style.display = 'block';
+      document.getElementById('wifi-list').style.display = 'none';
+      document.getElementById('wifi-password').style.display = 'none';
+
+      fetch('/setup/scan-wifi')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('wifi-scanning').style.display = 'none';
+          const listEl = document.getElementById('wifi-list');
+          listEl.style.display = 'block';
+
+          if (data.networks && data.networks.length > 0) {
+            listEl.innerHTML = data.networks.map(n => {
+              const signalIcon = n.signal > 70 ? '&#128246;' : (n.signal > 40 ? '&#128246;' : '&#128246;');
+              return '<div class="wifi-item" onclick="selectWifi(\'' + escapeHtml(n.ssid) + '\')">' +
+                '<span class="wifi-icon">' + signalIcon + '</span>' +
+                '<span class="wifi-name">' + escapeHtml(n.ssid) + '</span>' +
+                '<span class="wifi-signal">' + n.signal + '%</span>' +
+              '</div>';
+            }).join('');
+          } else {
+            listEl.innerHTML = '<div style="text-align:center; padding: 20px;">' +
+              '<p class="muted" style="margin-bottom: 16px;">No WiFi networks found</p>' +
+              '<button class="btn btn--secondary" onclick="scanWifi()" style="margin-bottom: 12px;">Scan Again</button>' +
+              '<p class="muted" style="font-size: 12px;">You can configure WiFi later in Settings, or use Ethernet.</p>' +
+              '<button class="btn btn--primary" onclick="skipWifi()" style="margin-top: 12px;">Continue Without WiFi</button>' +
+            '</div>';
+          }
+        })
+        .catch(err => {
+          document.getElementById('wifi-scanning').innerHTML = '<p class="muted">Failed to scan WiFi networks</p>';
+        });
+    }
+
+    function selectWifi(ssid) {
+      setupData.wifi_ssid = ssid;
+      document.querySelectorAll('.wifi-item').forEach(el => {
+        el.classList.toggle('selected', el.querySelector('.wifi-name').textContent === ssid);
+      });
+      document.getElementById('wifi-selected-name').textContent = ssid;
+      document.getElementById('wifi-password').style.display = 'block';
+    }
+
+    function connectWifi() {
+      if (!setupData.wifi_ssid) {
+        nextStep();
+        return;
+      }
+
+      setupData.wifi_psk = document.getElementById('wifi-psk').value;
+
+      // Show connecting state
+      const btn = document.querySelector('#step-2 .setup-actions .btn--primary');
+      const backBtn = document.querySelector('#step-2 .setup-actions .btn--secondary');
+      btn.disabled = true;
+      btn.textContent = 'Connecting...';
+      if (backBtn) backBtn.disabled = true;
+
+      // Actually connect to WiFi now (before moving to next step)
+      fetch('/setup/connect-wifi', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          ssid: setupData.wifi_ssid,
+          psk: setupData.wifi_psk
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        btn.disabled = false;
+        if (backBtn) backBtn.disabled = false;
+
+        if (data.success) {
+          btn.textContent = 'Connected!';
+          // Brief success message then proceed
+          setTimeout(() => {
+            btn.textContent = 'Connect';
+            nextStep();
+          }, 1000);
+        } else {
+          btn.textContent = 'Connect';
+          alert('WiFi connection failed: ' + (data.error || 'Unknown error') + '\n\nYou can try again or skip WiFi setup.');
+        }
+      })
+      .catch(err => {
+        btn.disabled = false;
+        if (backBtn) backBtn.disabled = false;
+        btn.textContent = 'Connect';
+        alert('Connection error: ' + err.message);
+      });
+    }
+
+    function skipWifi() {
+      setupData.wifi_ssid = '';
+      setupData.wifi_psk = '';
+      nextStep();
+    }
+
+    // External storage detection
+    function detectStorage() {
+      document.getElementById('storage-scanning').style.display = 'block';
+      document.getElementById('storage-result').style.display = 'none';
+
+      fetch('/setup/detect-storage')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('storage-scanning').style.display = 'none';
+          document.getElementById('storage-result').style.display = 'block';
+
+          if (data.found) {
+            setupData.usb_storage = true;
+            document.getElementById('storage-found').style.display = 'block';
+            document.getElementById('storage-not-found').style.display = 'none';
+            document.getElementById('storage-device').textContent = data.device || 'USB';
+            document.getElementById('storage-size').textContent = data.size || '-';
+            document.getElementById('storage-status-text').textContent = data.status || 'Ready';
+          } else {
+            setupData.usb_storage = false;
+            document.getElementById('storage-found').style.display = 'none';
+            document.getElementById('storage-not-found').style.display = 'block';
+          }
+        })
+        .catch(err => {
+          document.getElementById('storage-scanning').style.display = 'none';
+          document.getElementById('storage-result').style.display = 'block';
+          document.getElementById('storage-found').style.display = 'none';
+          document.getElementById('storage-not-found').style.display = 'block';
+        });
+    }
+
+    // Software updates
+    function checkForUpdates() {
+      document.getElementById('update-scanning').style.display = 'block';
+      document.getElementById('update-result').style.display = 'none';
+
+      fetch('/setup/check-updates')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('update-scanning').style.display = 'none';
+          document.getElementById('update-result').style.display = 'block';
+
+          if (data.error) {
+            document.getElementById('update-available').style.display = 'none';
+            document.getElementById('update-current').style.display = 'none';
+            document.getElementById('update-error').style.display = 'block';
+            document.getElementById('update-error-text').textContent = data.error;
+          } else if (data.update_available) {
+            document.getElementById('update-available').style.display = 'block';
+            document.getElementById('update-current').style.display = 'none';
+            document.getElementById('update-error').style.display = 'none';
+            document.getElementById('update-new-version').textContent = 'v' + data.new_version;
+            document.getElementById('update-description').textContent = data.description || 'Improvements and bug fixes';
+          } else {
+            document.getElementById('update-available').style.display = 'none';
+            document.getElementById('update-current').style.display = 'block';
+            document.getElementById('update-error').style.display = 'none';
+            document.getElementById('current-version').textContent = 'v' + data.current_version;
+          }
+        })
+        .catch(err => {
+          document.getElementById('update-scanning').style.display = 'none';
+          document.getElementById('update-result').style.display = 'block';
+          document.getElementById('update-available').style.display = 'none';
+          document.getElementById('update-current').style.display = 'none';
+          document.getElementById('update-error').style.display = 'block';
+          document.getElementById('update-error-text').textContent = 'Could not connect to update server';
+        });
+    }
+
+    function installUpdate() {
+      const btn = document.getElementById('update-install-btn');
+      const progressDiv = document.getElementById('update-progress');
+      const progressText = document.getElementById('update-progress-text');
+      const progressFill = document.getElementById('update-progress-fill');
+
+      btn.disabled = true;
+      btn.textContent = 'Installing...';
+      progressDiv.style.display = 'block';
+
+      // Simulate progress while update runs
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress > 95) progress = 95;
+        progressFill.style.width = progress + '%';
+      }, 500);
+
+      fetch('/setup/apply-update', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          clearInterval(progressInterval);
+          progressFill.style.width = '100%';
+
+          if (data.success) {
+            setupData.update_applied = true;
+            progressText.textContent = 'Update installed! Restarting...';
+            // Wait a moment then redirect
+            setTimeout(() => {
+              window.location.href = '/setup';
+            }, 3000);
+          } else {
+            progressText.textContent = 'Update failed: ' + (data.error || 'Unknown error');
+            btn.disabled = false;
+            btn.textContent = 'Try Again';
+          }
+        })
+        .catch(err => {
+          clearInterval(progressInterval);
+          progressText.textContent = 'Update failed: Connection error';
+          btn.disabled = false;
+          btn.textContent = 'Try Again';
+        });
+    }
+
+    // Account linking
+    function checkProvisioningStatus() {
+      const statusEl = document.getElementById('account-status');
+      const linkContainer = document.getElementById('link-code-container');
+
+      fetch('/settings/portal/status')
+        .then(r => r.json())
+        .then(data => {
+          if (data.linked) {
+            // Already linked
+            setupData.linked = true;
+            statusEl.innerHTML = '<div class="provisioning-status">' +
+              '<div class="provisioning-spinner">&#9989;</div>' +
+              '<p><strong>Already linked!</strong><br>' + (data.email || 'Portal Account') + '</p>' +
+            '</div>';
+          } else if (data.reason === 'not_provisioned') {
+            // Not provisioned yet - device hasn't registered with server
+            // Try to provision automatically
+            triggerProvisioning();
+          } else {
+            // Provisioned but not linked - show generate code button
+            statusEl.innerHTML = '<div class="provisioning-status">' +
+              '<p>Link your device to access it remotely.</p>' +
+              '<button class="btn btn--primary" onclick="generateLinkCode()" style="margin-top: 12px;">Generate Link Code</button>' +
+            '</div>';
+          }
+        })
+        .catch(err => {
+          statusEl.innerHTML = '<div class="provisioning-status">' +
+            '<p class="muted">Could not check status. You can link later from Settings.</p>' +
+          '</div>';
+        });
+    }
+
+    function generateLinkCode() {
+      const statusEl = document.getElementById('account-status');
+      const linkContainer = document.getElementById('link-code-container');
+
+      statusEl.innerHTML = '<div class="provisioning-status">' +
+        '<div class="spinner"></div>' +
+        '<p>Generating code...</p>' +
+      '</div>';
+
+      fetch('/settings/portal/generate_link_code', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            setupData.link_code = data.code;
+            document.getElementById('link-code-value').textContent = data.code;
+            const expiryMin = Math.round(data.expires_in / 60);
+            document.getElementById('link-code-expiry').textContent = 'Expires in ' + expiryMin + ' minutes';
+            statusEl.style.display = 'none';
+            linkContainer.style.display = 'block';
+          } else {
+            statusEl.innerHTML = '<div class="provisioning-status">' +
+              '<p class="muted">' + (data.error || 'Failed to generate code') + '</p>' +
+              '<button class="btn btn--secondary" onclick="generateLinkCode()" style="margin-top: 12px;">Try Again</button>' +
+            '</div>';
+          }
+        })
+        .catch(err => {
+          statusEl.innerHTML = '<div class="provisioning-status">' +
+            '<p class="muted">Connection error. Try again later.</p>' +
+          '</div>';
+        });
+    }
+
+    function triggerProvisioning() {
+      const statusEl = document.getElementById('account-status');
+
+      statusEl.innerHTML = '<div class="provisioning-status">' +
+        '<div class="spinner"></div>' +
+        '<p>Registering device with server...</p>' +
+      '</div>';
+
+      fetch('/settings/portal/provision', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok && data.provisioned) {
+            // Successfully provisioned, now show generate code button
+            statusEl.innerHTML = '<div class="provisioning-status">' +
+              '<p>Device registered! Link your device to access it remotely.</p>' +
+              '<button class="btn btn--primary" onclick="generateLinkCode()" style="margin-top: 12px;">Generate Link Code</button>' +
+            '</div>';
+          } else {
+            // Provisioning failed
+            statusEl.innerHTML = '<div class="provisioning-status">' +
+              '<p class="muted">' + (data.error || 'Could not register device.') + '</p>' +
+              '<button class="btn btn--secondary" onclick="triggerProvisioning()" style="margin-top: 12px;">Retry</button>' +
+              '<p class="muted mt-2" style="font-size: 12px;">You can link your account later from Settings.</p>' +
+            '</div>';
+          }
+        })
+        .catch(err => {
+          statusEl.innerHTML = '<div class="provisioning-status">' +
+            '<p class="muted">Connection error. Check your internet connection.</p>' +
+            '<button class="btn btn--secondary" onclick="triggerProvisioning()" style="margin-top: 12px;">Retry</button>' +
+          '</div>';
+        });
+    }
+
+    // App/Browser choice
+    // Controller functions
+    function scanControllers() {
+      document.getElementById('controller-scanning').style.display = 'block';
+      document.getElementById('controller-list').style.display = 'none';
+      document.getElementById('controller-manual').style.display = 'none';
+
+      fetch('/setup/scan-controllers')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('controller-scanning').style.display = 'none';
+
+          if (data.controllers && data.controllers.length > 0) {
+            setupData.controllers = data.controllers.map((c, i) => ({
+              ip: c.ip,
+              name: 'Pool ' + (i + 1),
+              enabled: true
+            }));
+            renderControllerList();
+          } else {
+            showManualEntry();
+          }
+        })
+        .catch(err => {
+          document.getElementById('controller-scanning').style.display = 'none';
+          showManualEntry();
+        });
+    }
+
+    function renderControllerList() {
+      const listEl = document.getElementById('controller-list');
+      listEl.style.display = 'block';
+      document.getElementById('controller-manual').style.display = 'block';
+
+      if (setupData.controllers.length === 0) {
+        listEl.innerHTML = '<p class="muted" style="text-align:center;">No controllers found</p>';
+        return;
+      }
+
+      listEl.innerHTML = setupData.controllers.map((c, i) =>
+        '<div class="controller-item">' +
+          '<input type="checkbox" ' + (c.enabled ? 'checked' : '') + ' onchange="toggleController(' + i + ', this.checked)">' +
+          '<input type="text" class="controller-ip" value="' + escapeHtml(c.ip) + '" ' +
+            'placeholder="IP Address" onchange="updateControllerIp(' + i + ', this.value)" style="font-family: monospace; color: var(--wizard-accent); width: 140px; padding: 4px 8px; border: 1px solid var(--wizard-border-dark); border-radius: 4px; background: transparent;">' +
+          '<input type="text" class="controller-name-input" value="' + escapeHtml(c.name) + '" ' +
+            'placeholder="Pool name" onchange="updateControllerName(' + i + ', this.value)">' +
+          '<button class="btn--icon" onclick="deleteController(' + i + ')" title="Delete" style="flex-shrink: 0; padding: 8px; background: transparent; border: 1px solid var(--wizard-border-dark); border-radius: 6px; cursor: pointer; color: #e74c3c;">&times;</button>' +
+        '</div>'
+      ).join('');
+    }
+
+    function toggleController(index, enabled) {
+      setupData.controllers[index].enabled = enabled;
+    }
+
+    function updateControllerName(index, name) {
+      setupData.controllers[index].name = name;
+    }
+
+    function updateControllerIp(index, newIp) {
+      // Validate IP format
+      if (/^(\d{1,3}\.){3}\d{1,3}$/.test(newIp.trim())) {
+        setupData.controllers[index].ip = newIp.trim();
+      } else {
+        alert('Please enter a valid IP address');
+        renderControllerList();
+      }
+    }
+
+    function deleteController(index) {
+      if (confirm('Remove this controller?')) {
+        setupData.controllers.splice(index, 1);
+        renderControllerList();
+      }
+    }
+
+    function showManualEntry() {
+      document.getElementById('controller-scanning').style.display = 'none';
+      document.getElementById('controller-list').style.display = 'block';
+      document.getElementById('controller-manual').style.display = 'block';
+      renderControllerList();
+    }
+
+    function addManualController() {
+      const ip = document.getElementById('manual-controller-ip').value.trim();
+      if (!ip) return;
+
+      // Validate IP format
+      if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
+        alert('Please enter a valid IP address');
+        return;
+      }
+
+      // Check if already exists
+      if (setupData.controllers.some(c => c.ip === ip)) {
+        alert('This controller is already in the list');
+        return;
+      }
+
+      setupData.controllers.push({
+        ip: ip,
+        name: 'Pool ' + (setupData.controllers.length + 1),
+        enabled: true
+      });
+
+      document.getElementById('manual-controller-ip').value = '';
+      document.getElementById('manual-controller-ip').focus();
+      renderControllerList();
+    }
+
+    // Summary
+    function updateSummary() {
+      const langNames = {en: 'English', fr: 'Francais', de: 'Deutsch', es: 'Espanol'};
+      const themeNames = {light: 'Light', dark: 'Dark'};
+      const rotationNames = {0: 'Normal (0°)', 90: 'Left (90°)', 180: 'Flipped (180°)', 270: 'Right (270°)'};
+
+      document.getElementById('summary-language').textContent = langNames[setupData.language] || 'English';
+      document.getElementById('summary-rotation').textContent = rotationNames[setupData.screen_rotation] || 'Normal';
+      document.getElementById('summary-theme').textContent = themeNames[setupData.theme] || 'Light';
+      document.getElementById('summary-hostname').textContent = (setupData.hostname || 'poolai') + '.local';
+      document.getElementById('summary-wifi').textContent = setupData.wifi_ssid || 'Not connected';
+      document.getElementById('summary-storage').textContent = setupData.usb_storage ? 'USB Storage' : 'SD Card';
+      document.getElementById('summary-account').textContent = setupData.linked ? 'Linked' : (setupData.link_code ? 'Code generated' : 'Not linked');
+
+      const enabledControllers = setupData.controllers.filter(c => c.enabled);
+      if (enabledControllers.length > 0) {
+        document.getElementById('summary-controllers').textContent = enabledControllers.map(c => c.name).join(', ');
+      } else {
+        document.getElementById('summary-controllers').textContent = 'None configured';
+      }
+    }
+
+    // Finish setup
+    function finishSetup() {
+      const enabledControllers = setupData.controllers.filter(c => c.enabled);
+
+      const payload = {
+        language: setupData.language,
+        screen_rotation: setupData.screen_rotation,
+        theme: setupData.theme,
+        wifi_ssid: setupData.wifi_ssid,
+        wifi_psk: setupData.wifi_psk,
+        controllers: enabledControllers.map(c => ({
+          ip: c.ip,
+          name: c.name
+        }))
+      };
+
+      fetch('/setup/complete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          window.location.href = '/';
+        } else {
+          alert('Setup failed: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(err => {
+        alert('Error completing setup: ' + err.message);
+      });
+    }
+
+    // Utility
+    function escapeHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  </script>
+
+  <!-- On-Screen Keyboard for Touch Devices -->
+  <div id="virtualKeyboard" class="virtual-keyboard">
+    <div class="vk-row">
+      <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+      <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+      <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+      <button data-key="0">0</button>
+    </div>
+    <div class="vk-row">
+      <button data-key="q">q</button><button data-key="w">w</button><button data-key="e">e</button>
+      <button data-key="r">r</button><button data-key="t">t</button><button data-key="y">y</button>
+      <button data-key="u">u</button><button data-key="i">i</button><button data-key="o">o</button>
+      <button data-key="p">p</button>
+    </div>
+    <div class="vk-row">
+      <button data-key="a">a</button><button data-key="s">s</button><button data-key="d">d</button>
+      <button data-key="f">f</button><button data-key="g">g</button><button data-key="h">h</button>
+      <button data-key="j">j</button><button data-key="k">k</button><button data-key="l">l</button>
+    </div>
+    <div class="vk-row">
+      <button data-action="shift" class="vk-wide">&#8679;</button>
+      <button data-key="z">z</button><button data-key="x">x</button><button data-key="c">c</button>
+      <button data-key="v">v</button><button data-key="b">b</button><button data-key="n">n</button>
+      <button data-key="m">m</button>
+      <button data-action="backspace" class="vk-wide">&#9003;</button>
+    </div>
+    <div class="vk-row">
+      <button data-action="symbols" class="vk-wide">123</button>
+      <button data-key="@">@</button>
+      <button data-key=" " class="vk-space">space</button>
+      <button data-key=".">.</button>
+      <button data-action="hide" class="vk-wide">&#9660;</button>
+    </div>
+  </div>
+
+  <!-- Symbols keyboard layer -->
+  <div id="virtualKeyboardSymbols" class="virtual-keyboard">
+    <div class="vk-row">
+      <button data-key="!">!</button><button data-key="@">@</button><button data-key="#">#</button>
+      <button data-key="$">$</button><button data-key="%">%</button><button data-key="^">^</button>
+      <button data-key="&">&amp;</button><button data-key="*">*</button><button data-key="(">(</button>
+      <button data-key=")">)</button>
+    </div>
+    <div class="vk-row">
+      <button data-key="-">-</button><button data-key="_">_</button><button data-key="=">=</button>
+      <button data-key="+">+</button><button data-key="[">[</button><button data-key="]">]</button>
+      <button data-key="{">{</button><button data-key="}">}</button><button data-key="|">|</button>
+      <button data-key="\">\</button>
+    </div>
+    <div class="vk-row">
+      <button data-key=";">;​</button><button data-key=":">:</button><button data-key="'">'</button>
+      <button data-key='"'>"</button><button data-key=",">,</button><button data-key=".">.</button>
+      <button data-key="/">/</button><button data-key="?">?</button>
+      <button data-action="backspace" class="vk-wide">&#9003;</button>
+    </div>
+    <div class="vk-row">
+      <button data-action="abc" class="vk-wide">ABC</button>
+      <button data-key="@">@</button>
+      <button data-key=" " class="vk-space">space</button>
+      <button data-key=".">.</button>
+      <button data-action="hide" class="vk-wide">&#9660;</button>
+    </div>
+  </div>
+
+  <style>
+    .virtual-keyboard {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--wizard-surface-dark, #1e2a3a);
+      border-top: 1px solid var(--wizard-border-dark, #374151);
+      padding: 8px;
+      z-index: 10001;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+    }
+    body[data-wizard-theme="light"] .virtual-keyboard {
+      background: #f0f0f0;
+      border-top-color: #ccc;
+    }
+    .virtual-keyboard.active {
+      display: block;
+    }
+    .vk-row {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+    .virtual-keyboard button {
+      min-width: 36px;
+      height: 48px;
+      border: none;
+      border-radius: 6px;
+      background: var(--wizard-surface-dark, #2d3748);
+      color: var(--wizard-text-dark, #fff);
+      font-size: 18px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.1s;
+      flex: 1;
+      max-width: 48px;
+    }
+    body[data-wizard-theme="light"] .virtual-keyboard button {
+      background: #fff;
+      color: #333;
+      border: 1px solid #ddd;
+    }
+    .virtual-keyboard button:active {
+      background: var(--wizard-accent, #4a90e2);
+      color: white;
+    }
+    .virtual-keyboard button.vk-wide {
+      min-width: 50px;
+      max-width: 60px;
+      font-size: 14px;
+    }
+    .virtual-keyboard button.vk-space {
+      min-width: 100px;
+      max-width: 160px;
+      flex: 3;
+    }
+    .virtual-keyboard button.vk-shift-active {
+      background: var(--wizard-accent, #4a90e2);
+      color: white;
+    }
+    /* Adjust setup card when keyboard is open */
+    body.keyboard-open .setup-container {
+      padding-bottom: 220px;
+    }
+    /* Hide keyboard by default - JS will show it on touch devices */
+    .virtual-keyboard { display: none !important; }
+    .virtual-keyboard.active { display: flex !important; }
+  </style>
+
+  <script>
+  (function() {
+    const keyboard = document.getElementById('virtualKeyboard');
+    const symbolsKeyboard = document.getElementById('virtualKeyboardSymbols');
+    let activeInput = null;
+    let shiftActive = false;
+    let isTouchDevice = false;
+    let keyboardEnabled = false;
+
+    // Detect touch device - more robust detection
+    function detectTouch() {
+      isTouchDevice = ('ontouchstart' in window) ||
+                      (navigator.maxTouchPoints > 0) ||
+                      (navigator.msMaxTouchPoints > 0) ||
+                      window.matchMedia('(pointer: coarse)').matches ||
+                      /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                      (navigator.userAgent.includes('Linux') && window.screen.width <= 1024);
+      return isTouchDevice;
+    }
+
+    // Initialize keyboard on page load
+    if (detectTouch()) {
+      keyboardEnabled = true;
+      console.log('Virtual keyboard enabled - touch device detected');
+    }
+
+    function showKeyboard(input) {
+      if (!keyboardEnabled) return;
+      activeInput = input;
+      keyboard.classList.add('active');
+      symbolsKeyboard.classList.remove('active');
+      document.body.classList.add('keyboard-open');
+      setTimeout(() => {
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+
+    function hideKeyboard() {
+      keyboard.classList.remove('active');
+      symbolsKeyboard.classList.remove('active');
+      document.body.classList.remove('keyboard-open');
+      activeInput = null;
+      shiftActive = false;
+      updateShiftState();
+    }
+
+    function insertChar(char) {
+      if (!activeInput) return;
+      const start = activeInput.selectionStart;
+      const end = activeInput.selectionEnd;
+      const value = activeInput.value;
+
+      if (shiftActive && char.length === 1 && char.match(/[a-z]/)) {
+        char = char.toUpperCase();
+        shiftActive = false;
+        updateShiftState();
+      }
+
+      activeInput.value = value.substring(0, start) + char + value.substring(end);
+      activeInput.selectionStart = activeInput.selectionEnd = start + char.length;
+      activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function doBackspace() {
+      if (!activeInput) return;
+      const start = activeInput.selectionStart;
+      const end = activeInput.selectionEnd;
+      const value = activeInput.value;
+
+      if (start === end && start > 0) {
+        activeInput.value = value.substring(0, start - 1) + value.substring(end);
+        activeInput.selectionStart = activeInput.selectionEnd = start - 1;
+      } else if (start !== end) {
+        activeInput.value = value.substring(0, start) + value.substring(end);
+        activeInput.selectionStart = activeInput.selectionEnd = start;
+      }
+      activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function updateShiftState() {
+      document.querySelectorAll('[data-action="shift"]').forEach(btn => {
+        btn.classList.toggle('vk-shift-active', shiftActive);
+      });
+    }
+
+    function handleKeyboardClick(e) {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const key = btn.dataset.key;
+      const action = btn.dataset.action;
+
+      if (key) {
+        insertChar(key);
+      } else if (action === 'backspace') {
+        doBackspace();
+      } else if (action === 'shift') {
+        shiftActive = !shiftActive;
+        updateShiftState();
+      } else if (action === 'symbols') {
+        keyboard.classList.remove('active');
+        symbolsKeyboard.classList.add('active');
+      } else if (action === 'abc') {
+        symbolsKeyboard.classList.remove('active');
+        keyboard.classList.add('active');
+      } else if (action === 'hide') {
+        hideKeyboard();
+      }
+    }
+
+    keyboard.addEventListener('click', handleKeyboardClick);
+    keyboard.addEventListener('touchend', handleKeyboardClick);
+    symbolsKeyboard.addEventListener('click', handleKeyboardClick);
+    symbolsKeyboard.addEventListener('touchend', handleKeyboardClick);
+
+    document.addEventListener('focusin', function(e) {
+      if (e.target.matches('input[type="text"], input[type="password"], input[type="email"], textarea')) {
+        showKeyboard(e.target);
+      }
+    });
+
+    document.addEventListener('touchstart', function(e) {
+      if (!keyboard.contains(e.target) && !symbolsKeyboard.contains(e.target) && !e.target.matches('input, textarea')) {
+        hideKeyboard();
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

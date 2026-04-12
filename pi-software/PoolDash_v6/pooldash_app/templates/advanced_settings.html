@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Advanced Settings</h2>
+<p class="muted">
+  Remote sync and data management configuration.
+  <a href="{{ url_for('main.settings') }}">&larr; Back to Settings</a>
+</p>
+
+<!-- Device Identity -->
+<div class="card" style="margin-bottom:14px; background:#f0f7ff;">
+  <h3>Device Identity</h3>
+  <p class="muted" style="margin-bottom:10px;">
+    Unique identification for this Pi. Used to distinguish devices in the MOD Projects dashboard.
+  </p>
+  <form method="post" action="{{ url_for('main.update_device_identity') }}">
+    <div style="display:grid; grid-template-columns: 1fr 2fr; gap:10px; align-items:center;">
+      <label style="margin:0;">Device ID</label>
+      <div>
+        <code style="font-size:0.85em; background:#e8e8e8; padding:4px 8px; border-radius:4px;">{{ device_id }}</code>
+        <span class="info-icon" title="Auto-generated unique identifier. Cannot be changed.">i</span>
+      </div>
+
+      <label style="margin:0;">Device Alias</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" name="device_alias" value="{{ device_alias }}"
+               placeholder="e.g., Leisure Centre Pool" style="flex:1;">
+        <button class="btn" type="submit">Save</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Screen Rotation -->
+<div class="card" style="margin-bottom:14px; background:#f5f0ff;">
+  <h3>Screen Rotation</h3>
+  <p class="muted" style="margin-bottom:10px;">
+    Rotate the touchscreen display. Useful for mounting the screen in different orientations.
+  </p>
+  <form method="post" action="{{ url_for('main.update_screen_rotation') }}">
+    <div style="display:grid; grid-template-columns: 1fr 2fr; gap:10px; align-items:center;">
+      <label style="margin:0;">Rotation</label>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select name="screen_rotation" style="width:auto;">
+          <option value="0" {% if screen_rotation == 0 %}selected{% endif %}>0° (Normal)</option>
+          <option value="90" {% if screen_rotation == 90 %}selected{% endif %}>90° (Clockwise)</option>
+          <option value="180" {% if screen_rotation == 180 %}selected{% endif %}>180° (Upside Down)</option>
+          <option value="270" {% if screen_rotation == 270 %}selected{% endif %}>270° (Counter-clockwise)</option>
+        </select>
+        <button class="btn" type="submit">Apply</button>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:8px; font-size:0.85em;">
+      Current rotation: {{ screen_rotation }}°. Changes take effect immediately but a reboot may be required for touchscreen input to match.
+    </p>
+  </form>
+</div>
+
+<!-- Chart Performance -->
+<div class="card" style="margin-bottom:14px;">
+  <h3>Chart Performance</h3>
+  <p class="muted" style="margin-bottom:10px;">
+    Limit data points in charts to keep the UI responsive with large databases.
+  </p>
+  <form method="post" action="{{ url_for('main.update_chart_performance') }}">
+    <label>Maximum data points per chart</label>
+    <span class="info-icon" title="Lower = faster charts, Higher = more detail. With 7GB+ database, keep this low.">i</span>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <select name="chart_max_points" style="width:auto;">
+        <option value="1000" {% if chart_max_points == 1000 %}selected{% endif %}>1,000 (fastest)</option>
+        <option value="2500" {% if chart_max_points == 2500 %}selected{% endif %}>2,500</option>
+        <option value="5000" {% if chart_max_points == 5000 %}selected{% endif %}>5,000 (default)</option>
+        <option value="10000" {% if chart_max_points == 10000 %}selected{% endif %}>10,000</option>
+        <option value="25000" {% if chart_max_points == 25000 %}selected{% endif %}>25,000</option>
+        <option value="50000" {% if chart_max_points == 50000 %}selected{% endif %}>50,000 (most detail)</option>
+      </select>
+      <button class="btn" type="submit">Save</button>
+    </div>
+    <p class="muted" style="margin-top:8px; font-size:0.85em;">
+      Current: {{ chart_max_points | default(5000) }} points. Charts will downsample data beyond this limit.
+    </p>
+  </form>
+</div>
+
+<!-- Storage Overview -->
+<div class="card" style="margin-bottom:14px;">
+  <h3>Storage Overview</h3>
+  <div class="grid-2" style="gap:10px;">
+    <div>
+      <label>Pool Readings DB</label>
+      <div class="mono" style="font-size:1.1em;">{{ storage_info.pool_db_size_mb }} MB</div>
+    </div>
+    <div>
+      <label>Maintenance DB</label>
+      <div class="mono" style="font-size:1.1em;">{{ storage_info.maint_db_size_mb }} MB</div>
+    </div>
+    <div>
+      <label>Total Database Size</label>
+      <div class="mono" style="font-size:1.1em; font-weight:600;">{{ storage_info.total_db_size_mb }} MB</div>
+    </div>
+    <div>
+      <label>Disk Usage</label>
+      <div class="mono" style="font-size:1.1em;">{{ storage_info.disk_used_percent }}% used ({{ storage_info.disk_free_mb }} MB free)</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid-2">
+
+  <!-- Remote Sync Settings -->
+  <div class="card">
+    <h3>Remote Sync (MOD Projects)</h3>
+    <p class="muted" style="margin-bottom:10px;">
+      Automatically upload database snapshots to your MOD Projects dashboard.
+      {% if last_remote_sync_ts %}
+      <br><small>Last sync: {{ last_remote_sync_ts }}</small>
+      {% endif %}
+    </p>
+
+    <form method="post" action="{{ url_for('main.update_remote_sync') }}">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" name="remote_sync_enabled" {% if remote_sync_enabled %}checked{% endif %}>
+        <span>Enable remote sync</span>
+      </label>
+
+      <label style="margin-top:12px;">Server URL</label>
+      <input type="url" name="remote_sync_url" value="{{ remote_sync_url }}" placeholder="https://poolaissistant.modprojects.co.uk">
+
+      <label style="margin-top:8px;">API Key</label>
+      <span class="info-icon" title="Get this from your MOD Projects admin dashboard under Pi Devices.">i</span>
+      <input type="text" name="remote_api_key" value="{{ remote_api_key }}" placeholder="64-character API key" class="mono" style="font-size:0.85em;">
+
+      <label style="margin-top:8px;">Sync Schedule</label>
+      <select name="remote_sync_schedule" id="syncSchedule" onchange="toggleCustomInterval()">
+        <option value="daily" {% if remote_sync_schedule == 'daily' %}selected{% endif %}>Daily (every 24 hours)</option>
+        <option value="3days" {% if remote_sync_schedule == '3days' %}selected{% endif %}>Every 3 days</option>
+        <option value="weekly" {% if remote_sync_schedule == 'weekly' %}selected{% endif %}>Weekly (every 7 days)</option>
+        <option value="custom" {% if remote_sync_schedule == 'custom' %}selected{% endif %}>Custom interval</option>
+      </select>
+
+      <div id="customIntervalDiv" style="margin-top:8px; {% if remote_sync_schedule != 'custom' %}display:none;{% endif %}">
+        <label>Custom interval (hours)</label>
+        <input type="number" name="remote_sync_interval_hours" value="{{ remote_sync_interval_hours }}" min="1" max="720" style="width:100px;">
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+        <button class="btn" type="submit">Save Sync Settings</button>
+        <button class="btn secondary" type="submit" name="action" value="reset"
+                onclick="return confirm('Reset sync settings to defaults?')">Reset</button>
+      </div>
+    </form>
+
+    <hr style="margin:14px 0; border:none; border-top:1px solid #ccc;">
+
+    <form method="post" action="{{ url_for('main.trigger_remote_sync') }}">
+      <button class="btn secondary" type="submit"
+              onclick="return confirm('Start a manual sync now? This may upload significant data.')"
+              {% if not remote_sync_enabled or not remote_api_key %}disabled title="Enable sync and add API key first"{% endif %}>
+        Sync Now
+      </button>
+      <span class="info-icon" title="Manually trigger an upload to the remote server.">i</span>
+    </form>
+  </div>
+
+  <!-- Data Retention Settings -->
+  <div class="card">
+    <h3>Data Retention & Cleanup</h3>
+    <p class="muted" style="margin-bottom:10px;">
+      Configure automatic data thinning to prevent storage from filling up.
+      Older data is progressively aggregated to save space.
+    </p>
+
+    <form method="post" action="{{ url_for('main.update_data_retention') }}">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" name="data_retention_enabled" {% if data_retention_enabled %}checked{% endif %}>
+        <span>Enable automatic data cleanup</span>
+      </label>
+
+      <div style="background:#f8f8f8; padding:10px; border-radius:6px; margin-top:12px;">
+        <h4 style="margin:0 0 8px 0; font-size:0.95em;">Retention Policy</h4>
+
+        <label>Keep full resolution data for</label>
+        <span class="info-icon" title="Raw readings at original frequency (typically every 30-60 seconds).">i</span>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="number" name="data_retention_full_days" value="{{ data_retention_full_days }}" min="1" max="365" style="width:80px;">
+          <span>days</span>
+        </div>
+
+        <label style="margin-top:8px;">Keep hourly averages for</label>
+        <span class="info-icon" title="After full retention period, data is aggregated to hourly averages.">i</span>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="number" name="data_retention_hourly_days" value="{{ data_retention_hourly_days }}" min="1" max="730" style="width:80px;">
+          <span>days</span>
+        </div>
+
+        <label style="margin-top:8px;">Keep daily averages for</label>
+        <span class="info-icon" title="After hourly retention, data is aggregated to daily averages.">i</span>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="number" name="data_retention_daily_days" value="{{ data_retention_daily_days }}" min="1" max="3650" style="width:80px;">
+          <span>days</span>
+        </div>
+      </div>
+
+      <div style="background:#fff3cd; padding:10px; border-radius:6px; margin-top:12px;">
+        <h4 style="margin:0 0 8px 0; font-size:0.95em;">Emergency Cleanup</h4>
+        <p class="muted" style="margin:0 0 8px 0; font-size:0.85em;">
+          When storage exceeds thresholds, oldest data is deleted aggressively.
+        </p>
+
+        <label>Start aggressive cleanup at</label>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="number" name="storage_threshold_percent" value="{{ storage_threshold_percent }}" min="50" max="95" style="width:80px;">
+          <span>% disk usage</span>
+        </div>
+
+        <label style="margin-top:8px;">Target max DB size</label>
+        <span class="info-icon" title="Delete oldest data to keep total DB size under this limit.">i</span>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="number" name="storage_max_mb" value="{{ storage_max_mb }}" min="100" max="10000" style="width:80px;">
+          <span>MB</span>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+        <button class="btn" type="submit">Save Retention Settings</button>
+        <button class="btn secondary" type="submit" name="action" value="reset"
+                onclick="return confirm('Reset retention settings to defaults?')">Reset</button>
+      </div>
+    </form>
+
+    <hr style="margin:14px 0; border:none; border-top:1px solid #ccc;">
+
+    <form method="post" action="{{ url_for('main.trigger_data_cleanup') }}">
+      <button class="btn secondary" type="submit"
+              onclick="return confirm('Run data cleanup now? This will aggregate and delete old data based on your retention settings.')"
+              {% if not data_retention_enabled %}disabled title="Enable data retention first"{% endif %}>
+        Run Cleanup Now
+      </button>
+      <span class="info-icon" title="Manually trigger data aggregation and cleanup.">i</span>
+    </form>
+  </div>
+
+</div>
+
+<!-- Info Box -->
+<div class="card" style="margin-top:14px; background:#e8f4fd;">
+  <h3>Data Preservation Policy</h3>
+  <p style="margin:0 0 10px 0; font-weight:600; color:#0066cc;">
+    All data is kept locally for AI analysis until disk space runs low.
+  </p>
+  <ol style="margin:0; padding-left:20px; line-height:1.6;">
+    <li><strong>Normal operation</strong>: ALL data is preserved at full resolution</li>
+    <li><strong>Low disk space (&lt;500MB free)</strong>: Sync to remote server, then aggregate old data</li>
+    <li><strong>Emergency (&lt;200MB free)</strong>: Sync to remote, then delete oldest data</li>
+    <li><strong>Remote sync</strong>: Data is ALWAYS uploaded to MOD Projects before any deletion</li>
+  </ol>
+  <p class="muted" style="margin:10px 0 0 0; font-size:0.85em;">
+    Your 7GB+ database will be preserved until disk space becomes critical. Configure remote sync to ensure data is backed up before any cleanup occurs.
+  </p>
+</div>
+
+<script>
+function toggleCustomInterval() {
+  const select = document.getElementById('syncSchedule');
+  const div = document.getElementById('customIntervalDiv');
+  div.style.display = (select.value === 'custom') ? 'block' : 'none';
+}
+</script>
+
+{% endblock %}

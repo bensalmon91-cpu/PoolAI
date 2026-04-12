@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>{{ pool }} – All maintenance entries</h2>
+{% if not rows %}
+  <p>No entries yet.</p>
+{% else %}
+  <table>
+    <thead><tr><th>Timestamp</th><th>Pool</th><th>Action</th><th>Note</th></tr></thead>
+    <tbody>
+      {% for ts, p, a, note in rows %}
+        <tr><td class="mono">{{ ts }}</td><td>{{ p }}</td><td>{{ a }}</td><td>{{ note or '' }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+<div style="height:12px"></div>
+<a class="btn ghost" href="{{ url_for('main.maintenance_page', pool=pool) }}">⬅ Back</a>
+
+{% endblock %}

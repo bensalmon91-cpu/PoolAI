@@ -1,0 +1,12 @@
+[Unit]
+Description=PoolAIssistant Device Sync Timer
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=1min
+Persistent=true
+Unit=poolaissistant_device_sync.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,324 @@
+Ezetrol touch Interfaces 4.
+59
+4.4.2 Reference list
+The following reference list contains all available data points and
+values that can be read and written via Modbus TCP.
+Modbus register Ezetrol touch
+IP address: IP address of the device, e.g. 192.168.200.11               Port: 502
+MB
+register Description Type No.
+byte
+Access Max. Min. Description
+[400001-400099] Info area (read only)
+400001 System name Ascii 20 RD e.g. “ Ezetrol touch”
+400011 Software version Ascii 10 RD e.g. "V:1.00"
+400016 Current date Ascii 10 RD e.g. "21.02.17"
+400021 Current time Ascii 6 RD e.g. "13:16"
+400024 Serial number Ascii 16 RD
+[400100-400299] Measurements (read only)
+(Ch.1) Chlorine
+400100 Measured value float 4 RD -
+Lower
+range
+400102 Measurement unit Ascii 10 RD - - mg/l
+400107 Lower range float 4 RD - -
+400109 Upper range float 4 RD - -
+400111 Current setpoint float 4 RD
+Upper
+range
+Lower
+range Normal/Eco/Setpoint
+400113
+Current dosing rate / control
+value Yout float 4 RD 100.0 % 0.0 %
+(Ch.2) pH
+400115 Measured value float 4 RD - -
+400117 Measurement unit Ascii 10 RD - - pH
+400122 Lower range float 4 RD - -
+400124 Upper range float 4 RD - -
+400126 Current setpoint float 4 RD
+Upper
+range
+Lower
+range
+400128
+Current dosing rate/control
+value Yout float 4 RD 100.0 % 0.0 %
+(Ch.3) ORP
+400130 Measured value float 4 RD - -
+400132 Measurement unit Ascii 10 RD - - mV
+400137 Lower range float 4 RD - -
+400139 Upper range float 4 RD - -
+400141 - 4 RD
+400143 - 4 RD
+(Ch.4) Cl2 / CLN / Conductivity (not yet available)
+400145 Measured value float 4 RD - -
+400147 Measurement unit Ascii 10 RD - - mg/l µS/cm mS/cm
+400152 Lower range float 4 RD - -
+400154 Upper range float 4 RD - -
+400156 Current setpoint float 4 RD
+Upper
+range
+Lower
+range
+400158
+Current dosing rate / control
+value Yout float 4 RD 100.0 % 0.0 %
+
+60  WT.050.500.200.DE.IM.1217
+Interfaces Ezetrol touch4.
+(Ch.5) Temperature
+400160 Measured value float 4 RD - -
+400162 Measurement unit Ascii 10 RD - - °C
+400167 Lower range float 4 RD - -
+400169 Upper range float 4 RD - -
+400171 -- 4 RD
+400173 -- 4 RD
+[400300-400399] Status messages (read only)
+400300 Limit contact states uint16 2 RD
+0x0001 - Limit contact 1
+0x0002 - Limit contact 2
+0x0004 - Limit contact 3
+0x0008 - Limit contact 4
+0x0010 - Limit contact 5
+0x0020 - Limit contact 6
+0x0040 - Limit contact 7
+0x0080 - Limit contact 8
+400301 Digital input uint16 2 RD
+0x0001 - Sample water Stop - DI1
+0x0002 - DI 2
+0x0004 - DI 3
+0x0008 - DI 4
+0x0010 - DI 5
+(open=1, closed=0)
+400302 Relay outputs K1..K8 uint16 2 RD
+0x0001 - Relay K1
+0x0002 - Relay K2
+0x0004 - Relay K3
+0x0008 - Relay K4
+0x0010 - Relay K5
+0x0020 - Relay K6
+400303 --- uint16 2 RD
+400304
+Operation mode controller 1
+(Chlorine) uint16 2 RD
+0x0001 - Manual
+0x0002 - Automatic
+0x0004 - Controller Off
+0x0008 - Auto tune running
+0x0010 -
+0x0020 - Controller Stop (Yout=0 %)
+0x0040 - Freeze controller
+(Yout=Yout)
+0x0080 - Controller Yout=100 %
+0x0100 -
+0x0200 -
+0x0400 -
+0x0800 - Eco Mode switchover
+0x2000 - Controller Standby
+400305
+Operation mode controller 2
+(pH) uint16 2 RD Bit coding as for controller 1
+400306 --
+400307
+Operation mode controller 4
+(CIN or Conductivity) uint16 2 RD Bit coding as for controller 1
+400308 --
+
+Ezetrol touch Interfaces 4.
+61
+400310 Error code chlorine (Ch.1) uint32 4 RD
+0x00000001 - Zero point calibration
+0x00000002 - DPD calibration
+0x00000004 - pH7 calibration
+0x00000008 - pHX calibration
+0x00000010 - Calibration error e.g.
+ORP
+0x00000020 - Offset calibration
+0x00000040 - --
+0x00000080 - Cell error
+0x00000100 - Factory calibration error
+0x00000200 - --
+0x00000400 - --
+0x00000800 - Setpoint error
+0x00001000 - Limit value error
+0x00002000 - Peak chlorination error
+(Cl2++)
+0x00004000 - Combined chlorine error
+0x00008000 - Overfeed (max.
+Dosing time)
+0x00010000 - Auto tune error
+0x00020000 -
+0x00040000 - Temperature error
+0x00080000  - Tank empty message
+0x00100000 - No sample water
+0x00200000 -
+0x00400000 -
+0x00800000 - mA output 1 Load error
+0x01000000 - mA output  2 load error
+0x02000000 - mA output 3 load error
+0x04000000 - mA output 4 load error
+0x08000000 - Dosage analog error
+0x10000000 - Flocculation error
+0x20000000 - Peak chlorination error
+0x40000000 - Analog hardware error
+0x80000000 - Data storage error
+(SD/EEprom)
+400314 Error code pH (Ch.2) uint32 4 RD Bit coding as for error code chlorine
+400318 Error code ORP (Ch.3) uint32 4 RD Bit coding as for error code chlorine
+400322 Error code total chlorine (Ch.4) uint32 4 RD Bit coding as for error code chlorine
+400326 Error code temperature (Ch.5) uint32 4 RD Bit coding as for error code chlorine
+[401000-401049] Controller parameters (read and write)
+(Ch.1) Chlorine
+401000 Setpoint (W) float 4 RW
+Upper
+range
+Lower
+range
+401002 P-element (Xp) float 4 RW 1000 % 0 %
+401004 I-element (Tn) float 4 RW
+100.0
+min 0.0 min 0.0 min means Tn inactive
+(Ch.2) pH
+401006 Setpoint (W) float 4 RW
+Upper
+range
+Lower
+range
+401008 P-element (Xp) float 4 RW 1000 % 0 %
+401010 I-element (Tn) float 4 RW
+100.0
+min 0.0 min 0.0 min means Tn inactive
+---
+401012 ---
+401014 ---
+401018 ---
+(Ch.4) Cl2 / CLN / Conductivity
+401018 Setpoint (W) float 4 RW
+Upper
+range
+Lower
+range
+401020 P-element (Xp) float 4 RW 1000 % 0 %
+401022 I-element (Tn) float 4 RW
+100.0
+min 0.0 min 0.0 min means Tn inactive
+
+62  WT.050.500.200.DE.IM.1217
+Interfaces Ezetrol touch4.
+[401050-401149] Limit value parameters (read and write)
+(Ch.1) Chlorine
+401050 Min. value 1 float 4 RW
+Max.
+value 1
+Lower
+range mg/l
+401052 Max. value 1 float 4 RW
+Upper
+range
+Min.
+value 1
+401054 Hysteresis value 1 float 4 RW 25-digit 1-digit
+401056 Min. value 2 float 4 RW
+Max.
+value 2
+Lower
+range
+401058 Max. value 2 float 4 RW
+Upper
+range
+Min.
+value 2
+401060 Hysteresis value 2 float 4 RW 25-digit 1-digit
+(Ch.2) pH
+401062 Min. value 1 float 4 RW
+Max.
+value 1
+Lower
+range pH
+401064 Max. value 1 float 4 RW
+Upper
+range
+Min.
+value 1
+401066 Hysteresis value 1 float 4 RW 25-digit 1-digit
+401068 Min. value 2 float 4 RW
+Max.
+value 2
+Lower
+range
+401070 Max. value 2 float 4 RW
+Upper
+range
+Min.
+value 2
+401072 Hysteresis value 2 float 4 RW 25-digit 1-digit
+(Ch.3) ORP
+401074 Min. value 1 float 4 RW
+Max.
+value 1
+Lower
+range mV
+401076 Max. value 1 float 4 RW
+Upper
+range
+Min.
+value 1
+401078 Hysteresis value 1 float 4 RW 25-digit 1-digit
+401080 Min. value 2 float 4 RW
+Max.
+value 2
+Lower
+range
+401082 Max. value 2 float 4 RW
+Upper
+range
+Min.
+value 2
+401084 Hysteresis value 2 float 4 RW 25-digit 1-digit
+(Ch.4) Cl2 / CLN / Conductivity
+401086 Min. value 1 float 4 RW
+Max.
+value 1
+Lower
+range mg/l µS/cm mS/cm
+401088 Max. value 1 float 4 RW
+Upper
+range
+Min.
+value 1
+401090 Hysteresis value 1 float 4 RW 25-digit 1-digit
+401092 Min. value 2 float 4 RW
+Max.
+value 2
+Lower
+range
+401094 Max. value 2 float 4 RW
+Upper
+range
+Min.
+value 2
+401096 Hysteresis value 2 float 4 RW 25-digit 1-digit
+(Ch.5) Temperature
+401098 Min. value 1 float 4 RW
+Max.
+value 1
+Lower
+range °C
+401100 Max. value 1 float 4 RW
+Upper
+range
+Min.
+value 1
+401102 Hysteresis value 1 float 4 RW 25-digit 1-digit
+401104 Min. value 2 float 4 RW
+Max.
+value 2
+Lower
+range
+401106 Max. value 2 float 4 RW
+Upper
+range
+Min.
+value 2
+401108 Hysteresis value 2 float 4 RW 25-digit 1-digit

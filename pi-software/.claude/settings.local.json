@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(scp:*)",
+      "Bash(ssh:*)",
+      "WebFetch(domain:10.0.30.80)",
+      "Bash(git status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(curl:*)",
+      "Bash(robocopy:*)",
+      "Bash(cmd //c \"xcopy \"\"C:\\\\Users\\\\bensa\\\\iCloudDrive\\\\MBSoftware\\\\Pool_AIsstant_Web_Portal\"\" \"\"C:\\\\Users\\\\bensa\\\\iCloudDrive\\\\MBSoftware\\\\PoolAIssistant-Project\\\\web-portal\\\\\"\" /E /I /H /Y\")",
+      "Bash(cmd //c:*)",
+      "Bash(dir:*)",
+      "WebFetch(domain:modprojects.co.uk)",
+      "Bash(ping:*)",
+      "Bash(tar:*)",
+      "Bash(certutil:*)",
+      "Bash(nslookup:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(findstr:*)",
+      "Bash(git init:*)",
+      "Bash(for f in admin/*.php admin/*.html)",
+      "Bash(do curl -T \"$f\" -u \"u931726538.fullaccess:MODprojects99!\" \"ftp://ftp.modprojects.co.uk/poolaissistant/$f\" -s)",
+      "Bash(done)",
+      "Bash(for:*)",
+      "Bash(powershell:*)",
+      "WebFetch(domain:poolaissistant.modprojects.co.uk)",
+      "Bash(tree:*)"
+    ]
+  }
+}

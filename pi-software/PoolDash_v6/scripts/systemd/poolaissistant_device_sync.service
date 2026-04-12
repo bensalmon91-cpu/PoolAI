@@ -1,0 +1,13 @@
+[Unit]
+Description=PoolAIssistant Device Provisioning and Upload
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/PoolAIssistant/app
+EnvironmentFile=/etc/PoolAIssistant/poolaissistant.env
+ExecStart=/opt/PoolAIssistant/venv/bin/python /opt/PoolAIssistant/app/scripts/device_upload.py
+
+[Install]
+WantedBy=multi-user.target

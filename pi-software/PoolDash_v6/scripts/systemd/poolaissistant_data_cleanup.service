@@ -1,0 +1,20 @@
+[Unit]
+Description=PoolAIssistant Data Cleanup
+After=network.target
+
+[Service]
+Type=oneshot
+User=poolai
+Group=poolai
+WorkingDirectory=/opt/PoolAIssistant/app
+Environment="POOLDASH_SETTINGS_PATH=/opt/PoolAIssistant/data/pooldash_settings.json"
+Environment="POOL_DB_PATH=/opt/PoolAIssistant/data/pool_readings.sqlite3"
+Environment="POOLDASH_DATA_DIR=/opt/PoolAIssistant/data"
+ExecStart=/usr/bin/python3 /opt/PoolAIssistant/app/scripts/data_cleanup.py
+StandardOutput=journal
+StandardError=journal
+# Give cleanup enough time for large databases
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

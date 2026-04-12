@@ -1,0 +1,718 @@
+{% extends "base.html" %}
+
+{% block title %}AI Assistant{% endblock %}
+
+{% block content %}
+<div class="ai-container">
+    <!-- Header with stats -->
+    <div class="ai-header">
+        <h1>AI Assistant</h1>
+        <div class="ai-stats">
+            <span class="stat">
+                <span class="stat-value" id="pending-count">{{ pending_count }}</span>
+                <span class="stat-label">Questions</span>
+            </span>
+            <span class="stat">
+                <span class="stat-value" id="unread-count">{{ unread_count }}</span>
+                <span class="stat-label">Suggestions</span>
+            </span>
+        </div>
+    </div>
+
+    <!-- Tab navigation -->
+    <div class="ai-tabs">
+        <button class="ai-tab active" data-tab="questions">
+            Questions
+            {% if pending_count > 0 %}
+            <span class="badge">{{ pending_count }}</span>
+            {% endif %}
+        </button>
+        <button class="ai-tab" data-tab="suggestions">
+            Suggestions
+            {% if unread_count > 0 %}
+            <span class="badge">{{ unread_count }}</span>
+            {% endif %}
+        </button>
+    </div>
+
+    <!-- Questions Panel -->
+    <div class="ai-panel active" id="questions-panel">
+        {% if questions %}
+        <div class="questions-list">
+            {% for q in questions %}
+            <div class="question-card" data-id="{{ q.id }}">
+                <div class="question-text">{{ q.text }}</div>
+
+                {% if q.input_type == 'buttons' and q.options %}
+                <div class="question-options">
+                    {% for opt in q.options %}
+                    <button class="option-btn" onclick="selectAnswer({{ q.id }}, '{{ opt }}')">
+                        {{ opt }}
+                    </button>
+                    {% endfor %}
+                </div>
+                {% elif q.input_type == 'dropdown' and q.options %}
+                <div class="question-dropdown">
+                    <select id="dropdown-{{ q.id }}" class="dropdown-select">
+                        <option value="">Select an option...</option>
+                        {% for opt in q.options %}
+                        <option value="{{ opt }}">{{ opt }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="submit-btn" onclick="submitDropdown({{ q.id }})">Submit</button>
+                </div>
+                {% elif q.input_type == 'text' %}
+                <div class="question-text-input">
+                    <textarea id="text-{{ q.id }}" class="text-input" placeholder="Type your answer..."></textarea>
+                    <button class="submit-btn" onclick="submitText({{ q.id }})">Submit</button>
+                </div>
+                {% elif q.input_type == 'number' %}
+                <div class="question-number-input">
+                    <input type="number" id="number-{{ q.id }}" class="number-input" placeholder="Enter a number">
+                    <button class="submit-btn" onclick="submitNumber({{ q.id }})">Submit</button>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">✓</div>
+            <div class="empty-title">All caught up!</div>
+            <div class="empty-text">No pending questions right now.</div>
+            <button class="ask-btn" onclick="askMeSomething()">Ask me something</button>
+        </div>
+        {% endif %}
+
+        {% if questions %}
+        <div class="ask-more">
+            <button class="ask-btn" onclick="askMeSomething()">Ask me something else</button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Suggestions Panel -->
+    <div class="ai-panel" id="suggestions-panel">
+        {% if suggestions %}
+        <div class="suggestions-list">
+            {% for s in suggestions %}
+            <div class="suggestion-card {{ 'unread' if s.status == 'unread' else '' }}"
+                 data-id="{{ s.id }}"
+                 onclick="openSuggestion({{ s.id }})">
+                <div class="suggestion-header">
+                    <span class="suggestion-type">{{ s.suggestion_type or 'tip' }}</span>
+                    {% if s.status == 'unread' %}
+                    <span class="unread-dot"></span>
+                    {% endif %}
+                </div>
+                <div class="suggestion-title">{{ s.title }}</div>
+                <div class="suggestion-preview">{{ s.body[:100] }}{% if s.body|length > 100 %}...{% endif %}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">💡</div>
+            <div class="empty-title">No suggestions yet</div>
+            <div class="empty-text">AI suggestions will appear here as the system learns about your pool.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Suggestion Detail Modal -->
+<div class="modal-overlay" id="suggestion-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-type" id="modal-type"></span>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <h2 id="modal-title"></h2>
+            <div id="modal-body" class="modal-content"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="action-btn dismiss" onclick="dismissSuggestion()">Not helpful</button>
+            <button class="action-btn acted" onclick="actedOnSuggestion()">Done / Will do</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+
+<style>
+.ai-container {
+    padding: 16px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.ai-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.ai-header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+}
+
+.ai-stats {
+    display: flex;
+    gap: 16px;
+}
+
+.stat {
+    text-align: center;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent, #3b82f6);
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #94a3b8);
+}
+
+.ai-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.ai-tab {
+    flex: 1;
+    padding: 12px;
+    background: var(--surface, #1e293b);
+    border: none;
+    border-radius: 8px;
+    color: var(--text-secondary, #94a3b8);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.ai-tab.active {
+    background: var(--accent, #3b82f6);
+    color: #fff;
+}
+
+.ai-tab .badge {
+    background: rgba(255,255,255,0.2);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+}
+
+.ai-panel {
+    display: none;
+}
+
+.ai-panel.active {
+    display: block;
+}
+
+/* Questions */
+.question-card {
+    background: var(--surface, #1e293b);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.question-text {
+    font-size: 1.1rem;
+    margin-bottom: 16px;
+    line-height: 1.5;
+}
+
+.question-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.option-btn {
+    flex: 1 1 calc(50% - 5px);
+    min-width: 120px;
+    padding: 14px 16px;
+    background: var(--surface-2, #334155);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    color: var(--text-primary, #fff);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.option-btn:hover, .option-btn:focus {
+    border-color: var(--accent, #3b82f6);
+    background: var(--accent-dim, #1e3a5f);
+}
+
+.option-btn:active {
+    transform: scale(0.98);
+}
+
+.question-dropdown,
+.question-text-input,
+.question-number-input {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dropdown-select,
+.text-input,
+.number-input {
+    padding: 14px;
+    background: var(--surface-2, #334155);
+    border: 1px solid var(--border, #475569);
+    border-radius: 8px;
+    color: var(--text-primary, #fff);
+    font-size: 1rem;
+}
+
+.text-input {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.submit-btn {
+    padding: 14px 24px;
+    background: var(--accent, #3b82f6);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.submit-btn:active {
+    transform: scale(0.98);
+}
+
+/* Suggestions */
+.suggestion-card {
+    background: var(--surface, #1e293b);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+
+.suggestion-card:active {
+    transform: scale(0.98);
+}
+
+.suggestion-card.unread {
+    border-left: 3px solid var(--accent, #3b82f6);
+}
+
+.suggestion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.suggestion-type {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--accent, #3b82f6);
+    font-weight: 600;
+}
+
+.unread-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--accent, #3b82f6);
+    border-radius: 50%;
+}
+
+.suggestion-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.suggestion-preview {
+    font-size: 0.875rem;
+    color: var(--text-secondary, #94a3b8);
+    line-height: 1.4;
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.empty-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+}
+
+.empty-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.empty-text {
+    color: var(--text-secondary, #94a3b8);
+    margin-bottom: 24px;
+}
+
+.ask-btn {
+    padding: 14px 28px;
+    background: var(--accent, #3b82f6);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.ask-more {
+    text-align: center;
+    padding: 20px 0;
+}
+
+/* Modal */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 1000;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.modal-overlay.show {
+    display: flex;
+}
+
+.modal {
+    background: var(--surface, #1e293b);
+    border-radius: 16px 16px 0 0;
+    width: 100%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border, #475569);
+}
+
+.modal-type {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--accent, #3b82f6);
+    font-weight: 600;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary, #94a3b8);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-body h2 {
+    font-size: 1.25rem;
+    margin-bottom: 16px;
+}
+
+.modal-content {
+    white-space: pre-wrap;
+    line-height: 1.6;
+    color: var(--text-secondary, #94a3b8);
+}
+
+.modal-footer {
+    display: flex;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border, #475569);
+}
+
+.action-btn {
+    flex: 1;
+    padding: 14px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.action-btn.dismiss {
+    background: var(--surface-2, #334155);
+    color: var(--text-secondary, #94a3b8);
+}
+
+.action-btn.acted {
+    background: var(--success, #22c55e);
+    color: #fff;
+}
+
+/* Toast */
+.toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface, #1e293b);
+    color: var(--text-primary, #fff);
+    padding: 12px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 2000;
+    display: none;
+}
+
+.toast.show {
+    display: block;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+</style>
+
+<script>
+let currentSuggestionId = null;
+
+// Tab switching
+document.querySelectorAll('.ai-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.ai-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.ai-panel').forEach(p => p.classList.remove('active'));
+
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab + '-panel').classList.add('active');
+    });
+});
+
+// Answer submission
+function selectAnswer(questionId, answer) {
+    submitAnswer(questionId, answer);
+}
+
+function submitDropdown(questionId) {
+    const select = document.getElementById('dropdown-' + questionId);
+    if (select.value) {
+        submitAnswer(questionId, select.value);
+    }
+}
+
+function submitText(questionId) {
+    const textarea = document.getElementById('text-' + questionId);
+    if (textarea.value.trim()) {
+        submitAnswer(questionId, textarea.value.trim());
+    }
+}
+
+function submitNumber(questionId) {
+    const input = document.getElementById('number-' + questionId);
+    if (input.value) {
+        submitAnswer(questionId, input.value);
+    }
+}
+
+function submitAnswer(questionId, answer) {
+    fetch('/ai/api/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question_id: questionId, answer: answer })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            // Remove the question card
+            const card = document.querySelector(`.question-card[data-id="${questionId}"]`);
+            if (card) {
+                card.style.opacity = '0';
+                card.style.transform = 'translateX(-100%)';
+                setTimeout(() => {
+                    card.remove();
+                    updateCounts();
+                    checkEmptyState();
+                }, 300);
+            }
+            showToast('Answer recorded');
+        } else {
+            showToast('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => showToast('Network error'));
+}
+
+// Suggestions
+function openSuggestion(suggestionId) {
+    currentSuggestionId = suggestionId;
+
+    // Get suggestion data from the card
+    const card = document.querySelector(`.suggestion-card[data-id="${suggestionId}"]`);
+    const type = card.querySelector('.suggestion-type').textContent;
+    const title = card.querySelector('.suggestion-title').textContent;
+
+    // For the full body, we need to fetch it
+    fetch('/ai/api/suggestions')
+        .then(r => r.json())
+        .then(data => {
+            const suggestion = data.suggestions.find(s => s.id === suggestionId);
+            if (suggestion) {
+                document.getElementById('modal-type').textContent = suggestion.suggestion_type || 'tip';
+                document.getElementById('modal-title').textContent = suggestion.title;
+                document.getElementById('modal-body').textContent = suggestion.body;
+                document.getElementById('suggestion-modal').classList.add('show');
+
+                // Mark as read
+                if (card.classList.contains('unread')) {
+                    fetch(`/ai/api/suggestion/${suggestionId}/read`, { method: 'POST' });
+                    card.classList.remove('unread');
+                    card.querySelector('.unread-dot')?.remove();
+                    updateCounts();
+                }
+            }
+        });
+}
+
+function closeModal() {
+    document.getElementById('suggestion-modal').classList.remove('show');
+    currentSuggestionId = null;
+}
+
+function dismissSuggestion() {
+    if (!currentSuggestionId) return;
+
+    fetch(`/ai/api/suggestion/${currentSuggestionId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dismissed' })
+    })
+    .then(() => {
+        const card = document.querySelector(`.suggestion-card[data-id="${currentSuggestionId}"]`);
+        if (card) card.style.opacity = '0.5';
+        closeModal();
+        showToast('Feedback recorded');
+    });
+}
+
+function actedOnSuggestion() {
+    if (!currentSuggestionId) return;
+
+    fetch(`/ai/api/suggestion/${currentSuggestionId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'acted_upon' })
+    })
+    .then(() => {
+        const card = document.querySelector(`.suggestion-card[data-id="${currentSuggestionId}"]`);
+        if (card) {
+            card.style.borderLeftColor = 'var(--success, #22c55e)';
+        }
+        closeModal();
+        showToast('Great! Marked as done');
+    });
+}
+
+function askMeSomething() {
+    fetch('/ai/api/ask-me', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            showToast(data.message || 'Question requested');
+        });
+}
+
+function updateCounts() {
+    fetch('/ai/api/stats')
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                document.getElementById('pending-count').textContent = data.stats.pending_questions;
+                document.getElementById('unread-count').textContent = data.stats.unread_suggestions;
+
+                // Update tab badges
+                const qBadge = document.querySelector('[data-tab="questions"] .badge');
+                const sBadge = document.querySelector('[data-tab="suggestions"] .badge');
+
+                if (qBadge) {
+                    qBadge.textContent = data.stats.pending_questions;
+                    qBadge.style.display = data.stats.pending_questions > 0 ? '' : 'none';
+                }
+                if (sBadge) {
+                    sBadge.textContent = data.stats.unread_suggestions;
+                    sBadge.style.display = data.stats.unread_suggestions > 0 ? '' : 'none';
+                }
+            }
+        });
+}
+
+function checkEmptyState() {
+    const list = document.querySelector('.questions-list');
+    if (list && list.children.length === 0) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">✓</div>
+                <div class="empty-title">All caught up!</div>
+                <div class="empty-text">No pending questions right now.</div>
+                <button class="ask-btn" onclick="askMeSomething()">Ask me something</button>
+            </div>
+        `;
+    }
+}
+
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// Close modal on overlay click
+document.getElementById('suggestion-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+</script>
+{% endblock %}

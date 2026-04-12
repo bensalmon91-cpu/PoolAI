@@ -1,0 +1,10 @@
+[Unit]
+Description=PoolDash Cleanup Old Device Readings Timer
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+Unit=pooldash_cleanup_readings.service
+
+[Install]
+WantedBy=timers.target

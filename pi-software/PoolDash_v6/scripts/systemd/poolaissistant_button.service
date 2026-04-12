@@ -1,0 +1,16 @@
+[Unit]
+Description=PoolAIssistant Physical Button Handler
+After=multi-user.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/PoolAIssistant/venv/bin/python /opt/PoolAIssistant/app/scripts/button_handler.py
+Restart=always
+RestartSec=5
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

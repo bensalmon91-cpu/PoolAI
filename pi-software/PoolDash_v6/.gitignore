@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environment
+venv/
+.venv/
+ENV/
+
+# Local data (do not commit)
+*.sqlite3
+*.db
+instance/
+data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment files with secrets
+.env
+*.env
+!*.env.example
+
+# Temporary files
+*.tmp
+*.bak
+*.tar
+*.gz
+
+# Claude Code local settings
+.claude/

@@ -1,0 +1,20 @@
+# API URL Routing
+# Maps clean URLs to PHP files
+
+RewriteEngine On
+RewriteBase /api/
+
+# Device heartbeat endpoint
+# /api/device/heartbeat -> /api/heartbeat.php
+RewriteRule ^device/heartbeat$ heartbeat.php [L,QSA]
+
+# Command completion endpoint
+# /api/device/commands/{id}/complete -> /api/command_complete.php?id={id}
+RewriteRule ^device/commands/([0-9]+)/complete$ command_complete.php?id=$1 [L,QSA]
+
+# Admin API routes
+# /api/admin/devices/health -> /api/admin_health.php
+RewriteRule ^admin/devices/health$ admin_health.php [L,QSA]
+
+# /api/admin/devices/{id}/request-upload -> /api/admin_request_upload.php?device_id={id}
+RewriteRule ^admin/devices/([^/]+)/request-upload$ admin_request_upload.php?device_id=$1 [L,QSA]

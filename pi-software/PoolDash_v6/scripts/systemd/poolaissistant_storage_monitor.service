@@ -1,0 +1,21 @@
+[Unit]
+Description=PoolAIssistant Storage Monitor
+After=network.target poolaissistant_logger.service
+Wants=poolaissistant_logger.service
+
+[Service]
+Type=simple
+User=poolai
+Group=poolai
+WorkingDirectory=/opt/PoolAIssistant/app
+Environment="POOLDASH_SETTINGS_PATH=/opt/PoolAIssistant/data/pooldash_settings.json"
+Environment="POOL_DB_PATH=/opt/PoolAIssistant/data/pool_readings.sqlite3"
+Environment="POOLDASH_DATA_DIR=/opt/PoolAIssistant/data"
+ExecStart=/opt/PoolAIssistant/venv/bin/python /opt/PoolAIssistant/app/scripts/storage_monitor.py
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,634 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>{{ pool }} — Alarms & Status</h2>
+
+<div id="connectionBanner" class="connection-banner" style="display: none;" role="alert">
+  <div class="connection-banner__icon">📡</div>
+  <div class="connection-banner__content">
+    <div class="connection-banner__title">Connection Lost</div>
+    <div id="connectionDetails" class="connection-banner__details"></div>
+  </div>
+  <button class="connection-banner__dismiss" onclick="dismissConnectionBanner()" aria-label="Dismiss">×</button>
+</div>
+
+<div class="card mb-3" role="status" aria-live="polite">
+  <div class="status-bar">
+    <span id="statusDot" class="status-dot" aria-hidden="true"></span>
+    <span id="statusText" class="status-bar__text">System Status</span>
+    <span id="lastUpdate" class="status-bar__update" aria-label="Last update time">Waiting for data…</span>
+  </div>
+</div>
+
+<!-- Active Alarms -->
+<section class="card mb-4" aria-labelledby="active-alarms-heading">
+  <h3 id="active-alarms-heading">
+    <span class="heading-icon" aria-hidden="true">🚨</span> Active Alarms
+    <span id="activeCount" class="heading-count" aria-label="Number of active alarms">0</span>
+  </h3>
+  <div id="activeList" role="list" aria-live="polite"></div>
+</section>
+
+<!-- System States Section - disabled for now due to slow queries on large readings table
+<section class="card mb-4">
+  <h3>
+    <span class="heading-icon">📊</span> System States
+    <span id="statesCount" class="heading-count" style="margin-left:8px;">0 active</span>
+  </h3>
+  <p class="muted text-xs mb-3">Operational states and indicators (not alarms)</p>
+  <div id="statesList" class="states-grid"></div>
+</section>
+-->
+
+<!-- Recent Events -->
+<section class="card mb-4" aria-labelledby="recent-events-heading">
+  <h3 id="recent-events-heading">
+    <span class="heading-icon" aria-hidden="true">📋</span> Recent Events
+  </h3>
+  <div id="recentListPreview" role="list"></div>
+  <details id="recentDetails" style="margin-top:10px;">
+    <summary class="summary--muted" style="cursor:pointer;">Show more events</summary>
+    <div id="recentListFull" role="list" style="margin-top:10px;"></div>
+  </details>
+</section>
+
+<div class="card card--transparent">
+  <details>
+    <summary>
+      <span class="heading-icon">ℹ️</span> Alarm Reference Guide
+    </summary>
+    <div class="details-content opacity-90 text-sm">
+      <h4>Severity Levels:</h4>
+      <div class="guide-list">
+        <div class="guide-item">
+          <span class="severity-dot severity-dot--critical"></span>
+          <span><strong>Critical:</strong> Immediate attention required - system may not be dosing</span>
+        </div>
+        <div class="guide-item">
+          <span class="severity-dot severity-dot--warning"></span>
+          <span><strong>Warning:</strong> Attention needed soon - may affect water quality</span>
+        </div>
+        <div class="guide-item">
+          <span class="severity-dot severity-dot--info"></span>
+          <span><strong>Info:</strong> Normal operation status or cleared alarm</span>
+        </div>
+      </div>
+
+      <h4>Common Alarms:</h4>
+      <div class="guide-list text-xs">
+        <div><strong>Manual Mode:</strong> Controller set to manual - automatic dosing disabled</div>
+        <div><strong>Probe Fault:</strong> Sensor not responding - clean or replace probe</div>
+        <div><strong>Pump Fault:</strong> Dosing pump issue - check pump and chemical supply</div>
+        <div><strong>Flow Switch:</strong> No water flow detected - check pump operation</div>
+        <div><strong>Low Chemical:</strong> Chemical tank needs refilling</div>
+      </div>
+
+      <h4>What to do:</h4>
+      <ol class="text-xs" style="padding-left:20px;">
+        <li>Check the "Suggested Action" for each alarm</li>
+        <li>Critical alarms should be addressed immediately</li>
+        <li>Warning alarms should be addressed within 24 hours</li>
+        <li>Info events are for monitoring only</li>
+        <li>If alarm persists after action, check controller display for error codes</li>
+      </ol>
+    </div>
+  </details>
+</div>
+
+<div class="mt-4 text-center">
+  <a href="{{ url_for('alarms.alarm_history', pool=pool) }}" class="btn">
+    📋 View Full Alarm History & Log
+  </a>
+  <div class="muted text-xs mt-2">
+    Access detailed alarm records, add notes, and acknowledge alarms
+  </div>
+</div>
+
+<style>
+  .connection-banner {
+    background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  .connection-banner__icon { font-size: 24px; }
+  .connection-banner__content { flex: 1; }
+  .connection-banner__title { font-weight: 700; font-size: 14px; }
+  .connection-banner__details { font-size: 12px; opacity: 0.9; margin-top: 4px; }
+  .connection-banner__dismiss {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 18px;
+  }
+  .connection-banner__dismiss:hover { background: rgba(255,255,255,0.3); }
+  .stale-alarm { opacity: 0.6; border-left: 3px solid #888 !important; }
+  .stale-badge {
+    display: inline-block;
+    background: #666;
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+  }
+  /* System States styles */
+  .states-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .state-card {
+    background: #f5f5f5;
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-left: 3px solid #ccc;
+  }
+  .state-card--active {
+    background: #e3f2fd;
+    border-left-color: #2196f3;
+  }
+  .state-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ccc;
+    flex-shrink: 0;
+  }
+  .state-indicator--active {
+    background: #2196f3;
+    box-shadow: 0 0 6px rgba(33, 150, 243, 0.5);
+  }
+  .state-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .state-name {
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .state-desc {
+    font-size: 11px;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .state-status {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .state-status--on {
+    background: #2196f3;
+    color: white;
+  }
+  .state-status--off {
+    background: #e0e0e0;
+    color: #666;
+  }
+</style>
+
+<script>
+  const pool = {{ pool|tojson }};
+  const pollMs = 5000;  // 5 seconds on alarm page (faster than global 15s since this is the dedicated view)
+  let lastHash = "";
+  let connectionBannerDismissed = false;
+  const OFFLINE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes = offline
+
+  // Alarm description mapping - based on Ezetrol Modbus Register Documentation v4.4.2
+  // NOTE: Status_Mode_Controller* registers are NOT error registers!
+  // They contain operational states (Manual, Automatic, Off, etc.)
+  // Actual errors come from ErrorCode_* registers (400310-400326)
+
+  // Limit Contact alarms (400300) - generic, meaning depends on wiring
+  const ALARM_INFO = {
+    "Status_LimitContactStates:b0": {
+      name: "Limit Contact 1 Active",
+      severity: "warning",
+      description: "Limit contact 1 has been triggered",
+      action: "Check the equipment connected to limit contact 1.",
+    },
+    "Status_LimitContactStates:b1": {
+      name: "Limit Contact 2 Active",
+      severity: "warning",
+      description: "Limit contact 2 has been triggered",
+      action: "Check the equipment connected to limit contact 2.",
+    },
+    "Status_LimitContactStates:b2": {
+      name: "Limit Contact 3 Active",
+      severity: "warning",
+      description: "Limit contact 3 has been triggered",
+      action: "Check the equipment connected to limit contact 3.",
+    },
+    "Status_LimitContactStates:b3": {
+      name: "Limit Contact 4 Active",
+      severity: "warning",
+      description: "Limit contact 4 has been triggered",
+      action: "Check the equipment connected to limit contact 4.",
+    },
+    "Status_LimitContactStates:b4": {
+      name: "Limit Contact 5 Active",
+      severity: "warning",
+      description: "Limit contact 5 has been triggered",
+      action: "Check the equipment connected to limit contact 5.",
+    },
+    "Status_LimitContactStates:b5": {
+      name: "Limit Contact 6 Active",
+      severity: "warning",
+      description: "Limit contact 6 has been triggered",
+      action: "Check the equipment connected to limit contact 6.",
+    },
+    "Status_LimitContactStates:b6": {
+      name: "Limit Contact 7 Active",
+      severity: "warning",
+      description: "Limit contact 7 has been triggered",
+      action: "Check the equipment connected to limit contact 7.",
+    },
+    "Status_LimitContactStates:b7": {
+      name: "Limit Contact 8 Active",
+      severity: "warning",
+      description: "Limit contact 8 has been triggered",
+      action: "Check the equipment connected to limit contact 8.",
+    },
+
+    // Digital Input (400301)
+    "Status_DigitalInputs:b0": {
+      name: "Sample Water Stop",
+      severity: "critical",
+      description: "Sample water flow has stopped (DI1)",
+      action: "Check sample water pump and flow. Dosing may be stopped.",
+    },
+  };
+
+  // ErrorCode bit definitions (same for all channels per Ezetrol docs)
+  // Registers: 400310 (Cl), 400314 (pH), 400318 (ORP), 400322 (TotalCl), 400326 (Temp)
+  const ERRORCODE_BITS = {
+    0:  { name: "Zero Point Calibration", severity: "warning" },
+    1:  { name: "DPD Calibration", severity: "warning" },
+    2:  { name: "pH7 Calibration", severity: "warning" },
+    3:  { name: "pHX Calibration", severity: "warning" },
+    4:  { name: "Calibration Error", severity: "warning" },
+    5:  { name: "Offset Calibration", severity: "warning" },
+    7:  { name: "Cell Error", severity: "critical" },
+    8:  { name: "Factory Calibration Error", severity: "critical" },
+    11: { name: "Setpoint Error", severity: "warning" },
+    12: { name: "Limit Value Error", severity: "warning" },
+    13: { name: "Peak Chlorination Error", severity: "warning" },
+    14: { name: "Combined Chlorine Error", severity: "warning" },
+    15: { name: "Overfeed - Max Dosing Time", severity: "critical" },
+    16: { name: "Auto Tune Error", severity: "warning" },
+    18: { name: "Temperature Error", severity: "warning" },
+    19: { name: "Tank Empty", severity: "critical" },
+    20: { name: "No Sample Water", severity: "critical" },
+    23: { name: "mA Output 1 Load Error", severity: "critical" },
+    24: { name: "mA Output 2 Load Error", severity: "critical" },
+    25: { name: "mA Output 3 Load Error", severity: "critical" },
+    26: { name: "mA Output 4 Load Error", severity: "critical" },
+    27: { name: "Dosage Analog Error", severity: "critical" },
+    28: { name: "Flocculation Error", severity: "warning" },
+    29: { name: "Peak Chlorination Error", severity: "warning" },
+    30: { name: "Analog Hardware Error", severity: "critical" },
+    31: { name: "Data Storage Error", severity: "warning" },
+  };
+
+  // Channel names for ErrorCode registers
+  const ERRORCODE_CHANNELS = {
+    "ErrorCode_Chlorine": "Chlorine",
+    "ErrorCode_pH": "pH",
+    "ErrorCode_ORP": "ORP",
+    "ErrorCode_TotalChlorine": "Total Chlorine",
+    "ErrorCode_Temperature": "Temperature",
+  };
+
+  const SEVERITY_COLORS = {
+    info: "#0b5bd3",
+    warning: "#ff9800",
+    critical: "#b00020",
+  };
+
+  const SEVERITY_ICONS = {
+    info: "ℹ️",
+    warning: "⚠️",
+    critical: "🚨",
+  };
+
+  // Escape HTML to prevent XSS attacks
+  function escapeHtml(s) {
+    if (s == null) return "";
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+  function safeText(s){ return escapeHtml(s); }
+
+  // Track offline hosts
+  let offlineHosts = new Set();
+
+  function dismissConnectionBanner() {
+    connectionBannerDismissed = true;
+    document.getElementById("connectionBanner").style.display = "none";
+  }
+
+  function updateConnectionStatus(connectionStatus) {
+    if (!connectionStatus || connectionStatus.length === 0) return;
+
+    const now = new Date();
+    const offlineList = [];
+    offlineHosts.clear();
+
+    for (const cs of connectionStatus) {
+      if (!cs.last_reading) {
+        offlineList.push({ host: cs.host, ago: "never" });
+        offlineHosts.add(cs.host);
+        continue;
+      }
+
+      const lastReading = new Date(cs.last_reading);
+      const diffMs = now - lastReading;
+
+      if (diffMs > OFFLINE_THRESHOLD_MS) {
+        const mins = Math.floor(diffMs / 60000);
+        let agoStr;
+        if (mins < 60) agoStr = `${mins}m ago`;
+        else if (mins < 1440) agoStr = `${Math.floor(mins/60)}h ago`;
+        else agoStr = `${Math.floor(mins/1440)}d ago`;
+
+        offlineList.push({ host: cs.host, ago: agoStr });
+        offlineHosts.add(cs.host);
+      }
+    }
+
+    const banner = document.getElementById("connectionBanner");
+    const details = document.getElementById("connectionDetails");
+
+    if (offlineList.length > 0 && !connectionBannerDismissed) {
+      // Escape host names to prevent XSS
+      const hostInfo = offlineList.map(o => `${escapeHtml(o.host)} (${escapeHtml(o.ago)})`).join(", ");
+      details.innerHTML = `
+        <strong>${offlineList.length} controller(s) offline:</strong> ${hostInfo}<br>
+        <span style="opacity: 0.8;">Alarms from offline controllers may be stale.</span>
+      `;
+      banner.style.display = "flex";
+    } else if (offlineList.length === 0) {
+      banner.style.display = "none";
+      connectionBannerDismissed = false; // Reset if all back online
+    }
+  }
+
+  function isAlarmStale(alarm) {
+    // An alarm is stale if its host is offline
+    return offlineHosts.has(alarm.host);
+  }
+
+  function hashPayload(obj){ return JSON.stringify(obj); }
+
+  function cleanSystemName(raw){
+    if (!raw) return "";
+    // Remove null characters and extract meaningful part
+    const cleaned = raw.replace(/\x00/g, ' ').trim();
+    const parts = cleaned.split(/\s+/).filter(p => p && !p.startsWith('v') && !/^\d/.test(p));
+    return parts[0] || cleaned;
+  }
+
+  function getAlarmInfo(label){
+    let info;
+
+    // Check static ALARM_INFO first
+    if (ALARM_INFO[label]) {
+      info = {...ALARM_INFO[label]};
+    } else if (label.includes(":")) {
+      const [sourceLabel, bitName] = label.split(":");
+
+      // Handle ErrorCode_* registers dynamically using ERRORCODE_BITS
+      if (ERRORCODE_CHANNELS[sourceLabel]) {
+        const channel = ERRORCODE_CHANNELS[sourceLabel];
+        const bitNum = parseInt(bitName.replace("b", ""), 10);
+
+        if (ERRORCODE_BITS[bitNum]) {
+          const bitInfo = ERRORCODE_BITS[bitNum];
+          info = {
+            name: `${channel}: ${bitInfo.name}`,
+            severity: bitInfo.severity,
+            description: `${bitInfo.name} error on ${channel} channel`,
+            action: "Check controller display for details. May require calibration or service.",
+          };
+        } else {
+          // Unknown bit in ErrorCode register
+          info = {
+            name: `${channel}: Error Bit ${bitNum}`,
+            severity: "warning",
+            description: `Error condition on ${channel} channel (bit ${bitNum})`,
+            action: "Check controller display for details.",
+          };
+        }
+      }
+    }
+
+    // Generic fallback for completely unknown alarms
+    if (!info) {
+      info = {
+        name: label,
+        severity: "warning",
+        description: "Alarm condition detected",
+        action: "Check controller display for details.",
+      };
+    }
+
+    info.color = SEVERITY_COLORS[info.severity] || "#ff9800";
+    info.icon = SEVERITY_ICONS[info.severity] || "!";
+    return info;
+  }
+
+  function formatDuration(startTs){
+    const start = new Date(startTs);
+    const now = new Date();
+    const diffMs = now - start;
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 60) return `${diffMins}m`;
+    if (diffMins < 1440) return `${Math.floor(diffMins/60)}h ${diffMins%60}m`;
+    return `${Math.floor(diffMins/1440)}d ${Math.floor((diffMins%1440)/60)}h`;
+  }
+
+  function alarmCard(item, isActive){
+    const info = getAlarmInfo(item.label);
+    // Escape user-controlled data to prevent XSS
+    const systemName = escapeHtml(cleanSystemName(item.system_name));
+    const when = escapeHtml(new Date(item.ts).toLocaleString());
+    const duration = isActive ? escapeHtml(formatDuration(item.ts)) : "";
+    const severityClass = escapeHtml(info.severity || 'info');
+    const stale = isActive && isAlarmStale(item);
+    const staleClass = stale ? ' stale-alarm' : '';
+    const staleBadge = stale ? '<span class="stale-badge">STALE - Controller Offline</span>' : '';
+    // Escape info fields that come from ALARM_INFO (trusted but be safe)
+    const infoName = escapeHtml(info.name);
+    const infoDesc = escapeHtml(info.description);
+    const infoAction = escapeHtml(info.action);
+
+    return `
+      <div class="alarm-card alarm-card--${severityClass}${staleClass}" role="listitem" aria-label="${infoName}">
+        <div class="alarm-card__header">
+          <span class="alarm-card__icon">${stale ? '📡' : info.icon}</span>
+          <div class="alarm-card__content">
+            <div class="alarm-card__title">${infoName}${staleBadge}</div>
+            <div class="alarm-card__meta">
+              ${systemName ? systemName + ' — ' : ''}${when}
+              ${duration ? ` — <strong>Duration: ${duration}</strong>` : ''}
+            </div>
+          </div>
+          <div class="alarm-card__badge alarm-card__badge--${stale ? 'info' : severityClass}">
+            ${stale ? 'stale' : (isActive ? escapeHtml(info.severity) : 'cleared')}
+          </div>
+        </div>
+        ${stale ? '<div class="alarm-card__description" style="color:#888;">⚠️ Controller is offline. This alarm may no longer be active.</div>' : (infoDesc ? `<div class="alarm-card__description">${infoDesc}</div>` : '')}
+        ${info.action && isActive && !stale ? `<div class="alarm-card__action"><strong>→ Action:</strong> ${infoAction}</div>` : ''}
+      </div>
+    `;
+  }
+
+  function flash(el){
+    el.style.transform = "scale(1.01)";
+    el.style.transition = "transform 120ms ease";
+    setTimeout(()=>{ el.style.transform="scale(1)"; }, 150);
+  }
+
+  async function poll(){
+    try{
+      const r = await fetch(`/alarms/api/${encodeURIComponent(pool)}?limit=120`, { cache: "no-store" });
+      const data = await r.json();
+
+      const h = hashPayload(data);
+      const changed = h !== lastHash;
+      lastHash = h;
+
+      // Update connection status first (so stale detection works)
+      updateConnectionStatus(data.connection_status || []);
+
+      // Count non-stale active alarms
+      const nonStaleActive = data.active.filter(a => !isAlarmStale(a));
+      const activeCount = nonStaleActive.length;
+      const staleCount = data.active.length - activeCount;
+
+      const hasCritical = nonStaleActive.some(a => {
+        const info = getAlarmInfo(a.label);
+        return info.severity === 'critical';
+      });
+
+      // Update count display
+      const countDisplay = staleCount > 0
+        ? `${activeCount} active, ${staleCount} stale`
+        : activeCount.toString();
+      document.getElementById("activeCount").textContent = countDisplay;
+      document.getElementById("lastUpdate").textContent = `Updated: ${new Date().toLocaleTimeString()}`;
+
+      const statusDot = document.getElementById("statusDot");
+      const statusText = document.getElementById("statusText");
+
+      if (offlineHosts.size > 0) {
+        statusDot.style.background = "#888";
+        statusText.textContent = `${offlineHosts.size} Controller(s) Offline`;
+        statusText.style.color = "#888";
+      } else if (hasCritical) {
+        statusDot.style.background = "#b00020";
+        statusText.textContent = "Critical Alarms Active";
+        statusText.style.color = "#b00020";
+      } else if (activeCount > 0) {
+        statusDot.style.background = "#ff9800";
+        statusText.textContent = "Warnings Active";
+        statusText.style.color = "#ff9800";
+      } else {
+        statusDot.style.background = "#0b5bd3";
+        statusText.textContent = "All Systems Normal";
+        statusText.style.color = "inherit";
+      }
+
+      // Update active alarms list
+      const activeEl = document.getElementById("activeList");
+      if (!data.active.length){
+        activeEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state__icon">✅</div>
+            <div>No active alarms</div>
+          </div>
+        `;
+      } else {
+        // Sort: non-stale first, then by severity (critical first)
+        const sorted = data.active.sort((a, b) => {
+          const aStale = isAlarmStale(a) ? 1 : 0;
+          const bStale = isAlarmStale(b) ? 1 : 0;
+          if (aStale !== bStale) return aStale - bStale;
+
+          const severityOrder = {critical: 0, warning: 1, info: 2};
+          const aSev = getAlarmInfo(a.label).severity;
+          const bSev = getAlarmInfo(b.label).severity;
+          return (severityOrder[aSev] || 3) - (severityOrder[bSev] || 3);
+        });
+        activeEl.innerHTML = sorted.map(a => alarmCard(a, true)).join("");
+      }
+
+      // Update recent events list (4 preview + rest in dropdown)
+      const recentPreview = document.getElementById("recentListPreview");
+      const recentFull = document.getElementById("recentListFull");
+      const recentDetails = document.getElementById("recentDetails");
+
+      if (!data.recent || data.recent.length === 0) {
+        recentPreview.innerHTML = `<div class="empty-state">No recent events</div>`;
+        recentDetails.style.display = "none";
+      } else {
+        // Show first 4 in preview
+        recentPreview.innerHTML = data.recent.slice(0, 4).map(e => {
+          const isActive = (e.value ?? 0) != 0;
+          return alarmCard(e, isActive);
+        }).join("");
+
+        // Show rest in dropdown if more than 4
+        if (data.recent.length > 4) {
+          recentDetails.style.display = "block";
+          recentFull.innerHTML = data.recent.slice(4, 20).map(e => {
+            const isActive = (e.value ?? 0) != 0;
+            return alarmCard(e, isActive);
+          }).join("");
+        } else {
+          recentDetails.style.display = "none";
+        }
+      }
+
+      if (changed){
+        flash(activeEl);
+      }
+    } catch(e){
+      document.getElementById("lastUpdate").textContent = `Error: ${e.message}`;
+      document.getElementById("statusDot").style.background = "#888";
+    } finally{
+      setTimeout(poll, pollMs);
+    }
+  }
+
+  poll();
+
+  // System States polling - disabled for now due to slow queries on large readings table
+  // To re-enable, uncomment the HTML section and this JavaScript
+</script>
+
+
+{% endblock %}

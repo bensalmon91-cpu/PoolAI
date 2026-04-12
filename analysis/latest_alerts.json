@@ -1,0 +1,65 @@
+{
+  "check_time": "2026-02-17T09:34:04.205140",
+  "alerts": [
+    {
+      "pool": "Main",
+      "sensor": "pH",
+      "timestamp": "2026-02-15T09:15:46+00:00",
+      "level": "CRITICAL",
+      "current_value": 7.95,
+      "baseline": 7.43,
+      "normal_range": "7.0-7.8",
+      "sustained_readings": 100
+    },
+    {
+      "pool": "Main",
+      "sensor": "Temp",
+      "timestamp": "2026-02-15T09:15:46+00:00",
+      "level": "CRITICAL",
+      "current_value": 24.1,
+      "baseline": 28.0,
+      "normal_range": "25.0-31.0",
+      "sustained_readings": 100
+    },
+    {
+      "pool": "Spa",
+      "sensor": "pH",
+      "timestamp": "2026-02-15T23:59:58+00:00",
+      "level": "WARNING",
+      "current_value": 7.19,
+      "baseline": 7.09,
+      "normal_range": "7.03-7.15",
+      "sustained_readings": 100
+    },
+    {
+      "pool": "Spa",
+      "sensor": "Temp",
+      "timestamp": "2026-02-15T23:59:58+00:00",
+      "level": "CRITICAL",
+      "current_value": 24.8,
+      "baseline": 10.2,
+      "normal_range": "6.0-14.0",
+      "sustained_readings": 100
+    },
+    {
+      "pool": "Vitality",
+      "sensor": "ORP",
+      "timestamp": "2026-02-12T11:40:19+00:00",
+      "level": "WARNING",
+      "current_value": 868.0,
+      "baseline": 748,
+      "normal_range": "700-850",
+      "sustained_readings": 100
+    }
+  ],
+  "trends": [
+    {
+      "pool": "Vitality",
+      "sensor": "Temp",
+      "direction": "RISING",
+      "days": 8,
+      "total_change": 4.547
+    }
+  ],
+  "status": "CRITICAL"
+}

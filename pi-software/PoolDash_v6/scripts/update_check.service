@@ -1,0 +1,15 @@
+[Unit]
+Description=PoolAIssistant Update Checker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/PoolAIssistant/app
+ExecStart=/bin/bash -c '/usr/bin/python3 /opt/PoolAIssistant/app/scripts/update_check.py --apply && systemctl restart poolaissistant_ui.service poolaissistant_logger.service || true'
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

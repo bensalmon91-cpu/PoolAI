@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin | PoolDash_v6</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-mark">PoolDash_v6</span>
+      <span class="brand-sub">Admin</span>
+    </div>
+    <nav class="site-nav">
+      <a href="../index.html">Home</a>
+      <a href="advertising.html">Advertising & Sales</a>
+      <a href="/portal">Client Portal</a>
+      <form action="/api/logout" method="post">
+        <button class="link-button" type="submit">Sign out</button>
+      </form>
+    </nav>
+  </header>
+
+  <main class="content">
+    <section class="hero">
+      <h1>Admin Console</h1>
+      <p class="lead">Manage clients, pools, users, and device assignments.</p>
+    </section>
+
+    <section class="card-grid">
+      <article class="card">
+        <h2>Create Client</h2>
+        <form class="upload-form" id="account-form">
+          <label for="account-name">Client name</label>
+          <input id="account-name" name="name" type="text" required>
+
+          <label for="account-contact">Contact name</label>
+          <input id="account-contact" name="contact_name" type="text">
+
+          <label for="account-email">Contact email</label>
+          <input id="account-email" name="contact_email" type="email">
+
+          <label for="account-phone">Contact phone</label>
+          <input id="account-phone" name="contact_phone" type="text">
+
+          <label for="account-address">Address</label>
+          <input id="account-address" name="address" type="text">
+
+          <button type="submit">Create client</button>
+        </form>
+        <p class="helper-text" id="account-status"></p>
+      </article>
+
+      <article class="card">
+        <h2>Edit Client</h2>
+        <form class="upload-form" id="account-edit-form">
+          <label for="account-edit-select">Client</label>
+          <select id="account-edit-select" name="account_id" required></select>
+
+          <label for="account-edit-name">Client name</label>
+          <input id="account-edit-name" name="name" type="text" required>
+
+          <label for="account-edit-contact">Contact name</label>
+          <input id="account-edit-contact" name="contact_name" type="text">
+
+          <label for="account-edit-email">Contact email</label>
+          <input id="account-edit-email" name="contact_email" type="email">
+
+          <label for="account-edit-phone">Contact phone</label>
+          <input id="account-edit-phone" name="contact_phone" type="text">
+
+          <label for="account-edit-address">Address</label>
+          <input id="account-edit-address" name="address" type="text">
+
+          <button type="submit">Update client</button>
+        </form>
+        <p class="helper-text" id="account-edit-status"></p>
+      </article>
+
+      <article class="card">
+        <h2>Create Pool</h2>
+        <form class="upload-form" id="pool-form">
+          <label for="pool-account">Client</label>
+          <select id="pool-account" name="account_id" required></select>
+
+          <label for="pool-name">Pool name</label>
+          <input id="pool-name" name="name" type="text" required>
+
+          <label for="pool-location">Location</label>
+          <input id="pool-location" name="location" type="text">
+
+          <label for="pool-notes">Notes</label>
+          <input id="pool-notes" name="notes" type="text">
+
+          <button type="submit">Create pool</button>
+        </form>
+        <p class="helper-text" id="pool-status"></p>
+      </article>
+
+      <article class="card">
+        <h2>Create User</h2>
+        <form class="upload-form" id="user-form">
+          <label for="user-email">Email address</label>
+          <input id="user-email" name="email" type="email" required>
+
+          <label for="user-password">Temporary password</label>
+          <input id="user-password" name="password" type="text" required>
+
+          <label for="user-account">Client</label>
+          <select id="user-account" name="accountId"></select>
+
+          <label for="user-admin">Admin user?</label>
+          <select id="user-admin" name="isAdmin">
+            <option value="false" selected>No</option>
+            <option value="true">Yes</option>
+          </select>
+
+          <button type="submit">Create user</button>
+        </form>
+        <p class="helper-text" id="user-status"></p>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Device Assignments</h2>
+      <form class="upload-form" id="device-form">
+        <label for="device-select">Device</label>
+        <select id="device-select" name="device_id" required></select>
+
+        <label for="device-account">Assign to client</label>
+        <select id="device-account" name="account_id"></select>
+
+        <label for="device-pool">Assign to pool</label>
+        <select id="device-pool" name="pool_id"></select>
+
+        <button type="submit">Assign device</button>
+      </form>
+      <p class="helper-text" id="device-status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Client Directory</h2>
+      <div class="table-wrap">
+        <table class="data-table" id="accounts-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Contact</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Address</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Client Overview</h2>
+      <form class="upload-form">
+        <label for="client-filter">Select client</label>
+        <select id="client-filter"></select>
+      </form>
+      <div class="grid-2" style="margin-top:12px;">
+        <div>
+          <h3>Client Pools</h3>
+          <ul id="client-pools" class="list"></ul>
+        </div>
+        <div>
+          <h3>Client Devices</h3>
+          <ul id="client-devices" class="list"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Pools</h2>
+      <div class="table-wrap">
+        <table class="data-table" id="pools-table">
+          <thead>
+            <tr>
+              <th>Pool</th>
+              <th>Client</th>
+              <th>Location</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Users</h2>
+      <div class="table-wrap">
+        <table class="data-table" id="users-table">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Client</th>
+              <th>Admin</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Devices</h2>
+      <div class="table-wrap">
+        <table class="data-table" id="devices-table">
+          <thead>
+            <tr>
+              <th>Device ID</th>
+              <th>Model</th>
+              <th>Hostname</th>
+              <th>Client</th>
+              <th>Pool</th>
+              <th>Last seen</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Device Health Monitor</h2>
+      <p class="helper-text">Real-time status of all connected devices. Devices are considered offline if not seen for 20+ minutes.</p>
+      <button type="button" id="refresh-health" class="btn-secondary" style="margin-bottom:12px;">Refresh Health</button>
+
+      <!-- Issues Summary Banner -->
+      <div id="issues-banner" class="issues-banner" style="display:none;"></div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="health-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Device</th>
+              <th>Controllers</th>
+              <th>Alarms</th>
+              <th>Last Heartbeat</th>
+              <th>System</th>
+              <th>Uploads</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="helper-text" id="health-status"></p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>PoolDash_v6 &copy; <span id="year"></span></span>
+  </footer>
+
+  <script src="../js/app.js"></script>
+  <script src="../js/admin.js"></script>
+</body>
+</html>

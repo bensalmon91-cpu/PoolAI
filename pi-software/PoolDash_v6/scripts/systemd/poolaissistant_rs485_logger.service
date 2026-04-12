@@ -1,0 +1,23 @@
+[Unit]
+Description=PoolAIssistant RS485 Water Tester Logger
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=poolai
+Group=poolai
+WorkingDirectory=/opt/PoolAIssistant/app
+EnvironmentFile=/etc/PoolAIssistant/poolaissistant.env
+ExecStart=/opt/PoolAIssistant/venv/bin/python /opt/PoolAIssistant/app/tools/rs485_logger.py
+Restart=always
+RestartSec=5
+Nice=10
+CPUWeight=40
+WatchdogSec=180
+
+# Grant access to serial devices
+SupplementaryGroups=dialout
+
+[Install]
+WantedBy=multi-user.target

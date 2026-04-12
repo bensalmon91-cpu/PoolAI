@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Environment files (contain secrets)
+.env
+backend/.env
+php_deploy/.env
+
+# Backend data files
+backend/data/devices.json
+backend/data/updates.json
+backend/updates/*
+!backend/updates/.gitkeep
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# PHP data
+php_deploy/data/uploads/*
+!php_deploy/data/uploads/.gitkeep
+php_deploy/data/updates/*
+!php_deploy/data/updates/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+temp_*.php
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db

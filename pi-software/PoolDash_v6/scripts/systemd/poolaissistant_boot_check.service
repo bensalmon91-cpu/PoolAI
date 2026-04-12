@@ -1,0 +1,20 @@
+[Unit]
+Description=PoolAIssistant Boot Check
+Documentation=https://github.com/modprojects/poolaissistant
+After=network-online.target
+Wants=network-online.target
+Before=poolaissistant_logger.service poolaissistant_ui.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/PoolAIssistant/app/scripts/boot_check.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+# Don't fail the boot if this check fails
+# Other services can read /opt/PoolAIssistant/data/boot_status.json
+SuccessExitStatus=0 1 2
+
+[Install]
+WantedBy=multi-user.target

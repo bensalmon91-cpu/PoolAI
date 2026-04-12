@@ -1,0 +1,7 @@
+[Unit]
+Description=Weekly Reboot for PoolAIssistant
+Documentation=man:systemd-reboot.service(8)
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/shutdown -r now "Weekly scheduled reboot for system health"
