@@ -287,19 +287,22 @@ SSH_DIR="$PI_HOME/.ssh"
 sudo mkdir -p "$SSH_DIR"
 sudo chmod 700 "$SSH_DIR"
 
-# Add standard Claude SSH key if not present
-CLAUDE_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICT2USTN90TYd32Y6iQf7RW9q/AGYULgAv1RVykZhxuk claude-pi"
-if [ -f "$SSH_DIR/authorized_keys" ]; then
-    if ! grep -q "claude-pi" "$SSH_DIR/authorized_keys"; then
-        echo "$CLAUDE_KEY" | sudo tee -a "$SSH_DIR/authorized_keys" > /dev/null
-        echo "Added Claude SSH key"
-    else
-        echo "Claude SSH key already present"
-    fi
-else
-    echo "$CLAUDE_KEY" | sudo tee "$SSH_DIR/authorized_keys" > /dev/null
-    echo "Created authorized_keys with Claude SSH key"
-fi
+# Add authorized SSH keys for remote access
+# These keys allow passwordless SSH access to all cloned devices
+cat > /tmp/poolai_authorized_keys <<'SSHKEYS'
+# PoolAIssistant Authorized Keys
+# Add your SSH public keys below for passwordless access
+
+# Ben's development key (Windows/Claude)
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICT2USTN90TYd32Y6iQf7RW9q/AGYULgAv1RVykZhxuk claude-pi
+
+# Add more keys here as needed:
+# ssh-ed25519 AAAA... user@host
+SSHKEYS
+
+sudo cp /tmp/poolai_authorized_keys "$SSH_DIR/authorized_keys"
+rm /tmp/poolai_authorized_keys
+echo "Configured SSH authorized_keys for passwordless access"
 
 sudo chmod 600 "$SSH_DIR/authorized_keys"
 sudo chown -R "$PI_USER:$PI_USER" "$SSH_DIR"
@@ -411,29 +414,55 @@ sudo journalctl --vacuum-time=1s 2>/dev/null || true
 echo "OK - Logs cleaned"
 echo
 
-echo "[13/14] Removing SSH host keys..."
+echo "[13/14] Configuring SSH for remote access after clone..."
 sudo rm -f /etc/ssh/ssh_host_*
-sudo systemctl enable regenerate_ssh_host_keys 2>/dev/null || true
 
-sudo tee /etc/systemd/system/ssh-keygen-on-boot.service > /dev/null <<'SSHSERVICE'
+# Create robust first-boot SSH setup service
+sudo tee /etc/systemd/system/poolaissistant-ssh-firstboot.service > /dev/null <<'SSHSERVICE'
 [Unit]
-Description=Regenerate SSH host keys if missing
-Before=ssh.service
-ConditionPathExists=!/etc/ssh/ssh_host_rsa_key
+Description=PoolAIssistant SSH First Boot Setup
+After=network.target local-fs.target
+Before=ssh.service sshd.service
+DefaultDependencies=no
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/ssh-keygen -A
-ExecStartPost=/bin/systemctl restart ssh
+ExecStart=/bin/bash -c '\
+  if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then \
+    /usr/bin/ssh-keygen -A; \
+    echo "SSH host keys generated"; \
+  fi; \
+  /bin/systemctl unmask ssh sshd 2>/dev/null || true; \
+  /bin/systemctl enable ssh 2>/dev/null || true; \
+  /bin/systemctl start ssh 2>/dev/null || true; \
+  echo "SSH service started"'
 RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 SSHSERVICE
+
 sudo systemctl daemon-reload
-sudo systemctl enable ssh-keygen-on-boot.service
-sudo systemctl enable ssh
-echo "OK - SSH host keys removed (will regenerate on first boot)"
+sudo systemctl enable poolaissistant-ssh-firstboot.service
+
+# Ensure SSH is enabled and will start on boot
+sudo systemctl unmask ssh sshd 2>/dev/null || true
+sudo systemctl enable ssh 2>/dev/null || true
+
+# Configure SSH for easy access
+SSHD_CONFIG="/etc/ssh/sshd_config"
+if [ -f "$SSHD_CONFIG" ]; then
+    # Allow password auth for initial access
+    sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' "$SSHD_CONFIG"
+    sudo sed -i 's/^#*PubkeyAuthentication.*/PubkeyAuthentication yes/' "$SSHD_CONFIG"
+    sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' "$SSHD_CONFIG"
+    # Disable PAM issues that can block login
+    sudo sed -i 's/^#*UsePAM.*/UsePAM yes/' "$SSHD_CONFIG"
+fi
+
+echo "OK - SSH configured (enabled on boot, password + key auth)"
 echo
 
 echo "[14/14] Forgetting WiFi networks..."
@@ -471,6 +500,19 @@ sudo systemctl enable avahi-daemon 2>/dev/null || true
 echo "OK - Hostname set to 'poolai' (accessible at poolai.local)"
 echo
 
+echo "Configuring static ethernet IP (192.168.2.100)..."
+# Create NetworkManager connection for static ethernet IP
+# This ensures new clones are immediately accessible via direct ethernet
+sudo nmcli con delete "PoolAI-Ethernet" 2>/dev/null || true
+sudo nmcli con add con-name "PoolAI-Ethernet" \
+    ifname eth0 \
+    type ethernet \
+    ip4 192.168.2.100/24 \
+    autoconnect yes \
+    connection.autoconnect-priority 100 2>/dev/null || true
+echo "OK - Ethernet configured: 192.168.2.100 (connect directly or via poolai.local)"
+echo
+
 echo "Installing cloud-init hostname preservation config..."
 # Prevent cloud-init from overwriting hostname on boot (allows Quick Connect to work)
 sudo tee /etc/cloud/cloud.cfg.d/01_preserve_hostname.cfg > /dev/null <<'CLOUDINIT'
@@ -494,13 +536,7 @@ else
 fi
 echo
 
-echo "Hardening SSH..."
-SSHD_CONFIG="/etc/ssh/sshd_config"
-if [ -f "$SSHD_CONFIG" ]; then
-    sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' "$SSHD_CONFIG"
-    sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' "$SSHD_CONFIG"
-fi
-echo "OK - SSH hardened"
+echo "SSH already configured in Phase 5 (remote access setup)"
 echo
 
 echo "Configuring fail2ban..."
@@ -594,13 +630,25 @@ echo "  - All required packages verified (including hostapd, dnsmasq)"
 echo "  - AP Manager installed and enabled (fallback WiFi: PoolAI - no password)"
 echo "  - Kiosk display (labwc) configured for port 80"
 echo "  - Health reporter timer installed (15 min interval)"
-echo "  - SSH keys configured for remote access"
 echo "  - Databases and settings cleared"
 echo "  - Security hardening applied"
+echo
+echo "REMOTE ACCESS (enabled by default on all clones):"
+echo "  - SSH: ENABLED on boot (no manual enable needed)"
+echo "  - Hostname: poolai.local (mDNS)"
+echo "  - Ethernet IP: 192.168.2.100 (static)"
+echo "  - SSH user: poolai"
+echo "  - SSH password: 12345678"
+echo "  - SSH key auth: Your key pre-installed (passwordless)"
+echo
+echo "Connect to any clone via:"
+echo "  ssh poolai@poolai.local"
+echo "  ssh poolai@192.168.2.100"
 echo
 echo "Next steps:"
 echo "  1. Shut down: sudo shutdown -h now"
 echo "  2. Remove SD card and create image"
 echo "  3. Flash to new SD cards"
 echo "  4. Each clone auto-provisions on first boot"
+echo "  5. SSH immediately available on each clone"
 echo
