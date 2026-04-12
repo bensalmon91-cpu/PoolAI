@@ -613,24 +613,36 @@ main() {
         fi
 
         # Check connectivity
-        if has_network; then
-            last_accessible=$now  # We have network, so we're accessible
-            # We have network
+        # Note: We track ethernet separately from WiFi
+        # AP should only stop when WiFi is connected (users need AP to configure WiFi)
+        # Ethernet alone should NOT stop the AP
+        local has_wifi=false
+        local has_eth=false
+        connected_wifi && has_wifi=true
+        connected_ethernet && has_eth=true
+
+        if [[ "$has_eth" == "true" ]]; then
+            last_accessible=$now  # Ethernet gives us accessibility
+        fi
+
+        if [[ "$has_wifi" == "true" ]]; then
+            last_accessible=$now  # WiFi also gives us accessibility
+            # WiFi is connected
             if [[ $wifi_connected_since -eq 0 ]]; then
                 wifi_connected_since=$now
-                log "Network connected"
+                log "WiFi connected"
             fi
 
             local connected_duration=$((now - wifi_connected_since))
 
-            # If network has been stable AND we're past initial period, stop AP
+            # If WiFi has been stable AND we're past initial period, stop AP
             if [[ $time_since_boot -gt $INITIAL_AP_TIME ]] && [[ $connected_duration -gt 60 ]]; then
                 if [[ -f "$STATE_FILE" ]]; then
-                    log "Network stable for ${connected_duration}s, stopping AP to free WiFi"
+                    log "WiFi stable for ${connected_duration}s, stopping AP to free WiFi radio"
                     stop_ap
                 fi
 
-                # Slow down checking once network is stable
+                # Slow down checking once WiFi is stable
                 if [[ $connected_duration -gt $WIFI_STABLE_TIME ]]; then
                     check_interval=$SLOW_CHECK_INTERVAL
                 fi
