@@ -1,56 +1,77 @@
-﻿<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PoolDash_v6 Portal</title>
+  <meta name="description" content="PoolAIssistant - Smart pool monitoring and management">
+  <meta name="theme-color" content="#0066cc">
+  <title>PoolAIssistant</title>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
 </head>
 <body>
   <header class="site-header">
-    <div class="brand">
-      <span class="brand-mark">PoolDash_v6</span>
-      <span class="brand-sub">Client Portal</span>
+    <div class="site-header-inner">
+      <div class="brand">
+        <span class="brand-mark">PoolAIssistant</span>
+        <span class="brand-sub">Smart Pool Management</span>
+      </div>
+      <nav class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="pages/login.html" class="btn btn-primary btn-sm">Sign In</a>
+      </nav>
     </div>
-    <nav class="site-nav">
-      <a href="index.html">Home</a>
-      <a href="pages/advertising.html">Advertising & Sales</a>
-      <a href="pages/login.html">Login</a>
-    </nav>
   </header>
 
   <main class="content">
     <section class="hero">
-      <h1>Welcome to PoolDash_v6</h1>
-      <p class="lead">This is the initial draft of the client-facing portal. Use this space for announcements, key links, and next steps.</p>
+      <h1>Intelligent Pool Monitoring</h1>
+      <p class="lead">Monitor water quality, track chemical levels, and get AI-powered insights for optimal pool maintenance.</p>
     </section>
 
     <section class="card-grid">
       <article class="card">
-        <h2>File Upload</h2>
-        <p>Send documents or reports to the backend script endpoint for processing.</p>
-        <form class="upload-form" action="/api/upload" method="post" enctype="multipart/form-data">
-          <label for="upload-file">Choose a file</label>
-          <input id="upload-file" name="file" type="file" required>
-          <button type="submit">Upload</button>
-        </form>
-        <p class="helper-text">Backend endpoint placeholder: <code>/api/upload</code> (login required).</p>
+        <h2>Real-Time Monitoring</h2>
+        <p>Track pH, chlorine, temperature, and more with continuous sensor readings delivered to your dashboard.</p>
+        <a class="btn btn-outline" href="pages/login.html">Get Started</a>
       </article>
+
       <article class="card">
-        <h2>Account Access</h2>
-        <p>Clients can sign in to view account details, billing, and service history.</p>
-        <a class="button" href="pages/login.html">Go to Login</a>
+        <h2>AI-Powered Insights</h2>
+        <p>Receive intelligent recommendations for chemical adjustments and maintenance schedules based on your pool's data.</p>
+        <a class="btn btn-outline" href="pages/login.html">Learn More</a>
       </article>
+
       <article class="card">
-        <h2>Advertising & Sales</h2>
-        <p>Highlight current promotions, service plans, and seasonal packages.</p>
-        <a class="button" href="pages/advertising.html">View Advertising Page</a>
+        <h2>Mobile Access</h2>
+        <p>Access your pool data anywhere with our mobile-friendly portal and installable web app.</p>
+        <a class="btn btn-outline" href="pages/login.html">Try Now</a>
       </article>
+    </section>
+
+    <section class="card mt-6">
+      <div class="card-header">
+        <h2>Why PoolAIssistant?</h2>
+      </div>
+      <div class="grid-3">
+        <div>
+          <h4>Save Time</h4>
+          <p class="text-secondary">Automated monitoring means less manual testing and more time enjoying your pool.</p>
+        </div>
+        <div>
+          <h4>Save Money</h4>
+          <p class="text-secondary">Precise chemical dosing reduces waste and prevents costly water quality issues.</p>
+        </div>
+        <div>
+          <h4>Peace of Mind</h4>
+          <p class="text-secondary">24/7 monitoring with instant alerts keeps your pool safe and healthy.</p>
+        </div>
+      </div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <span>PoolDash_v6 &copy; <span id="year"></span></span>
+    <p>PoolAIssistant &copy; <span id="year"></span></p>
   </footer>
 
   <script src="js/app.js"></script>

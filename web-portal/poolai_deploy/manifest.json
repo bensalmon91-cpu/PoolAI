@@ -1,14 +1,18 @@
 {
   "name": "PoolAIssistant",
   "short_name": "PoolAI",
-  "description": "Monitor and control your pool from anywhere",
+  "description": "Smart pool monitoring and management with AI-powered insights",
   "start_url": "/dashboard.php",
   "scope": "/",
+  "id": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "portrait-primary",
-  "background_color": "#1a1a2e",
+  "background_color": "#f8fafc",
   "theme_color": "#0066cc",
-  "categories": ["utilities", "lifestyle"],
+  "categories": ["utilities", "lifestyle", "productivity"],
+  "lang": "en",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/assets/icons/icon-72.png",
@@ -77,16 +81,51 @@
       "sizes": "390x844",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Dashboard view"
+      "label": "Dashboard - View all your pool devices"
+    },
+    {
+      "src": "/assets/screenshots/device.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Device Detail - Real-time pool data"
     }
   ],
   "shortcuts": [
     {
       "name": "Dashboard",
+      "short_name": "Devices",
+      "description": "View all your pool devices",
       "url": "/dashboard.php",
-      "icons": [{ "src": "/assets/icons/icon-96.png", "sizes": "96x96" }]
+      "icons": [
+        {
+          "src": "/assets/icons/icon-96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Account Settings",
+      "short_name": "Account",
+      "description": "Manage your account settings",
+      "url": "/account.php",
+      "icons": [
+        {
+          "src": "/assets/icons/icon-96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
     }
   ],
   "related_applications": [],
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
 }

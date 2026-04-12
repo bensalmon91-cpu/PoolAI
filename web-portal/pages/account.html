@@ -1,57 +1,119 @@
-﻿<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Account | PoolDash_v6</title>
+  <meta name="description" content="Manage your PoolAIssistant account">
+  <meta name="theme-color" content="#0066cc">
+  <title>Account | PoolAIssistant</title>
   <link rel="stylesheet" href="../css/styles.css">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/icons/favicon-32.png">
 </head>
 <body>
   <header class="site-header">
-    <div class="brand">
-      <span class="brand-mark">PoolDash_v6</span>
-      <span class="brand-sub">Account Overview</span>
+    <div class="site-header-inner">
+      <div class="brand">
+        <span class="brand-mark">PoolAIssistant</span>
+        <span class="brand-sub">Account</span>
+      </div>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="portal.html">Dashboard</a>
+        <form action="/api/logout" method="post" style="display: inline;">
+          <button class="link-button" type="submit">Sign Out</button>
+        </form>
+      </nav>
     </div>
-    <nav class="site-nav">
-      <a href="../index.html">Home</a>
-      <a href="advertising.html">Advertising & Sales</a>
-      <a href="login.html">Login</a>
-    </nav>
   </header>
 
   <main class="content">
     <section class="hero">
-      <h1>Account Overview</h1>
-      <p class="lead">Placeholder account details for the initial portal draft.</p>
+      <h1>Account Settings</h1>
+      <p class="lead">Manage your profile, security, and preferences.</p>
     </section>
 
+    <!-- Account Overview -->
+    <div class="grid-2 mb-6">
+      <section class="card">
+        <h2>Profile</h2>
+        <form class="upload-form" id="profile-form">
+          <div class="form-group">
+            <label for="name">Full Name</label>
+            <input id="name" name="name" type="text" placeholder="Your name">
+          </div>
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input id="email" name="email" type="email" placeholder="you@example.com">
+          </div>
+          <div class="form-group">
+            <label for="phone">Phone Number</label>
+            <input id="phone" name="phone" type="tel" placeholder="+1 234 567 8900">
+          </div>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Security</h2>
+        <form class="upload-form" id="password-form">
+          <div class="form-group">
+            <label for="current-password">Current Password</label>
+            <input id="current-password" name="current_password" type="password" autocomplete="current-password">
+          </div>
+          <div class="form-group">
+            <label for="new-password">New Password</label>
+            <input id="new-password" name="new_password" type="password" autocomplete="new-password">
+          </div>
+          <div class="form-group">
+            <label for="confirm-password">Confirm New Password</label>
+            <input id="confirm-password" name="confirm_password" type="password" autocomplete="new-password">
+          </div>
+          <button type="submit" class="btn btn-primary">Update Password</button>
+        </form>
+      </section>
+    </div>
+
+    <!-- Quick Stats -->
+    <section class="card mb-6">
+      <h2>Account Overview</h2>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-label">Status</div>
+          <div class="summary-value text-success">Active</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Devices</div>
+          <div class="summary-value">0</div>
+          <div class="summary-meta">Linked devices</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Next Service</div>
+          <div class="summary-value">TBD</div>
+          <div class="summary-meta">Scheduled visit</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Balance</div>
+          <div class="summary-value">$0.00</div>
+          <div class="summary-meta">Outstanding</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick Actions -->
     <section class="card">
-      <form class="upload-form" action="/api/logout" method="post">
-        <button type="submit">Sign out</button>
-      </form>
-      <p class="helper-text">Backend endpoint placeholder: <code>/api/logout</code></p>
-      <p class="helper-text"><a href="/portal">Open client portal</a></p>
-      <p class="helper-text"><a href="/admin">Admin console (admin only)</a></p>
-    </section>
-
-    <section class="card-grid">
-      <article class="card">
-        <h2>Account Status</h2>
-        <p>Active</p>
-      </article>
-      <article class="card">
-        <h2>Service Schedule</h2>
-        <p>Next visit: TBD</p>
-      </article>
-      <article class="card">
-        <h2>Billing</h2>
-        <p>Outstanding balance: $0.00</p>
-      </article>
+      <h2>Quick Actions</h2>
+      <div class="flex gap-4" style="flex-wrap: wrap;">
+        <a href="portal.html" class="btn btn-secondary">View Dashboard</a>
+        <a href="admin.html" class="btn btn-outline">Admin Console</a>
+        <form action="/api/logout" method="post" style="display: inline;">
+          <button type="submit" class="btn btn-danger-outline">Sign Out</button>
+        </form>
+      </div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <span>PoolDash_v6 &copy; <span id="year"></span></span>
+    <p>PoolAIssistant &copy; <span id="year"></span></p>
   </footer>
 
   <script src="../js/app.js"></script>

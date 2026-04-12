@@ -1,49 +1,182 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Set New Password | PoolDash_v6</title>
+  <meta name="description" content="Set a new password for your PoolAIssistant account">
+  <meta name="theme-color" content="#0066cc">
+  <title>Set New Password | PoolAIssistant</title>
   <link rel="stylesheet" href="../css/styles.css">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/icons/favicon-32.png">
+  <style>
+    .auth-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-6);
+      background: linear-gradient(135deg, #0066cc 0%, #004d99 100%);
+    }
+
+    .auth-container {
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .auth-card {
+      background: var(--surface);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-xl);
+      padding: var(--space-8);
+    }
+
+    .auth-header {
+      text-align: center;
+      margin-bottom: var(--space-8);
+    }
+
+    .auth-header h1 {
+      font-size: 1.5rem;
+      margin-bottom: var(--space-2);
+      color: var(--primary);
+    }
+
+    .auth-header p {
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .auth-form .form-group {
+      margin-bottom: var(--space-5);
+    }
+
+    .auth-links {
+      text-align: center;
+      margin-top: var(--space-6);
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--border);
+    }
+
+    .auth-links a {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .auth-links a:hover {
+      color: var(--primary);
+    }
+
+    .auth-footer {
+      text-align: center;
+      margin-top: var(--space-6);
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 0.875rem;
+    }
+
+    .password-strength {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--gray-200);
+      margin-top: var(--space-2);
+      overflow: hidden;
+    }
+
+    .password-strength-bar {
+      height: 100%;
+      width: 0;
+      transition: all 0.3s ease;
+      border-radius: 2px;
+    }
+
+    .password-strength-bar.weak { width: 33%; background: var(--error); }
+    .password-strength-bar.medium { width: 66%; background: var(--warning); }
+    .password-strength-bar.strong { width: 100%; background: var(--success); }
+  </style>
 </head>
 <body>
-  <header class="site-header">
-    <div class="brand">
-      <span class="brand-mark">PoolDash_v6</span>
-      <span class="brand-sub">Password Reset</span>
+  <div class="auth-page">
+    <div class="auth-container">
+      <div class="auth-card">
+        <div class="auth-header">
+          <h1>PoolAIssistant</h1>
+          <p>Create a new password</p>
+        </div>
+
+        <form class="auth-form" action="/api/password/reset" method="post">
+          <div class="form-group">
+            <label for="token">Reset Token</label>
+            <input id="token" name="token" type="text" placeholder="Paste token from email" required>
+            <small class="text-muted">Check your email for the reset link</small>
+          </div>
+
+          <div class="form-group">
+            <label for="password">New Password</label>
+            <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Choose a strong password" required minlength="8">
+            <div class="password-strength">
+              <div class="password-strength-bar" id="strengthBar"></div>
+            </div>
+            <small class="text-muted">Minimum 8 characters</small>
+          </div>
+
+          <div class="form-group">
+            <label for="confirm">Confirm Password</label>
+            <input id="confirm" name="password_confirm" type="password" autocomplete="new-password" placeholder="Confirm your password" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block btn-lg">Update Password</button>
+        </form>
+
+        <div class="auth-links">
+          <a href="login.html">Back to sign in</a>
+        </div>
+      </div>
+
+      <div class="auth-footer">
+        <p>PoolAIssistant &copy; <span id="year"></span></p>
+      </div>
     </div>
-    <nav class="site-nav">
-      <a href="../index.html">Home</a>
-      <a href="advertising.html">Advertising & Sales</a>
-      <a href="login.html">Login</a>
-    </nav>
-  </header>
-
-  <main class="content">
-    <section class="hero">
-      <h1>Set a new password</h1>
-      <p class="lead">Paste the token from your reset email and choose a new password.</p>
-    </section>
-
-    <section class="card">
-      <form class="upload-form" action="/api/password/reset" method="post">
-        <label for="token">Reset token</label>
-        <input id="token" name="token" type="text" required>
-
-        <label for="password">New password</label>
-        <input id="password" name="password" type="password" autocomplete="new-password" required>
-
-        <button type="submit">Update password</button>
-      </form>
-      <p class="helper-text">Backend endpoint: <code>/api/password/reset</code></p>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <span>PoolDash_v6 &copy; <span id="year"></span></span>
-  </footer>
+  </div>
 
   <script src="../js/app.js"></script>
-  <script src="../js/reset.js"></script>
+  <script>
+    // Password strength indicator
+    const password = document.getElementById('password');
+    const strengthBar = document.getElementById('strengthBar');
+
+    password.addEventListener('input', function() {
+      const value = this.value;
+      let strength = 0;
+
+      if (value.length >= 8) strength++;
+      if (value.match(/[a-z]/) && value.match(/[A-Z]/)) strength++;
+      if (value.match(/[0-9]/)) strength++;
+      if (value.match(/[^a-zA-Z0-9]/)) strength++;
+
+      strengthBar.className = 'password-strength-bar';
+      if (strength >= 3) {
+        strengthBar.classList.add('strong');
+      } else if (strength >= 2) {
+        strengthBar.classList.add('medium');
+      } else if (strength >= 1) {
+        strengthBar.classList.add('weak');
+      }
+    });
+
+    // Confirm password validation
+    const confirm = document.getElementById('confirm');
+    const form = document.querySelector('form');
+
+    form.addEventListener('submit', function(e) {
+      if (password.value !== confirm.value) {
+        e.preventDefault();
+        confirm.setCustomValidity('Passwords do not match');
+        confirm.reportValidity();
+      }
+    });
+
+    confirm.addEventListener('input', function() {
+      this.setCustomValidity('');
+    });
+  </script>
 </body>
 </html>

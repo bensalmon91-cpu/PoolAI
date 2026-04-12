@@ -52,7 +52,7 @@ $csrfToken = $auth->generateCSRFToken();
     <title>Login - PoolAIssistant</title>
 
     <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#0066cc">
     <meta name="description" content="Log in to PoolAIssistant - Monitor and control your pool">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -94,21 +94,36 @@ $csrfToken = $auth->generateCSRFToken();
                 <div class="form-group">
                     <label for="email">Email Address</label>
                     <input type="email" id="email" name="email" required autofocus
+                           placeholder="you@example.com"
                            value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
                 </div>
 
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required>
+                    <input type="password" id="password" name="password" required
+                           placeholder="Enter your password">
                 </div>
 
                 <button type="submit" class="btn btn-primary btn-block">Log In</button>
             </form>
 
             <div class="auth-links">
-                <a href="forgot-password.php">Forgot your password?</a>
+                <a href="forgot-password.php">Forgot password?</a>
                 <span class="divider">|</span>
-                <a href="register.php">Create an account</a>
+                <a href="register.php">Create account</a>
+            </div>
+
+            <!-- Install App Prompt for Mobile -->
+            <div id="installHint" style="display: none; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); text-align: center;">
+                <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.75rem;">For the best experience:</p>
+                <a href="/install.php" class="btn btn-outline btn-block" style="font-size: 0.875rem;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.5rem;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Install App
+                </a>
             </div>
         </div>
 
@@ -116,5 +131,17 @@ $csrfToken = $auth->generateCSRFToken();
             <p>&copy; <?= date('Y') ?> PoolAIssistant. All rights reserved.</p>
         </div>
     </div>
+
+    <script>
+        // Show install hint on mobile devices that aren't in standalone mode
+        (function() {
+            const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+            if (isMobile && !isStandalone) {
+                document.getElementById('installHint').style.display = 'block';
+            }
+        })();
+    </script>
 </body>
 </html>

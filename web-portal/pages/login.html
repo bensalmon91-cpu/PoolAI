@@ -1,49 +1,119 @@
-﻿<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Login | PoolDash_v6</title>
+  <meta name="description" content="Sign in to your PoolAIssistant account">
+  <meta name="theme-color" content="#0066cc">
+  <title>Sign In | PoolAIssistant</title>
   <link rel="stylesheet" href="../css/styles.css">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/icons/favicon-32.png">
+  <style>
+    .auth-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-6);
+      background: linear-gradient(135deg, #0066cc 0%, #004d99 100%);
+    }
+
+    .auth-container {
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .auth-card {
+      background: var(--surface);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-xl);
+      padding: var(--space-8);
+    }
+
+    .auth-header {
+      text-align: center;
+      margin-bottom: var(--space-8);
+    }
+
+    .auth-header h1 {
+      font-size: 1.5rem;
+      margin-bottom: var(--space-2);
+      color: var(--primary);
+    }
+
+    .auth-header p {
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .auth-form .form-group {
+      margin-bottom: var(--space-5);
+    }
+
+    .auth-links {
+      text-align: center;
+      margin-top: var(--space-6);
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--border);
+    }
+
+    .auth-links a {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .auth-links a:hover {
+      color: var(--primary);
+    }
+
+    .auth-footer {
+      text-align: center;
+      margin-top: var(--space-6);
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 0.875rem;
+    }
+
+    .divider {
+      margin: 0 var(--space-2);
+      color: var(--text-muted);
+    }
+  </style>
 </head>
 <body>
-  <header class="site-header">
-    <div class="brand">
-      <span class="brand-mark">PoolDash_v6</span>
-      <span class="brand-sub">Client Login</span>
+  <div class="auth-page">
+    <div class="auth-container">
+      <div class="auth-card">
+        <div class="auth-header">
+          <h1>PoolAIssistant</h1>
+          <p>Sign in to your account</p>
+        </div>
+
+        <form class="auth-form" action="/api/login" method="post">
+          <div class="form-group">
+            <label for="email">Email address</label>
+            <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block btn-lg">Sign In</button>
+        </form>
+
+        <div class="auth-links">
+          <a href="forgot.html">Forgot password?</a>
+          <span class="divider">|</span>
+          <a href="../index.html">Back to home</a>
+        </div>
+      </div>
+
+      <div class="auth-footer">
+        <p>PoolAIssistant &copy; <span id="year"></span></p>
+      </div>
     </div>
-    <nav class="site-nav">
-      <a href="../index.html">Home</a>
-      <a href="advertising.html">Advertising & Sales</a>
-      <a href="login.html">Login</a>
-    </nav>
-  </header>
-
-  <main class="content">
-    <section class="hero">
-      <h1>Client Login</h1>
-      <p class="lead">This login form is a placeholder for the future authentication flow.</p>
-    </section>
-
-    <section class="card">
-      <form class="upload-form" action="/api/login" method="post">
-        <label for="email">Email address</label>
-        <input id="email" name="email" type="email" autocomplete="email" required>
-
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
-
-        <button type="submit">Sign in</button>
-      </form>
-      <p class="helper-text">Backend endpoint placeholder: <code>/api/login</code></p>
-      <p class="helper-text"><a href="forgot.html">Forgot your password?</a></p>
-      <p class="helper-text"><a href="/portal">View client portal (requires login)</a></p>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <span>PoolDash_v6 &copy; <span id="year"></span></span>
-  </footer>
+  </div>
 
   <script src="../js/app.js"></script>
 </body>

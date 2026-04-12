@@ -1,25 +1,29 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin | PoolDash_v6</title>
+  <meta name="description" content="PoolAIssistant Admin Console">
+  <meta name="theme-color" content="#0066cc">
+  <title>Admin | PoolAIssistant</title>
   <link rel="stylesheet" href="../css/styles.css">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/icons/favicon-32.png">
 </head>
 <body>
   <header class="site-header">
-    <div class="brand">
-      <span class="brand-mark">PoolDash_v6</span>
-      <span class="brand-sub">Admin</span>
+    <div class="site-header-inner">
+      <div class="brand">
+        <span class="brand-mark">PoolAIssistant</span>
+        <span class="brand-sub">Admin</span>
+      </div>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="portal.html">Portal</a>
+        <form action="/api/logout" method="post" style="display: inline;">
+          <button class="link-button" type="submit">Sign Out</button>
+        </form>
+      </nav>
     </div>
-    <nav class="site-nav">
-      <a href="../index.html">Home</a>
-      <a href="advertising.html">Advertising & Sales</a>
-      <a href="/portal">Client Portal</a>
-      <form action="/api/logout" method="post">
-        <button class="link-button" type="submit">Sign out</button>
-      </form>
-    </nav>
   </header>
 
   <main class="content">
@@ -28,118 +32,149 @@
       <p class="lead">Manage clients, pools, users, and device assignments.</p>
     </section>
 
-    <section class="card-grid">
+    <!-- Quick Actions -->
+    <section class="card-grid mb-6">
+      <!-- Create Client -->
       <article class="card">
         <h2>Create Client</h2>
         <form class="upload-form" id="account-form">
-          <label for="account-name">Client name</label>
-          <input id="account-name" name="name" type="text" required>
-
-          <label for="account-contact">Contact name</label>
-          <input id="account-contact" name="contact_name" type="text">
-
-          <label for="account-email">Contact email</label>
-          <input id="account-email" name="contact_email" type="email">
-
-          <label for="account-phone">Contact phone</label>
-          <input id="account-phone" name="contact_phone" type="text">
-
-          <label for="account-address">Address</label>
-          <input id="account-address" name="address" type="text">
-
-          <button type="submit">Create client</button>
+          <div class="form-group">
+            <label for="account-name">Client name</label>
+            <input id="account-name" name="name" type="text" placeholder="Company or client name" required>
+          </div>
+          <div class="form-group">
+            <label for="account-contact">Contact name</label>
+            <input id="account-contact" name="contact_name" type="text" placeholder="Primary contact">
+          </div>
+          <div class="form-group">
+            <label for="account-email">Contact email</label>
+            <input id="account-email" name="contact_email" type="email" placeholder="email@example.com">
+          </div>
+          <div class="form-group">
+            <label for="account-phone">Contact phone</label>
+            <input id="account-phone" name="contact_phone" type="text" placeholder="+1 234 567 8900">
+          </div>
+          <div class="form-group">
+            <label for="account-address">Address</label>
+            <input id="account-address" name="address" type="text" placeholder="Street address">
+          </div>
+          <button type="submit" class="btn btn-primary">Create Client</button>
         </form>
         <p class="helper-text" id="account-status"></p>
       </article>
 
+      <!-- Edit Client -->
       <article class="card">
         <h2>Edit Client</h2>
         <form class="upload-form" id="account-edit-form">
-          <label for="account-edit-select">Client</label>
-          <select id="account-edit-select" name="account_id" required></select>
-
-          <label for="account-edit-name">Client name</label>
-          <input id="account-edit-name" name="name" type="text" required>
-
-          <label for="account-edit-contact">Contact name</label>
-          <input id="account-edit-contact" name="contact_name" type="text">
-
-          <label for="account-edit-email">Contact email</label>
-          <input id="account-edit-email" name="contact_email" type="email">
-
-          <label for="account-edit-phone">Contact phone</label>
-          <input id="account-edit-phone" name="contact_phone" type="text">
-
-          <label for="account-edit-address">Address</label>
-          <input id="account-edit-address" name="address" type="text">
-
-          <button type="submit">Update client</button>
+          <div class="form-group">
+            <label for="account-edit-select">Select client</label>
+            <select id="account-edit-select" name="account_id" required></select>
+          </div>
+          <div class="form-group">
+            <label for="account-edit-name">Client name</label>
+            <input id="account-edit-name" name="name" type="text" required>
+          </div>
+          <div class="form-group">
+            <label for="account-edit-contact">Contact name</label>
+            <input id="account-edit-contact" name="contact_name" type="text">
+          </div>
+          <div class="form-group">
+            <label for="account-edit-email">Contact email</label>
+            <input id="account-edit-email" name="contact_email" type="email">
+          </div>
+          <div class="form-group">
+            <label for="account-edit-phone">Contact phone</label>
+            <input id="account-edit-phone" name="contact_phone" type="text">
+          </div>
+          <div class="form-group">
+            <label for="account-edit-address">Address</label>
+            <input id="account-edit-address" name="address" type="text">
+          </div>
+          <button type="submit" class="btn btn-primary">Update Client</button>
         </form>
         <p class="helper-text" id="account-edit-status"></p>
       </article>
 
+      <!-- Create Pool -->
       <article class="card">
         <h2>Create Pool</h2>
         <form class="upload-form" id="pool-form">
-          <label for="pool-account">Client</label>
-          <select id="pool-account" name="account_id" required></select>
-
-          <label for="pool-name">Pool name</label>
-          <input id="pool-name" name="name" type="text" required>
-
-          <label for="pool-location">Location</label>
-          <input id="pool-location" name="location" type="text">
-
-          <label for="pool-notes">Notes</label>
-          <input id="pool-notes" name="notes" type="text">
-
-          <button type="submit">Create pool</button>
+          <div class="form-group">
+            <label for="pool-account">Client</label>
+            <select id="pool-account" name="account_id" required></select>
+          </div>
+          <div class="form-group">
+            <label for="pool-name">Pool name</label>
+            <input id="pool-name" name="name" type="text" placeholder="Main Pool" required>
+          </div>
+          <div class="form-group">
+            <label for="pool-location">Location</label>
+            <input id="pool-location" name="location" type="text" placeholder="Backyard">
+          </div>
+          <div class="form-group">
+            <label for="pool-notes">Notes</label>
+            <input id="pool-notes" name="notes" type="text" placeholder="Any additional notes">
+          </div>
+          <button type="submit" class="btn btn-primary">Create Pool</button>
         </form>
         <p class="helper-text" id="pool-status"></p>
       </article>
 
+      <!-- Create User -->
       <article class="card">
         <h2>Create User</h2>
         <form class="upload-form" id="user-form">
-          <label for="user-email">Email address</label>
-          <input id="user-email" name="email" type="email" required>
-
-          <label for="user-password">Temporary password</label>
-          <input id="user-password" name="password" type="text" required>
-
-          <label for="user-account">Client</label>
-          <select id="user-account" name="accountId"></select>
-
-          <label for="user-admin">Admin user?</label>
-          <select id="user-admin" name="isAdmin">
-            <option value="false" selected>No</option>
-            <option value="true">Yes</option>
-          </select>
-
-          <button type="submit">Create user</button>
+          <div class="form-group">
+            <label for="user-email">Email address</label>
+            <input id="user-email" name="email" type="email" placeholder="user@example.com" required>
+          </div>
+          <div class="form-group">
+            <label for="user-password">Temporary password</label>
+            <input id="user-password" name="password" type="text" placeholder="Initial password" required>
+          </div>
+          <div class="form-group">
+            <label for="user-account">Assign to client</label>
+            <select id="user-account" name="accountId"></select>
+          </div>
+          <div class="form-group">
+            <label for="user-admin">Admin privileges?</label>
+            <select id="user-admin" name="isAdmin">
+              <option value="false" selected>No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary">Create User</button>
         </form>
         <p class="helper-text" id="user-status"></p>
       </article>
     </section>
 
-    <section class="card">
+    <!-- Device Assignments -->
+    <section class="card mb-6">
       <h2>Device Assignments</h2>
-      <form class="upload-form" id="device-form">
-        <label for="device-select">Device</label>
-        <select id="device-select" name="device_id" required></select>
-
-        <label for="device-account">Assign to client</label>
-        <select id="device-account" name="account_id"></select>
-
-        <label for="device-pool">Assign to pool</label>
-        <select id="device-pool" name="pool_id"></select>
-
-        <button type="submit">Assign device</button>
+      <form class="upload-form" id="device-form" style="max-width: 600px;">
+        <div class="grid-3">
+          <div class="form-group">
+            <label for="device-select">Device</label>
+            <select id="device-select" name="device_id" required></select>
+          </div>
+          <div class="form-group">
+            <label for="device-account">Assign to client</label>
+            <select id="device-account" name="account_id"></select>
+          </div>
+          <div class="form-group">
+            <label for="device-pool">Assign to pool</label>
+            <select id="device-pool" name="pool_id"></select>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Assign Device</button>
       </form>
       <p class="helper-text" id="device-status"></p>
     </section>
 
-    <section class="card">
+    <!-- Client Directory -->
+    <section class="card mb-6">
       <h2>Client Directory</h2>
       <div class="table-wrap">
         <table class="data-table" id="accounts-table">
@@ -157,59 +192,70 @@
       </div>
     </section>
 
-    <section class="card">
+    <!-- Client Overview -->
+    <section class="card mb-6">
       <h2>Client Overview</h2>
-      <form class="upload-form">
+      <div class="form-group" style="max-width: 300px;">
         <label for="client-filter">Select client</label>
         <select id="client-filter"></select>
-      </form>
-      <div class="grid-2" style="margin-top:12px;">
+      </div>
+      <div class="grid-2 mt-4">
         <div>
           <h3>Client Pools</h3>
-          <ul id="client-pools" class="list"></ul>
+          <ul id="client-pools" class="list">
+            <li class="text-muted">Select a client to view pools</li>
+          </ul>
         </div>
         <div>
           <h3>Client Devices</h3>
-          <ul id="client-devices" class="list"></ul>
+          <ul id="client-devices" class="list">
+            <li class="text-muted">Select a client to view devices</li>
+          </ul>
         </div>
       </div>
     </section>
 
-    <section class="card">
-      <h2>Pools</h2>
-      <div class="table-wrap">
-        <table class="data-table" id="pools-table">
-          <thead>
-            <tr>
-              <th>Pool</th>
-              <th>Client</th>
-              <th>Location</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
+    <!-- Data Tables Grid -->
+    <div class="grid-2 mb-6">
+      <!-- Pools Table -->
+      <section class="card">
+        <h2>Pools</h2>
+        <div class="table-wrap">
+          <table class="data-table" id="pools-table">
+            <thead>
+              <tr>
+                <th>Pool</th>
+                <th>Client</th>
+                <th>Location</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
 
-    <section class="card">
-      <h2>Users</h2>
-      <div class="table-wrap">
-        <table class="data-table" id="users-table">
-          <thead>
-            <tr>
-              <th>Email</th>
-              <th>Client</th>
-              <th>Admin</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
+      <!-- Users Table -->
+      <section class="card">
+        <h2>Users</h2>
+        <div class="table-wrap">
+          <table class="data-table" id="users-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Client</th>
+                <th>Admin</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
 
-    <section class="card">
+    <!-- Devices Table -->
+    <section class="card mb-6">
       <h2>Devices</h2>
       <div class="table-wrap">
         <table class="data-table" id="devices-table">
@@ -220,7 +266,7 @@
               <th>Hostname</th>
               <th>Client</th>
               <th>Pool</th>
-              <th>Last seen</th>
+              <th>Last Seen</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -228,13 +274,18 @@
       </div>
     </section>
 
+    <!-- Device Health Monitor -->
     <section class="card">
-      <h2>Device Health Monitor</h2>
-      <p class="helper-text">Real-time status of all connected devices. Devices are considered offline if not seen for 20+ minutes.</p>
-      <button type="button" id="refresh-health" class="btn-secondary" style="margin-bottom:12px;">Refresh Health</button>
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h2>Device Health Monitor</h2>
+          <p class="helper-text" style="margin: 0;">Real-time status of all connected devices. Devices are considered offline if not seen for 20+ minutes.</p>
+        </div>
+        <button type="button" id="refresh-health" class="btn btn-secondary btn-sm">Refresh</button>
+      </div>
 
       <!-- Issues Summary Banner -->
-      <div id="issues-banner" class="issues-banner" style="display:none;"></div>
+      <div id="issues-banner" class="issues-banner" style="display: none;"></div>
 
       <div class="table-wrap">
         <table class="data-table" id="health-table">
@@ -258,7 +309,7 @@
   </main>
 
   <footer class="site-footer">
-    <span>PoolDash_v6 &copy; <span id="year"></span></span>
+    <p>PoolAIssistant &copy; <span id="year"></span></p>
   </footer>
 
   <script src="../js/app.js"></script>

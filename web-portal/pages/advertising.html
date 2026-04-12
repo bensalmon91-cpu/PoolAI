@@ -1,48 +1,197 @@
-﻿<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Advertising & Sales | PoolDash_v6</title>
+  <meta name="description" content="PoolAIssistant service plans and pricing">
+  <meta name="theme-color" content="#0066cc">
+  <title>Services | PoolAIssistant</title>
   <link rel="stylesheet" href="../css/styles.css">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/icons/favicon-32.png">
+  <style>
+    .pricing-card {
+      text-align: center;
+      position: relative;
+    }
+
+    .pricing-card.featured {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-light);
+    }
+
+    .pricing-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--primary);
+      color: white;
+      padding: 4px 16px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .pricing-price {
+      margin: var(--space-4) 0;
+    }
+
+    .pricing-price .amount {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+
+    .pricing-price .period {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .pricing-features {
+      list-style: none;
+      padding: 0;
+      margin: var(--space-6) 0;
+      text-align: left;
+    }
+
+    .pricing-features li {
+      padding: var(--space-2) 0;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .pricing-features li::before {
+      content: '';
+      width: 20px;
+      height: 20px;
+      background: var(--success-light);
+      border-radius: 50%;
+      flex-shrink: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2310b981' stroke-width='3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M5 13l4 4L19 7'/%3E%3C/svg%3E");
+      background-size: 12px;
+      background-repeat: no-repeat;
+      background-position: center;
+    }
+
+    .cta-section {
+      background: linear-gradient(135deg, var(--primary) 0%, #004d99 100%);
+      color: white;
+      text-align: center;
+      padding: var(--space-12) var(--space-6);
+      border-radius: var(--radius-xl);
+      margin-top: var(--space-8);
+    }
+
+    .cta-section h2 {
+      color: white;
+      margin-bottom: var(--space-4);
+    }
+
+    .cta-section p {
+      color: rgba(255, 255, 255, 0.9);
+      max-width: 500px;
+      margin: 0 auto var(--space-6);
+    }
+
+    .cta-section .btn {
+      background: white;
+      color: var(--primary);
+    }
+
+    .cta-section .btn:hover {
+      background: var(--gray-100);
+    }
+  </style>
 </head>
 <body>
   <header class="site-header">
-    <div class="brand">
-      <span class="brand-mark">PoolDash_v6</span>
-      <span class="brand-sub">Advertising & Sales</span>
+    <div class="site-header-inner">
+      <div class="brand">
+        <span class="brand-mark">PoolAIssistant</span>
+        <span class="brand-sub">Services</span>
+      </div>
+      <nav class="site-nav">
+        <a href="../index.html">Home</a>
+        <a href="login.html" class="btn btn-primary btn-sm">Sign In</a>
+      </nav>
     </div>
-    <nav class="site-nav">
-      <a href="../index.html">Home</a>
-      <a href="advertising.html">Advertising & Sales</a>
-      <a href="login.html">Login</a>
-    </nav>
   </header>
 
   <main class="content">
-    <section class="hero">
-      <h1>Advertising & Sales</h1>
-      <p class="lead">Use this page to highlight promotions, service tiers, and seasonal offers for PoolDash_v6 clients.</p>
+    <section class="hero" style="text-align: center;">
+      <h1>Choose Your Plan</h1>
+      <p class="lead" style="margin: 0 auto;">Simple, transparent pricing for every pool owner.</p>
     </section>
 
     <section class="card-grid">
-      <article class="card">
-        <h2>Seasonal Promotion</h2>
-        <p>Showcase limited-time offers and upgrades to encourage signups.</p>
+      <article class="card pricing-card">
+        <h2>Basic</h2>
+        <div class="pricing-price">
+          <span class="amount">$29</span>
+          <span class="period">/month</span>
+        </div>
+        <p class="text-muted">Perfect for single pool monitoring</p>
+        <ul class="pricing-features">
+          <li>1 Pool Device</li>
+          <li>Real-time Monitoring</li>
+          <li>Mobile App Access</li>
+          <li>Email Alerts</li>
+          <li>7-Day Data History</li>
+        </ul>
+        <a href="login.html" class="btn btn-outline btn-block">Get Started</a>
       </article>
-      <article class="card">
-        <h2>Service Plans</h2>
-        <p>Outline recurring service plans with clear pricing and features.</p>
+
+      <article class="card pricing-card featured">
+        <span class="pricing-badge">Most Popular</span>
+        <h2>Professional</h2>
+        <div class="pricing-price">
+          <span class="amount">$79</span>
+          <span class="period">/month</span>
+        </div>
+        <p class="text-muted">For serious pool owners</p>
+        <ul class="pricing-features">
+          <li>Up to 3 Pool Devices</li>
+          <li>AI-Powered Insights</li>
+          <li>SMS & Push Alerts</li>
+          <li>30-Day Data History</li>
+          <li>Priority Support</li>
+          <li>Automated Reports</li>
+        </ul>
+        <a href="login.html" class="btn btn-primary btn-block">Get Started</a>
       </article>
-      <article class="card">
-        <h2>Contact Sales</h2>
-        <p>Provide sales contact details or a lead capture form in future iterations.</p>
+
+      <article class="card pricing-card">
+        <h2>Enterprise</h2>
+        <div class="pricing-price">
+          <span class="amount">$199</span>
+          <span class="period">/month</span>
+        </div>
+        <p class="text-muted">For commercial properties</p>
+        <ul class="pricing-features">
+          <li>Unlimited Devices</li>
+          <li>Advanced Analytics</li>
+          <li>API Access</li>
+          <li>Unlimited Data History</li>
+          <li>Dedicated Support</li>
+          <li>Custom Integrations</li>
+        </ul>
+        <a href="login.html" class="btn btn-outline btn-block">Contact Sales</a>
       </article>
+    </section>
+
+    <section class="cta-section">
+      <h2>Ready to Get Started?</h2>
+      <p>Join thousands of pool owners who trust PoolAIssistant for their pool monitoring needs.</p>
+      <a href="login.html" class="btn btn-lg">Start Free Trial</a>
     </section>
   </main>
 
   <footer class="site-footer">
-    <span>PoolDash_v6 &copy; <span id="year"></span></span>
+    <p>PoolAIssistant &copy; <span id="year"></span></p>
   </footer>
 
   <script src="../js/app.js"></script>
