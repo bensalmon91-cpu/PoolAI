@@ -93,6 +93,27 @@ def get_uptime():
         return None
 
 
+def get_cpu_temperature():
+    """Get CPU temperature in Celsius (Raspberry Pi)."""
+    thermal_path = Path("/sys/class/thermal/thermal_zone0/temp")
+    try:
+        if not thermal_path.exists():
+            logger.debug("Thermal zone not found (not running on Pi?)")
+            return None
+        temp_raw = thermal_path.read_text().strip()
+        temp_c = float(temp_raw) / 1000.0
+        return {
+            "celsius": round(temp_c, 1),
+            "fahrenheit": round(temp_c * 9 / 5 + 32, 1)
+        }
+    except (ValueError, IOError) as e:
+        logger.warning(f"Failed to read CPU temperature: {e}")
+        return None
+    except Exception as e:
+        logger.exception(f"Unexpected error getting CPU temperature: {e}")
+        return None
+
+
 def check_services():
     """Check if critical services are running."""
     import subprocess
@@ -125,6 +146,7 @@ def health_check():
     disk = get_disk_usage()
     db = get_db_stats()
     services = check_services()
+    temperature = get_cpu_temperature()
 
     # Determine overall health
     healthy = True
@@ -138,6 +160,15 @@ def health_check():
         healthy = False
         issues.append("Some services not running")
 
+    # Temperature warnings
+    if temperature:
+        temp_c = temperature["celsius"]
+        if temp_c > 80:
+            healthy = False
+            issues.append(f"CPU temperature critical ({temp_c}°C)")
+        elif temp_c > 70:
+            issues.append(f"CPU temperature high ({temp_c}°C)")
+
     return jsonify({
         "ok": healthy,
         "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -146,6 +177,7 @@ def health_check():
         "disk": disk,
         "database": db,
         "services": services,
+        "temperature": temperature,
         "issues": issues
     })
 

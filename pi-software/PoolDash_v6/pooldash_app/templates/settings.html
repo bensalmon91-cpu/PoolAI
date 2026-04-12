@@ -514,10 +514,20 @@ document.getElementById('wifiChangeDetails').addEventListener('toggle', function
   <div class="quick-setup-section">
     <h4 class="settings-section__title">Quick Setup</h4>
     <p class="form-hint mb-2">Enter your controller's IP and we'll configure the Pi to connect to it.</p>
+
+    <!-- Visual flow diagram -->
+    <div class="setup-flow mb-3" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--color-text-muted);">
+      <span class="flow-step">① Controller IP</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step">② Subnet Detection</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step">③ Pi IP Assignment</span>
+    </div>
+
     <form id="quickSetupForm" onsubmit="return quickSetupCalculate(event)">
       <div class="input-row">
         <input type="text" id="controllerIpInput" name="controller_ip" placeholder="e.g. 192.168.200.11" pattern="^(\d{1,3}\.){3}\d{1,3}$" class="mono">
-        <button type="submit" class="btn btn--sm">Auto-Configure</button>
+        <button type="submit" class="btn btn--sm" id="quickSetupBtn">Auto-Configure</button>
       </div>
       <p class="form-hint mt-2">
         <a href="#" onclick="showControllerHelp(); return false;">Help me find my controller IP</a> |
@@ -531,6 +541,11 @@ document.getElementById('wifiChangeDetails').addEventListener('toggle', function
         <div class="preview-row">
           <span class="preview-label">Controller IP:</span>
           <code id="previewControllerIp"></code>
+          <span class="preview-check" id="controllerCheck"></span>
+        </div>
+        <div class="preview-row">
+          <span class="preview-label">Detected Subnet:</span>
+          <code id="previewSubnet"></code>
         </div>
         <div class="preview-row">
           <span class="preview-label">Pi will be set to:</span>
@@ -542,10 +557,13 @@ document.getElementById('wifiChangeDetails').addEventListener('toggle', function
         </div>
       </div>
       <div class="btn-row mt-3">
-        <button type="button" class="btn btn--sm" onclick="applyQuickSetup()">Apply Configuration</button>
+        <button type="button" class="btn btn--sm" id="applyQuickSetupBtn" onclick="applyQuickSetup()">Apply Configuration</button>
         <button type="button" class="btn btn--sm btn--secondary" onclick="cancelQuickSetup()">Cancel</button>
       </div>
     </div>
+
+    <!-- Quick Setup Success/Error feedback -->
+    <div id="quickSetupFeedback" style="display: none;" class="mt-3 p-3" style="border-radius:6px;"></div>
   </div>
 
   <!-- Controller IP Help Modal -->
@@ -820,20 +838,38 @@ function quickSetupCalculate(event) {
     return false;
   }
 
+  // Show loading state
+  const btn = document.getElementById('quickSetupBtn');
+  btn.disabled = true;
+  btn.textContent = 'Detecting...';
+
   // Calculate Pi IP
   fetch('/settings/network/calculate-pi-ip?controller=' + encodeURIComponent(ip))
     .then(r => r.json())
     .then(data => {
+      btn.disabled = false;
+      btn.textContent = 'Auto-Configure';
+
       if (data.error) {
-        alert(data.error);
+        showQuickSetupFeedback('error', data.error);
         return;
       }
 
       quickSetupData = data;
       document.getElementById('previewControllerIp').textContent = ip;
+      document.getElementById('controllerCheck').innerHTML = '<span class="network-status-ok">✓</span>';
+
+      // Show detected subnet
+      const subnetEl = document.getElementById('previewSubnet');
+      if (subnetEl) {
+        const parts = ip.split('.');
+        subnetEl.textContent = parts[0] + '.' + parts[1] + '.' + parts[2] + '.0/' + data.netmask;
+      }
+
       document.getElementById('previewPiIp').textContent = data.pi_ip + '/' + data.netmask;
       document.getElementById('previewIpStatus').innerHTML = '<span class="status-dot checking"></span> Checking...';
       document.getElementById('quickSetupResult').style.display = 'block';
+      hideQuickSetupFeedback();
 
       // Check if the proposed IP is available
       fetch('/settings/network/check-ip?ip=' + encodeURIComponent(data.pi_ip))
@@ -848,10 +884,25 @@ function quickSetupCalculate(event) {
         });
     })
     .catch(err => {
-      alert('Error: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = 'Auto-Configure';
+      showQuickSetupFeedback('error', 'Error: ' + err.message);
     });
 
   return false;
+}
+
+function showQuickSetupFeedback(type, message) {
+  const el = document.getElementById('quickSetupFeedback');
+  el.style.display = 'block';
+  el.className = 'mt-3 p-3 ' + (type === 'error' ? 'status-bad' : type === 'success' ? 'status-ok' : '');
+  el.style.background = type === 'error' ? 'rgba(229,57,53,0.1)' : type === 'success' ? 'rgba(67,160,71,0.1)' : '';
+  el.style.borderRadius = '6px';
+  el.innerHTML = message;
+}
+
+function hideQuickSetupFeedback() {
+  document.getElementById('quickSetupFeedback').style.display = 'none';
 }
 
 function applyQuickSetup() {
@@ -862,6 +913,9 @@ function applyQuickSetup() {
   }
 
   const controllerIp = document.getElementById('controllerIpInput').value.trim();
+  const applyBtn = document.getElementById('applyQuickSetupBtn');
+  applyBtn.disabled = true;
+  applyBtn.textContent = 'Applying...';
 
   fetch('/settings/network/quick-configure', {
     method: 'POST',
@@ -875,15 +929,21 @@ function applyQuickSetup() {
   })
   .then(r => r.json())
   .then(data => {
+    applyBtn.disabled = false;
+    applyBtn.textContent = 'Apply Configuration';
+
     if (data.success) {
-      alert('Configuration applied!\n\n' + data.message);
-      location.reload();
+      showQuickSetupFeedback('success', '&#10003; ' + (data.message || 'Configuration applied successfully!'));
+      document.getElementById('quickSetupResult').style.display = 'none';
+      setTimeout(() => location.reload(), 2000);
     } else {
-      alert('Configuration failed: ' + data.error);
+      showQuickSetupFeedback('error', '&#9888; Configuration failed: ' + data.error);
     }
   })
   .catch(err => {
-    alert('Error applying configuration: ' + err.message);
+    applyBtn.disabled = false;
+    applyBtn.textContent = 'Apply Configuration';
+    showQuickSetupFeedback('error', '&#9888; Error applying configuration: ' + err.message);
   });
 }
 
@@ -1502,12 +1562,28 @@ document.querySelectorAll('select[name^="rs485_port__"]').forEach(sel => {
 <!-- ===== QUICK LOG ACTIONS ===== -->
 <div class="card" id="quick-log-actions">
   <h3>Quick Log Actions</h3>
-  <p class="form-hint mb-3">Use the <span class="cog-inline">&#9881;</span> icon next to each controller above to set pool-specific actions.</p>
-  <details>
-    <summary class="summary--muted">Edit Global Default Actions</summary>
+  <p class="form-hint mb-3">Quick actions are configured per-pool on each pool's Maintenance page.</p>
+
+  {% if pools %}
+  <div class="pool-action-links">
+    {% for pool in pools %}
+    <a href="{{ url_for('main.maintenance_page', pool=pool) }}" class="pool-action-link">
+      <span class="pool-action-icon">&#128221;</span>
+      <span>{{ pool }} Maintenance</span>
+      <span class="pool-action-arrow">&rarr;</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="form-hint">No pools configured yet. Add controllers above to configure quick actions.</p>
+  {% endif %}
+
+  <details class="mt-3">
+    <summary class="summary--muted">Edit Global Fallback Actions</summary>
     <div class="settings-collapsed mt-2">
+      <p class="form-hint mb-2">These default actions are used when no pool-specific actions are configured.</p>
       <form method="post" action="{{ url_for('main.update_actions') }}">
-        <label>One action per line (used when no pool-specific actions are set)</label>
+        <label>One action per line</label>
         <textarea name="actions_text" class="textarea--lg">{{ actions_text }}</textarea>
         <button class="btn btn--full mt-3">{{ _('save') }}</button>
       </form>
@@ -1515,6 +1591,33 @@ document.querySelectorAll('select[name^="rs485_port__"]').forEach(sel => {
   </details>
 </div>
 <style>
+.pool-action-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pool-action-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--color-surface-raised, #f5f5f5);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--color-text);
+  transition: background 0.15s;
+}
+.pool-action-link:hover {
+  background: var(--color-surface-hover, #e8e8e8);
+}
+.pool-action-icon {
+  font-size: 1.25rem;
+}
+.pool-action-arrow {
+  margin-left: auto;
+  opacity: 0.5;
+}
 .cog-inline {
   display: inline-block;
   font-size: 1rem;

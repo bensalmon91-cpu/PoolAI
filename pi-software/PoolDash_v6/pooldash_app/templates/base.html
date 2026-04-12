@@ -859,5 +859,83 @@
       });
     }
   </script>
+
+  <!-- Eco Mode / Screen Sleep -->
+  {% if eco_mode_enabled %}
+  <style>
+    #ecoOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, calc(1 - {{ eco_brightness_percent }} / 100));
+      z-index: 99999;
+      display: none;
+      cursor: pointer;
+      transition: opacity 0.5s ease-in-out;
+    }
+    #ecoOverlay.active {
+      display: block;
+    }
+    #ecoOverlay .wake-hint {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 14px;
+      pointer-events: none;
+    }
+  </style>
+  <div id="ecoOverlay">
+    {% if eco_wake_on_touch %}<div class="wake-hint">Touch to wake</div>{% endif %}
+  </div>
+  <script>
+    (function() {
+      var overlay = document.getElementById('ecoOverlay');
+      var timeoutMinutes = {{ eco_timeout_minutes }};
+      var wakeOnTouch = {{ 'true' if eco_wake_on_touch else 'false' }};
+      var timer = null;
+      var sleeping = false;
+
+      function resetTimer() {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(goToSleep, timeoutMinutes * 60 * 1000);
+      }
+
+      function goToSleep() {
+        sleeping = true;
+        overlay.classList.add('active');
+      }
+
+      function wakeUp(e) {
+        if (!sleeping) return;
+        if (wakeOnTouch) {
+          e.preventDefault();
+          e.stopPropagation();
+          sleeping = false;
+          overlay.classList.remove('active');
+          resetTimer();
+        }
+      }
+
+      // Track activity events
+      var events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+      events.forEach(function(evt) {
+        document.addEventListener(evt, function() {
+          if (!sleeping) resetTimer();
+        }, { passive: true });
+      });
+
+      // Wake on touch/click on overlay
+      overlay.addEventListener('click', wakeUp);
+      overlay.addEventListener('touchstart', wakeUp);
+
+      // Start the timer
+      resetTimer();
+    })();
+  </script>
+  {% endif %}
 </body>
 </html>

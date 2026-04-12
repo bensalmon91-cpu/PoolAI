@@ -307,6 +307,75 @@ document.querySelectorAll('input[name="screen_rotation"]').forEach(input => {
 });
 </script>
 
+<!-- ===== ECO / SLEEP MODE ===== -->
+<div class="card">
+  <h3>Eco / Sleep Mode</h3>
+  <p class="form-hint mb-3">Dim the screen after inactivity to save energy and reduce screen burn-in.</p>
+  <form method="post" action="{{ url_for('main.update_eco_mode') }}">
+    <div class="settings-section">
+      <label class="checkbox-label">
+        <input type="checkbox" name="eco_mode_enabled" {% if eco_mode_enabled %}checked{% endif %} onchange="toggleEcoOptions(this)">
+        <span>Enable Eco Mode</span>
+      </label>
+    </div>
+
+    <div id="ecoModeOptions" style="{% if not eco_mode_enabled %}opacity:0.5;pointer-events:none;{% endif %}">
+      <div class="settings-divider"></div>
+
+      <div class="settings-section">
+        <h4 class="settings-section__title">Sleep After</h4>
+        <div class="input-row">
+          <input type="range" name="eco_timeout_minutes" id="ecoTimeout" min="1" max="60" value="{{ eco_timeout_minutes }}" oninput="updateTimeoutLabel(this)">
+          <span id="ecoTimeoutLabel" style="min-width:60px;text-align:right;">{{ eco_timeout_minutes }} min</span>
+        </div>
+      </div>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-section">
+        <h4 class="settings-section__title">Dimmed Brightness</h4>
+        <div class="input-row">
+          <input type="range" name="eco_brightness_percent" id="ecoBrightness" min="0" max="100" step="5" value="{{ eco_brightness_percent }}" oninput="updateBrightnessLabel(this)">
+          <span id="ecoBrightnessLabel" style="min-width:50px;text-align:right;">{{ eco_brightness_percent }}%</span>
+        </div>
+        <p class="form-hint mt-1">0% = fully dark overlay, 100% = no dimming</p>
+      </div>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-section">
+        <label class="checkbox-label">
+          <input type="checkbox" name="eco_wake_on_touch" {% if eco_wake_on_touch %}checked{% endif %}>
+          <span>Wake on touch/click</span>
+        </label>
+      </div>
+    </div>
+
+    <button class="btn btn--full mt-3" type="submit">Save Eco Settings</button>
+  </form>
+</div>
+
+<script>
+function toggleEcoOptions(checkbox) {
+  const options = document.getElementById('ecoModeOptions');
+  if (checkbox.checked) {
+    options.style.opacity = '1';
+    options.style.pointerEvents = 'auto';
+  } else {
+    options.style.opacity = '0.5';
+    options.style.pointerEvents = 'none';
+  }
+}
+
+function updateTimeoutLabel(input) {
+  document.getElementById('ecoTimeoutLabel').textContent = input.value + ' min';
+}
+
+function updateBrightnessLabel(input) {
+  document.getElementById('ecoBrightnessLabel').textContent = input.value + '%';
+}
+</script>
+
 <!-- ===== PROTECTED SETTINGS ===== -->
 <div class="card">
   <h3>Protected Settings</h3>
@@ -581,6 +650,10 @@ document.querySelectorAll('input[name="screen_rotation"]').forEach(input => {
       <h4 class="settings-section__title">Debug Info</h4>
       <div class="debug-grid">
         <div class="debug-row">
+          <span class="muted">CPU Temperature</span>
+          <span id="cpuTemp">Loading...</span>
+        </div>
+        <div class="debug-row">
           <span class="muted">Backend URL</span>
           <code>{{ backend_url or '-' }}</code>
         </div>
@@ -630,6 +703,37 @@ function toggleSecretVisibility() {
   const input = document.getElementById('bootstrap-secret');
   input.type = input.type === 'password' ? 'text' : 'password';
 }
+
+// Fetch CPU temperature from health endpoint
+(function() {
+  fetch('/api/health')
+    .then(r => r.json())
+    .then(data => {
+      const el = document.getElementById('cpuTemp');
+      if (!el) return;
+      if (data.temperature) {
+        const temp = data.temperature.celsius;
+        let color = 'var(--color-text)';
+        let icon = '';
+        if (temp > 80) {
+          color = 'var(--danger, #e53935)';
+          icon = '&#9888; ';
+        } else if (temp > 70) {
+          color = 'var(--warning, #ffa000)';
+          icon = '&#9888; ';
+        } else if (temp < 50) {
+          color = 'var(--success, #43a047)';
+        }
+        el.innerHTML = icon + '<code style="color:' + color + '">' + temp + '°C / ' + data.temperature.fahrenheit + '°F</code>';
+      } else {
+        el.innerHTML = '<span class="muted">N/A (not on Pi)</span>';
+      }
+    })
+    .catch(err => {
+      const el = document.getElementById('cpuTemp');
+      if (el) el.innerHTML = '<span class="muted">Error</span>';
+    });
+})();
 </script>
 
 {% endblock %}

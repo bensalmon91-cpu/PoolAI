@@ -3133,6 +3133,42 @@ def update_language():
 
 
 # ----------------------------
+# Eco/Sleep Mode Settings
+# ----------------------------
+
+@main_bp.route("/settings/eco-mode", methods=["POST"])
+def update_eco_mode():
+    """Update eco/sleep mode settings."""
+    data = _persisted()
+
+    # Get form values
+    eco_enabled = request.form.get("eco_mode_enabled") == "on"
+    timeout = request.form.get("eco_timeout_minutes", "5")
+    brightness = request.form.get("eco_brightness_percent", "10")
+    wake_on_touch = request.form.get("eco_wake_on_touch") == "on"
+
+    # Validate and save
+    try:
+        timeout_val = max(1, min(60, int(timeout)))
+    except (ValueError, TypeError):
+        timeout_val = 5
+
+    try:
+        brightness_val = max(0, min(100, int(brightness)))
+    except (ValueError, TypeError):
+        brightness_val = 10
+
+    data["eco_mode_enabled"] = eco_enabled
+    data["eco_timeout_minutes"] = timeout_val
+    data["eco_brightness_percent"] = brightness_val
+    data["eco_wake_on_touch"] = wake_on_touch
+
+    _save_persisted(data)
+    flash("Eco mode settings saved", "success")
+    return redirect(url_for("main.system_page"))
+
+
+# ----------------------------
 # System Page
 # ----------------------------
 
@@ -4171,6 +4207,23 @@ def setup_complete():
                 else:
                     # Update name if controller already exists
                     existing["name"] = ctrl_name
+
+        # Auto IP configuration if requested
+        if data.get("auto_config_ip") and data.get("auto_pi_ip"):
+            auto_pi_ip = data.get("auto_pi_ip")
+            try:
+                # Use the quick-configure logic to set up ethernet
+                result = subprocess.run(
+                    ["sudo", "/usr/local/bin/set_ethernet_ip.sh", auto_pi_ip, "24"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                current_app.logger.info(f"Auto IP config applied: {auto_pi_ip}")
+                _invalidate_net_cache()
+            except Exception as e:
+                current_app.logger.error(f"Auto IP config error: {e}")
+                # Don't fail the wizard for IP config issues
 
         # Mark wizard as completed
         settings["setup_wizard_completed"] = True

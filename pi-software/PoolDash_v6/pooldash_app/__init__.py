@@ -121,6 +121,17 @@ def create_app():
             'supported_languages': SUPPORTED_LANGUAGES,
         }
 
+    @app.context_processor
+    def inject_eco_settings():
+        """Make eco mode settings available in all templates."""
+        persisted = _load_persisted(app.instance_path)
+        return {
+            'eco_mode_enabled': persisted.get('eco_mode_enabled', False),
+            'eco_timeout_minutes': persisted.get('eco_timeout_minutes', 5),
+            'eco_brightness_percent': persisted.get('eco_brightness_percent', 10),
+            'eco_wake_on_touch': persisted.get('eco_wake_on_touch', True),
+        }
+
     # ---- IP View defaults (can be overridden by Settings/env) ----
     # Default target if none provided
     app.config.setdefault("TARGET_HOST", "")

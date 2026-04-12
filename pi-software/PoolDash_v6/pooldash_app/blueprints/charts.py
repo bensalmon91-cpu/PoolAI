@@ -49,11 +49,16 @@ YOUT_FOR_METRIC = {
     "ph": "pH_Yout",
 }
 
-RANGE_CHOICES = [
+# Quick access ranges (shown as prominent buttons)
+QUICK_RANGE_CHOICES = [
+    ("1h", timedelta(hours=1)),
     ("3h", timedelta(hours=3)),
     ("6h", timedelta(hours=6)),
+]
+
+# Extended ranges (shown in dropdown)
+EXTENDED_RANGE_CHOICES = [
     ("12h", timedelta(hours=12)),
-    ("18h", timedelta(hours=18)),
     ("24h", timedelta(hours=24)),
     ("72h", timedelta(hours=72)),
     ("1w", timedelta(days=7)),
@@ -64,6 +69,9 @@ RANGE_CHOICES = [
     ("1y", timedelta(days=365)),
     ("all", None),
 ]
+
+# Combined for backward compatibility
+RANGE_CHOICES = QUICK_RANGE_CHOICES + EXTENDED_RANGE_CHOICES
 
 
 def _range_delta(key: str) -> Optional[timedelta]:
@@ -335,6 +343,26 @@ def chart_page(pool: str, metric: str):
         .chart-controls {{ display: flex; align-items: center; gap: 8px; }}
         .btn.fast-on {{ background: #4caf50; color: white; }}
         .btn.fast-off {{ background: #ff9800; color: white; }}
+        .range-dropdown {{
+          padding: 8px 12px;
+          border: 2px solid var(--color-border, #ddd);
+          border-radius: 8px;
+          background: var(--color-surface, #fff);
+          color: var(--color-text, #333);
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          min-width: 80px;
+        }}
+        .range-dropdown:focus {{
+          outline: none;
+          border-color: var(--color-accent, #4a90e2);
+        }}
+        .range-dropdown.active {{
+          background: var(--color-accent, #4a90e2);
+          color: white;
+          border-color: var(--color-accent, #4a90e2);
+        }}
       </style>
 
       <script>
@@ -345,7 +373,8 @@ def chart_page(pool: str, metric: str):
           const rangeKey = '{range_key}';
           const apiUrlBase = '{api_url}';
           const pageUrlBase = '{base_page_url}';
-          const rangeChoices = {[rk for rk, _ in RANGE_CHOICES]};
+          const quickRanges = {[rk for rk, _ in QUICK_RANGE_CHOICES]};
+          const extendedRanges = {[rk for rk, _ in EXTENDED_RANGE_CHOICES]};
 
           // Get fast mode preference from localStorage
           function isFastMode() {{
@@ -370,16 +399,30 @@ def chart_page(pool: str, metric: str):
             pointsDisplay.textContent = getMaxPoints() + ' pts';
           }}
 
-          // Build range buttons with current max_points
+          // Build range buttons with quick buttons + dropdown for extended ranges
           function buildRangeButtons() {{
             const container = document.getElementById('range-buttons');
-            const maxPts = getMaxPoints();
             let html = '';
-            for (const rk of rangeChoices) {{
+
+            // Quick range buttons (1h, 3h, 6h)
+            for (const rk of quickRanges) {{
               const active = rk === rangeKey ? '' : 'secondary';
               const href = pageUrlBase + '?range=' + rk;
               html += '<a class="btn ' + active + '" href="' + href + '">' + rk + '</a>';
             }}
+
+            // Extended range dropdown
+            const isExtendedActive = extendedRanges.includes(rangeKey);
+            html += '<select class="range-dropdown' + (isExtendedActive ? ' active' : '') + '" onchange="if(this.value) window.location.href=this.value">';
+            html += '<option value="">' + (isExtendedActive ? rangeKey : 'More...') + '</option>';
+            for (const rk of extendedRanges) {{
+              if (rk !== rangeKey) {{
+                const href = pageUrlBase + '?range=' + rk;
+                html += '<option value="' + href + '">' + rk + '</option>';
+              }}
+            }}
+            html += '</select>';
+
             container.innerHTML = html;
           }}
 
@@ -465,10 +508,17 @@ def chart_page(pool: str, metric: str):
                 const layout = {{
                   height: {PLOT_HEIGHT},
                   hovermode: '{HOVERMODE}',
-                  margin: {{ l: 50, r: 60, t: 40, b: 60 }},
+                  margin: {{ l: 50, r: 60, t: 40, b: 100 }},
                   xaxis: {{ title: 'Timestamp' }},
                   yaxis: {{ title: data.axis_title }},
-                  title: data.pool + ' - ' + data.axis_title + ' (' + data.range_key + ', ' + modeLabel + ')'
+                  title: data.pool + ' - ' + data.axis_title + ' (' + data.range_key + ', ' + modeLabel + ')',
+                  legend: {{
+                    orientation: 'h',
+                    yanchor: 'top',
+                    y: -0.15,
+                    xanchor: 'center',
+                    x: 0.5
+                  }}
                 }};
 
                 if (data.secondary && data.secondary.y && data.secondary.y.length > 0) {{
@@ -644,6 +694,26 @@ def trends_page(pool: str):
         .chart-controls {{ display: flex; align-items: center; gap: 8px; }}
         .btn.fast-on {{ background: #4caf50; color: white; }}
         .btn.fast-off {{ background: #ff9800; color: white; }}
+        .range-dropdown {{
+          padding: 8px 12px;
+          border: 2px solid var(--color-border, #ddd);
+          border-radius: 8px;
+          background: var(--color-surface, #fff);
+          color: var(--color-text, #333);
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          min-width: 80px;
+        }}
+        .range-dropdown:focus {{
+          outline: none;
+          border-color: var(--color-accent, #4a90e2);
+        }}
+        .range-dropdown.active {{
+          background: var(--color-accent, #4a90e2);
+          color: white;
+          border-color: var(--color-accent, #4a90e2);
+        }}
       </style>
 
       <script>
@@ -654,7 +724,8 @@ def trends_page(pool: str):
           const rangeKey = '{range_key}';
           const apiUrlBase = '{api_url}';
           const pageUrlBase = '{base_page_url}';
-          const rangeChoices = {[rk for rk, _ in RANGE_CHOICES]};
+          const quickRanges = {[rk for rk, _ in QUICK_RANGE_CHOICES]};
+          const extendedRanges = {[rk for rk, _ in EXTENDED_RANGE_CHOICES]};
           const metricColors = {str(metric_colors).replace("'", '"')};
 
           function isFastMode() {{
@@ -681,11 +752,26 @@ def trends_page(pool: str):
           function buildRangeButtons() {{
             const container = document.getElementById('range-buttons');
             let html = '';
-            for (const rk of rangeChoices) {{
+
+            // Quick range buttons (1h, 3h, 6h)
+            for (const rk of quickRanges) {{
               const active = rk === rangeKey ? '' : 'secondary';
               const href = pageUrlBase + '?range=' + rk;
               html += '<a class="btn ' + active + '" href="' + href + '">' + rk + '</a>';
             }}
+
+            // Extended range dropdown
+            const isExtendedActive = extendedRanges.includes(rangeKey);
+            html += '<select class="range-dropdown' + (isExtendedActive ? ' active' : '') + '" onchange="if(this.value) window.location.href=this.value">';
+            html += '<option value="">' + (isExtendedActive ? rangeKey : 'More...') + '</option>';
+            for (const rk of extendedRanges) {{
+              if (rk !== rangeKey) {{
+                const href = pageUrlBase + '?range=' + rk;
+                html += '<option value="' + href + '">' + rk + '</option>';
+              }}
+            }}
+            html += '</select>';
+
             container.innerHTML = html;
           }}
 
@@ -769,7 +855,7 @@ def trends_page(pool: str):
                 const layout = {{
                   height: {PLOT_HEIGHT},
                   hovermode: 'x unified',
-                  margin: {{ l: 50, r: 30, t: 50, b: 60 }},
+                  margin: {{ l: 50, r: 30, t: 50, b: 100 }},
                   xaxis: {{ title: 'Time' }},
                   yaxis: {{
                     title: 'Normalized (%)',
@@ -779,8 +865,8 @@ def trends_page(pool: str):
                   title: data.pool + ' - All Trends (' + data.range_key + ', ' + modeLabel + ')',
                   legend: {{
                     orientation: 'h',
-                    yanchor: 'bottom',
-                    y: 1.02,
+                    yanchor: 'top',
+                    y: -0.15,
                     xanchor: 'center',
                     x: 0.5
                   }}
@@ -957,7 +1043,7 @@ def lsi_chart_page(pool: str):
           const layout = {{
             height: {PLOT_HEIGHT},
             hovermode: 'x unified',
-            margin: {{ l: 50, r: 30, t: 40, b: 60 }},
+            margin: {{ l: 50, r: 60, t: 40, b: 100 }},
             xaxis: {{ title: 'Date' }},
             yaxis: {{
               title: 'LSI Value',
@@ -966,6 +1052,13 @@ def lsi_chart_page(pool: str):
               zerolinecolor: '#888'
             }},
             shapes: shapes,
+            legend: {{
+              orientation: 'h',
+              yanchor: 'top',
+              y: -0.15,
+              xanchor: 'center',
+              x: 0.5
+            }},
             annotations: [
               {{ x: 1.02, y: 0.3, xref: 'paper', yref: 'y', text: 'Scaling', showarrow: false, font: {{ size: 10, color: '#f44336' }} }},
               {{ x: 1.02, y: 0, xref: 'paper', yref: 'y', text: 'Balanced', showarrow: false, font: {{ size: 10, color: '#4caf50' }} }},
