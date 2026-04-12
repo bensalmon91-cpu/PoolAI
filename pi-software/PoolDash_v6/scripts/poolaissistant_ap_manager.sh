@@ -437,10 +437,33 @@ stop_ap() {
     # Re-enable NetworkManager control if available
     if command -v nmcli >/dev/null 2>&1; then
         nmcli device set "$AP_INTERFACE" managed yes 2>/dev/null || true
+        # Trigger auto-connect to any saved WiFi networks
+        sleep 1
+        nmcli device connect "$AP_INTERFACE" 2>/dev/null || true
     fi
 
     rm -f "$STATE_FILE" 2>/dev/null || true
     log "Access Point stopped"
+}
+
+# Try to connect to any saved WiFi network
+try_reconnect_wifi() {
+    if ! command -v nmcli >/dev/null 2>&1; then
+        return 1
+    fi
+
+    # Ensure wlan0 is managed
+    nmcli device set "$AP_INTERFACE" managed yes 2>/dev/null || true
+    sleep 1
+
+    # Try to connect the device (will use saved connections)
+    if nmcli device connect "$AP_INTERFACE" 2>/dev/null; then
+        log "Triggered WiFi reconnection"
+        sleep 3  # Give it time to connect
+        return 0
+    fi
+
+    return 1
 }
 
 # Get WiFi SSID using multiple methods for compatibility
@@ -479,11 +502,18 @@ connected_wifi() {
         return 1
     fi
 
-    # Verify we have an IP address (not our AP IP)
+    # Verify we have an IP address that is NOT our AP IP
+    # wlan0 may have multiple IPs (AP IP + DHCP IP), so check all of them
+    local has_non_ap_ip=false
     local ip_addr
-    ip_addr=$(ip -4 addr show "$AP_INTERFACE" 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -n1 || true)
+    while read -r ip_addr; do
+        if [[ -n "$ip_addr" ]] && [[ "$ip_addr" != "$AP_IP" ]]; then
+            has_non_ap_ip=true
+            break
+        fi
+    done < <(ip -4 addr show "$AP_INTERFACE" 2>/dev/null | grep -oP 'inet \K[\d.]+' || true)
 
-    if [[ -z "$ip_addr" ]] || [[ "$ip_addr" == "$AP_IP" ]]; then
+    if [[ "$has_non_ap_ip" != "true" ]]; then
         return 1
     fi
 
@@ -581,13 +611,35 @@ main() {
         log "Interface $AP_INTERFACE is now available"
     fi
 
-    # ALWAYS start AP on boot for initial access - this is the key safety feature
-    local ap_start_failures=0
-    log "Starting AP for initial boot access..."
+    # Check if WiFi is already connected (e.g., NetworkManager auto-connected to saved network)
+    # Give NetworkManager a bit more time to auto-connect before deciding
+    log "Checking for existing WiFi connection..."
 
-    if ! start_ap; then
-        log "Initial AP start failed, will retry..."
-        ap_start_failures=1
+    local ap_start_failures=0
+
+    # First check if already connected
+    if connected_wifi; then
+        log "WiFi already connected - skipping AP startup"
+        log "AP will start automatically if WiFi connection is lost"
+    else
+        # Not connected yet - try to trigger reconnection to saved networks
+        log "WiFi not connected, attempting to reconnect to saved networks..."
+        try_reconnect_wifi
+        sleep 5  # Give NetworkManager time to establish connection
+
+        # Check again after reconnect attempt
+        if connected_wifi; then
+            log "WiFi reconnected successfully - skipping AP startup"
+            log "AP will start automatically if WiFi connection is lost"
+        else
+            # Still no WiFi connection - start AP for initial access (safety feature)
+            log "No WiFi connection available - starting AP for access..."
+
+            if ! start_ap; then
+                log "Initial AP start failed, will retry..."
+                ap_start_failures=1
+            fi
+        fi
     fi
 
     local boot_time
