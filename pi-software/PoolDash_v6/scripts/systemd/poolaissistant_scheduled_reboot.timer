@@ -1,0 +1,11 @@
+[Unit]
+Description=PoolAIssistant Daily Scheduled Reboot
+
+[Timer]
+# Default time - will be overwritten by configure_scheduled_reboot.sh
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

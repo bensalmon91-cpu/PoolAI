@@ -562,6 +562,34 @@ function updateBrightnessLabel(input) {
 
     <div class="settings-divider"></div>
 
+    <!-- Scheduled Reboot -->
+    <div class="settings-section">
+      <h4 class="settings-section__title">Scheduled Daily Reboot</h4>
+      <p class="form-hint mb-3">Automatically reboot daily to maintain system stability and clear memory.</p>
+      <form method="post" action="{{ url_for('main.update_scheduled_reboot') }}">
+        <label class="checkbox-label mb-3">
+          <input type="checkbox" name="scheduled_reboot_enabled" {% if scheduled_reboot_enabled %}checked{% endif %} onchange="toggleRebootOptions(this)">
+          <span>Enable scheduled daily reboot</span>
+        </label>
+        <div id="rebootOptions" style="{% if not scheduled_reboot_enabled %}opacity:0.5;pointer-events:none;{% endif %}">
+          <div class="form-field">
+            <label>Reboot Time</label>
+            <div class="input-row">
+              <input type="time" name="scheduled_reboot_time" value="{{ scheduled_reboot_time }}" style="width:120px;">
+              <span class="muted">(24-hour format)</span>
+            </div>
+            <p class="form-hint mt-1">Recommended: Early morning (03:00-05:00) when pool is not in use.</p>
+          </div>
+        </div>
+        <button class="btn btn--sm btn--full mt-3" type="submit">Save Reboot Schedule</button>
+      </form>
+      <div id="rebootTimerStatus" class="mt-3">
+        <span class="muted">Checking timer status...</span>
+      </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
     <!-- Backend Credentials (Debug) -->
     <details>
       <summary class="summary--muted">Backend Credentials (Debug)</summary>
@@ -698,6 +726,47 @@ function toggleCustomInterval() {
   document.getElementById('customIntervalDiv').style.display =
     (document.getElementById('syncSchedule').value === 'custom') ? 'block' : 'none';
 }
+
+function toggleRebootOptions(checkbox) {
+  const options = document.getElementById('rebootOptions');
+  if (checkbox.checked) {
+    options.style.opacity = '1';
+    options.style.pointerEvents = 'auto';
+  } else {
+    options.style.opacity = '0.5';
+    options.style.pointerEvents = 'none';
+  }
+}
+
+// Fetch scheduled reboot timer status
+(function() {
+  fetch('/settings/scheduled_reboot_status')
+    .then(r => r.json())
+    .then(data => {
+      const container = document.getElementById('rebootTimerStatus');
+      if (!container) return;
+      if (!data.ok) {
+        container.innerHTML = '<span class="status-bad">Failed to check timer status</span>';
+        return;
+      }
+      let html = '';
+      if (data.enabled && data.active) {
+        html = '<span class="status-ok">&#9679; Timer active</span>';
+        if (data.next_trigger) {
+          html += '<span class="muted ml-2">Next reboot: ' + data.next_trigger + '</span>';
+        }
+      } else if (data.enabled) {
+        html = '<span class="status-warn">&#9679; Timer enabled but not running</span>';
+      } else {
+        html = '<span class="muted">&#9679; Scheduled reboot disabled</span>';
+      }
+      container.innerHTML = html;
+    })
+    .catch(err => {
+      const container = document.getElementById('rebootTimerStatus');
+      if (container) container.innerHTML = '<span class="muted">Timer status unavailable</span>';
+    });
+})();
 
 function toggleSecretVisibility() {
   const input = document.getElementById('bootstrap-secret');

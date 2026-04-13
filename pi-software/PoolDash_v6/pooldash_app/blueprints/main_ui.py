@@ -2825,6 +2825,89 @@ def update_data_retention():
     return redirect(url_for("main.settings"))
 
 
+@main_bp.route("/settings/advanced/scheduled_reboot", methods=["POST"])
+def update_scheduled_reboot():
+    """Update scheduled reboot settings and configure the timer."""
+    import re
+
+    data = _persisted()
+
+    # Get form values
+    enabled = request.form.get("scheduled_reboot_enabled") == "on"
+    reboot_time = (request.form.get("scheduled_reboot_time") or "04:00").strip()
+
+    # Validate time format (HH:MM)
+    if not re.match(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$', reboot_time):
+        reboot_time = "04:00"
+
+    # Normalize to HH:MM
+    parts = reboot_time.split(":")
+    reboot_time = f"{int(parts[0]):02d}:{parts[1]}"
+
+    # Save settings
+    data["scheduled_reboot_enabled"] = enabled
+    data["scheduled_reboot_time"] = reboot_time
+    _save_persisted(data)
+
+    # Configure the timer
+    configure_script = "/opt/PoolAIssistant/app/scripts/configure_scheduled_reboot.sh"
+    if os.path.exists(configure_script):
+        try:
+            subprocess.run(
+                ["sudo", "bash", configure_script],
+                capture_output=True,
+                timeout=30
+            )
+            flash(f"Scheduled reboot {'enabled at ' + reboot_time if enabled else 'disabled'}.")
+        except Exception as e:
+            flash(f"Settings saved but timer configuration failed: {e}")
+    else:
+        flash("Settings saved. Timer will be configured on next boot.")
+
+    return redirect(url_for("main.system_page"))
+
+
+@main_bp.route("/settings/scheduled_reboot_status")
+def scheduled_reboot_status():
+    """AJAX endpoint to get scheduled reboot timer status."""
+    try:
+        # Check if timer is enabled
+        result = subprocess.run(
+            ["systemctl", "is-enabled", "poolaissistant_scheduled_reboot.timer"],
+            capture_output=True, text=True, timeout=5
+        )
+        enabled = result.returncode == 0
+
+        # Check if timer is active
+        result = subprocess.run(
+            ["systemctl", "is-active", "poolaissistant_scheduled_reboot.timer"],
+            capture_output=True, text=True, timeout=5
+        )
+        active = result.returncode == 0
+
+        # Get next trigger time
+        next_trigger = ""
+        if active:
+            result = subprocess.run(
+                ["systemctl", "list-timers", "poolaissistant_scheduled_reboot.timer", "--no-pager"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                lines = result.stdout.strip().split("\n")
+                if len(lines) >= 2:
+                    # Parse the timer output to get next trigger
+                    for line in lines[1:]:
+                        parts = line.split()
+                        if len(parts) >= 3 and "poolaissistant" in line:
+                            # Format: "Mon 2026-04-14 04:00:00 BST ..."
+                            next_trigger = " ".join(parts[:3])
+                            break
+
+        return {"ok": True, "enabled": enabled, "active": active, "next_trigger": next_trigger}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 @main_bp.route("/settings/advanced/device_identity", methods=["POST"])
 def update_device_identity():
     """Update device alias with timestamp for server sync."""
@@ -3223,6 +3306,19 @@ def system_page():
         ap_ssid_display="PoolAI" + (f" ({data.get('ap_suffix')})" if data.get("ap_suffix") else ""),
         backend_url=current_app.config.get("BACKEND_URL", ""),
         bootstrap_secret=current_app.config.get("BOOTSTRAP_SECRET", ""),
+        # Scheduled reboot settings
+        scheduled_reboot_enabled=data.get("scheduled_reboot_enabled", True),
+        scheduled_reboot_time=data.get("scheduled_reboot_time", "04:00"),
+        # Eco mode settings
+        eco_mode_enabled=data.get("eco_mode_enabled", False),
+        eco_timeout_minutes=data.get("eco_timeout_minutes", 5),
+        eco_brightness_percent=data.get("eco_brightness_percent", 10),
+        eco_wake_on_touch=data.get("eco_wake_on_touch", True),
+        # Appearance settings
+        appearance_theme=data.get("appearance_theme", "light"),
+        appearance_accent_color=data.get("appearance_accent_color", "blue"),
+        appearance_font_size=data.get("appearance_font_size", "medium"),
+        appearance_compact_mode=data.get("appearance_compact_mode", False),
     )
 
 

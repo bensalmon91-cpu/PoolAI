@@ -108,6 +108,17 @@ DEFAULTS = {
     # Setup wizard (first boot)
     "setup_wizard_completed": False,     # True after initial setup wizard has been completed
 
+    # Cloud Upload Settings (Portal Data Sync)
+    "cloud_upload_enabled": True,           # Enable automatic snapshot uploads to portal
+    "cloud_upload_interval_minutes": 6,     # Upload interval (default 6 minutes)
+    "cloud_upload_last_ts": "",             # ISO timestamp of last successful upload
+    "cloud_upload_last_status": "",         # "ok", "warning", or "error"
+    "cloud_upload_last_error": "",          # Last error message if any
+
+    # Scheduled Daily Reboot
+    "scheduled_reboot_enabled": True,        # Enable daily scheduled reboot (default: on)
+    "scheduled_reboot_time": "04:00",        # Time for daily reboot in 24h format (HH:MM)
+
     # RS485 Water Tester devices
     # List of RS485 serial devices for water testing (TDS, conductivity, etc.)
     "rs485_devices": [
@@ -270,6 +281,33 @@ def load(app_instance_path: str) -> Dict[str, Any]:
         # Setup wizard (first boot)
         if not isinstance(merged.get("setup_wizard_completed"), bool):
             merged["setup_wizard_completed"] = DEFAULTS["setup_wizard_completed"]
+
+        # Cloud upload settings
+        if not isinstance(merged.get("cloud_upload_enabled"), bool):
+            merged["cloud_upload_enabled"] = DEFAULTS["cloud_upload_enabled"]
+        if not isinstance(merged.get("cloud_upload_interval_minutes"), int):
+            merged["cloud_upload_interval_minutes"] = DEFAULTS["cloud_upload_interval_minutes"]
+        # Clamp interval to reasonable values (1-60 minutes)
+        if merged["cloud_upload_interval_minutes"] < 1:
+            merged["cloud_upload_interval_minutes"] = 1
+        if merged["cloud_upload_interval_minutes"] > 60:
+            merged["cloud_upload_interval_minutes"] = 60
+        if not isinstance(merged.get("cloud_upload_last_ts"), str):
+            merged["cloud_upload_last_ts"] = ""
+        if not isinstance(merged.get("cloud_upload_last_status"), str):
+            merged["cloud_upload_last_status"] = ""
+        if not isinstance(merged.get("cloud_upload_last_error"), str):
+            merged["cloud_upload_last_error"] = ""
+
+        # Scheduled reboot settings
+        if not isinstance(merged.get("scheduled_reboot_enabled"), bool):
+            merged["scheduled_reboot_enabled"] = DEFAULTS["scheduled_reboot_enabled"]
+        if not isinstance(merged.get("scheduled_reboot_time"), str):
+            merged["scheduled_reboot_time"] = DEFAULTS["scheduled_reboot_time"]
+        # Validate time format (HH:MM)
+        import re
+        if not re.match(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$', merged.get("scheduled_reboot_time", "")):
+            merged["scheduled_reboot_time"] = DEFAULTS["scheduled_reboot_time"]
 
         # RS485 devices
         if not isinstance(merged.get("rs485_devices"), list):
@@ -457,8 +495,17 @@ def save(app_instance_path: str, data: Dict[str, Any]) -> Path:
         "network_wizard_completed": bool(data.get("network_wizard_completed", DEFAULTS["network_wizard_completed"])),
         # Setup wizard (first boot)
         "setup_wizard_completed": bool(data.get("setup_wizard_completed", DEFAULTS["setup_wizard_completed"])),
+        # Cloud upload settings
+        "cloud_upload_enabled": bool(data.get("cloud_upload_enabled", DEFAULTS["cloud_upload_enabled"])),
+        "cloud_upload_interval_minutes": max(1, min(60, int(data.get("cloud_upload_interval_minutes") or DEFAULTS["cloud_upload_interval_minutes"]))),
+        "cloud_upload_last_ts": (data.get("cloud_upload_last_ts") or "").strip(),
+        "cloud_upload_last_status": (data.get("cloud_upload_last_status") or "").strip(),
+        "cloud_upload_last_error": (data.get("cloud_upload_last_error") or "").strip(),
         # RS485 devices
         "rs485_devices": _sanitize_rs485_devices(data.get("rs485_devices")),
+        # Scheduled reboot settings
+        "scheduled_reboot_enabled": bool(data.get("scheduled_reboot_enabled", DEFAULTS["scheduled_reboot_enabled"])),
+        "scheduled_reboot_time": _validate_reboot_time(data.get("scheduled_reboot_time", DEFAULTS["scheduled_reboot_time"])),
     }
     # Validate AP password - disable if too short (WPA2 requires min 8 chars)
     if out["ap_password_enabled"] and len(out["ap_password"]) < 8:
@@ -481,6 +528,19 @@ def save(app_instance_path: str, data: Dict[str, Any]) -> Path:
                 pass
             raise
     return path
+
+def _validate_reboot_time(time_str) -> str:
+    """Validate and normalize reboot time to HH:MM format."""
+    import re
+    if not isinstance(time_str, str):
+        return DEFAULTS["scheduled_reboot_time"]
+    time_str = time_str.strip()
+    if re.match(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$', time_str):
+        # Normalize to HH:MM (e.g., "4:00" -> "04:00")
+        parts = time_str.split(':')
+        return f"{int(parts[0]):02d}:{parts[1]}"
+    return DEFAULTS["scheduled_reboot_time"]
+
 
 def _sanitize_rs485_devices(devices) -> List[Dict[str, Any]]:
     """Sanitize RS485 device list for saving."""

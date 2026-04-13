@@ -1,0 +1,7 @@
+[Unit]
+Description=PoolAIssistant Scheduled Daily Reboot
+Documentation=man:systemd-reboot.service(8)
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/shutdown -r now "Scheduled daily reboot for system health"
