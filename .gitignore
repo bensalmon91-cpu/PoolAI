@@ -100,8 +100,13 @@ temp_*/
 # *.zip
 
 # ===== Project-Specific =====
-# Virtual environments stored outside standard names
-brain/
+# Brain: track code + knowledge, ignore data/output/venv/secrets
+brain/venv/
+brain/output/
+brain/data/
+brain/analysis/
+brain/__pycache__/
+brain/.env
 
 # Backup directories (use external backup solution)
 backups/

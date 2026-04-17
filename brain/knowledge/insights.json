@@ -1,0 +1,156 @@
+{
+  "patterns": [
+    {
+      "timestamp": "2026-02-26T15:00:00",
+      "id": "z1a2b3c4",
+      "title": "Main Pool pH and Temperature Drift",
+      "category": "equipment_issue",
+      "severity": "critical",
+      "pool": "Main",
+      "device": "Swanwood_Spa",
+      "description": "Main pool showing pH at 7.95 (baseline 7.43) and temperature at 24.1C (baseline 28.0C). Both parameters drifting outside normal ranges.",
+      "evidence": "pH 7.95 vs normal 7.0-7.8, Temp 24.1C vs normal 25.0-31.0C, sustained 100+ readings",
+      "recommendation": "Check pH dosing and heating system"
+    },
+    {
+      "timestamp": "2026-02-26T15:00:00",
+      "id": "z2d3e4f5",
+      "title": "Spa Pool Temperature Change - Heating Restored?",
+      "category": "pattern",
+      "severity": "medium",
+      "pool": "Spa",
+      "device": "Swanwood_Spa",
+      "description": "Spa temperature jumped from ~10C (baseline) to 24.8C. May indicate heater repair/restart. However still not at typical spa temps (36-40C).",
+      "evidence": "Current 24.8C vs baseline 10.2C, flagged as CRITICAL deviation from cold baseline",
+      "recommendation": "Verify heating status - partial recovery or different operating mode?"
+    },
+    {
+      "timestamp": "2026-02-26T15:00:00",
+      "id": "z3g4h5i6",
+      "title": "Vitality ORP Elevated with Rising Temperature",
+      "category": "anomaly",
+      "severity": "warning",
+      "pool": "Vitality",
+      "device": "Swanwood_Spa",
+      "description": "ORP at 868 mV (above 700-850 normal range). Temperature rising trend +4.5C over 8 days.",
+      "evidence": "ORP 868 vs baseline 755, temperature RISING trend sustained 8 days",
+      "recommendation": "Monitor - elevated ORP may indicate overchlorination or chemistry imbalance"
+    },
+    {
+      "timestamp": "2026-02-26T15:00:00",
+      "id": "z4j5k6l7",
+      "title": "Multiple Pumps HIGH_OUTPUT_NO_RESULT",
+      "category": "equipment_issue",
+      "severity": "high",
+      "pool": "Multiple",
+      "device": "Swanwood_Spa",
+      "description": "Vitality chlorine pump, Main chlorine pump, Main pH pump, Plunge pH pump all flagged with HIGH_OUTPUT_NO_RESULT - pumps running but no measured effect.",
+      "evidence": "Effectiveness near zero despite activity, see baseline_manager pump analysis",
+      "recommendation": "Check for empty tanks, blocked lines, or pump failures across facility"
+    },
+    {
+      "timestamp": "2026-02-10T21:30:00",
+      "id": "a1b2c3d4",
+      "title": "Spa Pool Chlorine Dosing Failure",
+      "category": "equipment_issue",
+      "severity": "critical",
+      "pool": "Spa",
+      "device": "Swanwood_Spa",
+      "description": "Chlorine dosing pump appears non-functional. Yout=0% for 11+ days, measured chlorine only 0.04 mg/L vs setpoint 1.0 mg/L. STILL ACTIVE as of Feb 26.",
+      "evidence": "Chlorine_MeasuredValue mean=0.04, Chlorine_Yout=0.0",
+      "recommendation": "Immediate inspection of chlorine dosing system"
+    },
+    {
+      "timestamp": "2026-02-10T21:30:00",
+      "id": "e5f6g7h8",
+      "title": "Spa Pool Temperature Anomaly",
+      "category": "anomaly",
+      "severity": "medium",
+      "pool": "Spa",
+      "device": "Swanwood_Spa",
+      "description": "Temperature was averaging 10.3C - UPDATE: Now at 24.8C as of Feb 15 data, partial recovery observed.",
+      "evidence": "Temp_MeasuredValue was mean=10.26, now 24.8C",
+      "recommendation": "UPDATED: Heating appears partially restored, monitor progress"
+    },
+    {
+      "timestamp": "2026-02-10T21:30:00",
+      "id": "i9j0k1l2",
+      "title": "Main Pool Data Transmission Gap",
+      "category": "equipment_issue",
+      "severity": "medium",
+      "pool": "Main",
+      "device": "Swanwood_Spa",
+      "description": "Main pool data stops 2026-02-02, other pools continue to 2026-02-08. Six days missing.",
+      "evidence": "data_end discrepancy of 6 days",
+      "recommendation": "Check controller communication and data upload"
+    },
+    {
+      "timestamp": "2026-02-10T21:30:00",
+      "id": "m3n4o5p6",
+      "title": "Vitality Pool Cold Start Recovery",
+      "category": "pattern",
+      "severity": "low",
+      "pool": "Vitality",
+      "device": "Swanwood_Spa",
+      "description": "Pool brought online from cold state. Temp 9.8C to 34C, chlorine 0.04 to 1.12 mg/L.",
+      "evidence": "Large positive trends in temp, chlorine, ORP",
+      "recommendation": "Normal recovery - continue monitoring"
+    },
+    {
+      "timestamp": "2026-02-10T21:30:00",
+      "id": "q7r8s9t0",
+      "title": "Vitality ORP-Chlorine Lag Unusual",
+      "category": "correlation",
+      "severity": "low",
+      "pool": "Vitality",
+      "device": "Swanwood_Spa",
+      "description": "ORP leads chlorine by 27 minutes - typically should be simultaneous or chlorine leading.",
+      "evidence": "correlation=0.5755, lag=-27min",
+      "recommendation": "Review sensor placement relative to injection point"
+    },
+    {
+      "timestamp": "2026-02-10T21:30:00",
+      "id": "u1v2w3x4",
+      "title": "Plunge Pool Excellent pH Control",
+      "category": "pattern",
+      "severity": "low",
+      "pool": "Plunge",
+      "device": "Swanwood_Spa",
+      "description": "Best pH control - mean 7.32 exactly at setpoint 7.3.",
+      "evidence": "pH mean=7.32, setpoint=7.3, std=0.011",
+      "recommendation": "Use as reference for tuning other pools"
+    }
+  ],
+  "correlations": [
+    {
+      "pool": "Main",
+      "pair": "Chlorine_MeasuredValue vs pH_MeasuredValue",
+      "correlation": -0.73,
+      "lag_minutes": 0,
+      "interpretation": "Strong negative - expected behavior"
+    },
+    {
+      "pool": "Plunge",
+      "pair": "Chlorine_MeasuredValue vs ORP_MeasuredValue",
+      "correlation": 0.70,
+      "lag_minutes": 2,
+      "interpretation": "Strong positive - expected behavior"
+    },
+    {
+      "pool": "Spa",
+      "pair": "Temp_MeasuredValue vs pH_MeasuredValue",
+      "correlation": -0.70,
+      "lag_minutes": -30,
+      "interpretation": "Strong negative - unusual, investigate"
+    }
+  ],
+  "recurring_issues": [
+    {
+      "issue": "Pump effectiveness degradation",
+      "pools_affected": ["Vitality", "Main", "Plunge"],
+      "frequency": "Ongoing",
+      "description": "Multiple pumps showing HIGH_OUTPUT_NO_RESULT flags - running but ineffective"
+    }
+  ],
+  "last_updated": "2026-02-26T15:00:00"
+}

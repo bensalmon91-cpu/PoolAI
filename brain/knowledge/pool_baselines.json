@@ -1,0 +1,636 @@
+{
+  "_metadata": {
+    "version": "1.0",
+    "created": "2026-02-10",
+    "last_updated": "2026-02-26T15:02:15.421610",
+    "data_period": {
+      "start": "2026-01-28",
+      "end": "2026-02-08"
+    },
+    "total_readings_analyzed": 31676313,
+    "description": "Baseline norms for Swanwood Spa facility. Used to detect anomalies and unexpected behavior."
+  },
+  "chemistry_relationships": {
+    "_description": "Established relationships between ORP, Chlorine, and pH based on water chemistry",
+    "orp_chlorine": {
+      "relationship": "positive_proportional",
+      "expected_correlation_range": [
+        0.5,
+        0.75
+      ],
+      "formula": "ORP = slope * Chlorine + intercept",
+      "typical_slope_range": [
+        35,
+        55
+      ],
+      "slope_unit": "mV per mg/L",
+      "explanation": "Each 1 mg/L increase in chlorine should increase ORP by 35-55 mV",
+      "response_time_typical_minutes": [
+        0,
+        30
+      ],
+      "warning_if_correlation_below": 0.4,
+      "warning_if_slope_below": 20
+    },
+    "orp_ph": {
+      "relationship": "negative_proportional",
+      "expected_correlation_range": [
+        -0.4,
+        -0.15
+      ],
+      "formula": "ORP change = slope * pH change",
+      "typical_slope_range": [
+        -80,
+        -50
+      ],
+      "slope_unit": "mV per pH unit",
+      "explanation": "Each 0.1 pH increase reduces ORP by 5-8 mV due to HOCl/OCl- equilibrium shift",
+      "response_time_typical_minutes": [
+        0,
+        5
+      ],
+      "warning_if_correlation_positive": true
+    },
+    "chlorine_ph": {
+      "relationship": "typically_negative",
+      "expected_correlation_range": [
+        -0.8,
+        -0.2
+      ],
+      "explanation": "Control system balancing - when one is dosed, the other often needs adjustment",
+      "notes": "Strong negative correlation indicates active control. Weak correlation may indicate manual dosing."
+    }
+  },
+  "pools": {
+    "Vitality": {
+      "last_baseline_update": "2026-02-26T15:00:57.756469",
+      "data_period": {
+        "start": "2026-01-28 22:00:00+00:00",
+        "end": "2026-02-06 20:46:00+00:00"
+      },
+      "data_points_in_baseline": 12887,
+      "normal_operating_ranges": {
+        "Chlorine_MeasuredValue": {
+          "count": 12320,
+          "mean": 1.0935,
+          "std": 0.9945,
+          "min": -0.1,
+          "max": 6.6067,
+          "p5": 0.03,
+          "p25": 0.5031,
+          "p50": 0.9925,
+          "p75": 1.06,
+          "p95": 3.3826
+        },
+        "pH_MeasuredValue": {
+          "count": 12320,
+          "mean": 7.504,
+          "std": 0.3955,
+          "min": 6.0808,
+          "max": 8.3982,
+          "p5": 7.27,
+          "p25": 7.3,
+          "p50": 7.3167,
+          "p75": 7.4,
+          "p95": 8.35
+        },
+        "ORP_MeasuredValue": {
+          "count": 12320,
+          "mean": 755.1465,
+          "std": 87.3386,
+          "min": 382.5,
+          "max": 888.9167,
+          "p5": 556.9958,
+          "p25": 708.0,
+          "p50": 803.0,
+          "p75": 816.0,
+          "p95": 841.0
+        },
+        "Temp_MeasuredValue": {
+          "count": 12320,
+          "mean": 31.8041,
+          "std": 6.9446,
+          "min": 8.775,
+          "max": 35.0667,
+          "p5": 9.7583,
+          "p25": 34.1222,
+          "p50": 34.4,
+          "p75": 34.6667,
+          "p95": 34.9
+        }
+      },
+      "established_correlations": {
+        "chlorine_orp": {
+          "correlation": 0.5656,
+          "slope": 49.67,
+          "intercept": 700.83,
+          "r_squared": 0.3199,
+          "best_lag_minutes": 30,
+          "best_correlation": 0.5814
+        },
+        "orp_ph": {
+          "correlation": -0.3168,
+          "slope": -69.95,
+          "intercept": 1280.09,
+          "r_squared": 0.1004
+        },
+        "chlorine_ph": {
+          "correlation": -0.2962
+        }
+      },
+      "pump_effectiveness": {
+        "chlorine": {
+          "activity": {
+            "mean_output_pct": 3.02,
+            "max_output_pct": 100.0,
+            "pct_time_active": 28.3,
+            "mean_when_active": 10.65
+          },
+          "effectiveness": {
+            "value": 1.5e-05,
+            "unit": "mg/L per %-min",
+            "dosing_events_analyzed": 109,
+            "total_pump_output": 36562.0,
+            "total_sensor_change": 0.5365,
+            "response_lag_minutes": 1,
+            "output_result_correlation": 0.031
+          },
+          "red_flag": {
+            "issue": "HIGH_OUTPUT_NO_RESULT",
+            "description": "Pump running but no measured change",
+            "possible_causes": [
+              "Empty chemical tank",
+              "Blocked dosing line",
+              "Pump failure",
+              "Sensor fault"
+            ]
+          }
+        },
+        "ph": {
+          "activity": {
+            "mean_output_pct": 2.25,
+            "max_output_pct": 100.0,
+            "pct_time_active": 39.42,
+            "mean_when_active": 5.69
+          },
+          "effectiveness": {
+            "value": 0.00015,
+            "unit": "pH per %-min",
+            "dosing_events_analyzed": 153,
+            "total_pump_output": 27144.9,
+            "total_sensor_change": 4.0649,
+            "response_lag_minutes": 2,
+            "output_result_correlation": -0.177
+          }
+        }
+      },
+      "pool_type": "hot_therapy",
+      "anomaly_thresholds": {
+        "zscore_warning": 2.5,
+        "zscore_alarm": 3.5,
+        "correlation_deviation_warning": 0.15,
+        "response_time_warning_minutes": 15
+      }
+    },
+    "Main": {
+      "last_baseline_update": "2026-02-26T15:00:19.895115",
+      "data_period": {
+        "start": "2026-01-28 22:00:00+00:00",
+        "end": "2026-02-02 02:08:00+00:00"
+      },
+      "data_points_in_baseline": 6009,
+      "normal_operating_ranges": {
+        "Chlorine_MeasuredValue": {
+          "count": 5865,
+          "mean": 1.0325,
+          "std": 1.0169,
+          "min": 0.1,
+          "max": 9.99,
+          "p5": 0.45,
+          "p25": 0.5025,
+          "p50": 0.5517,
+          "p75": 1.35,
+          "p95": 2.69
+        },
+        "pH_MeasuredValue": {
+          "count": 5865,
+          "mean": 7.4269,
+          "std": 0.2431,
+          "min": 3.7355,
+          "max": 8.5183,
+          "p5": 7.18,
+          "p25": 7.32,
+          "p50": 7.42,
+          "p75": 7.58,
+          "p95": 7.68
+        },
+        "ORP_MeasuredValue": {
+          "count": 5865,
+          "mean": 809.3249,
+          "std": 75.5613,
+          "min": 557.1667,
+          "max": 1097.5833,
+          "p5": 708.8667,
+          "p25": 728.0,
+          "p50": 848.5455,
+          "p75": 873.9167,
+          "p95": 891.0
+        },
+        "Temp_MeasuredValue": {
+          "count": 5865,
+          "mean": 27.9806,
+          "std": 0.6833,
+          "min": 25.7412,
+          "max": 29.3,
+          "p5": 27.0,
+          "p25": 27.4,
+          "p50": 27.9,
+          "p75": 28.6,
+          "p95": 29.1
+        }
+      },
+      "established_correlations": {
+        "chlorine_orp": {
+          "correlation": 0.5472,
+          "slope": 40.66,
+          "intercept": 767.34,
+          "r_squared": 0.2994,
+          "best_lag_minutes": 0,
+          "best_correlation": 0.5472
+        },
+        "orp_ph": {
+          "correlation": -0.2033,
+          "slope": -63.21,
+          "intercept": 1278.75,
+          "r_squared": 0.0413
+        },
+        "chlorine_ph": {
+          "correlation": -0.7271
+        }
+      },
+      "pump_effectiveness": {
+        "chlorine": {
+          "activity": {
+            "mean_output_pct": 0.84,
+            "max_output_pct": 100.0,
+            "pct_time_active": 17.92,
+            "mean_when_active": 4.52
+          },
+          "effectiveness": {
+            "value": -2.2e-05,
+            "unit": "mg/L per %-min",
+            "dosing_events_analyzed": 36,
+            "total_pump_output": 4559.5,
+            "total_sensor_change": -0.0983,
+            "response_lag_minutes": 8,
+            "output_result_correlation": 0.001
+          },
+          "red_flag": {
+            "issue": "HIGH_OUTPUT_NO_RESULT",
+            "description": "Pump running but no measured change",
+            "possible_causes": [
+              "Empty chemical tank",
+              "Blocked dosing line",
+              "Pump failure",
+              "Sensor fault"
+            ]
+          }
+        },
+        "ph": {
+          "activity": {
+            "mean_output_pct": 11.36,
+            "max_output_pct": 100.0,
+            "pct_time_active": 49.07,
+            "mean_when_active": 23.16
+          },
+          "effectiveness": {
+            "value": 2.5e-05,
+            "unit": "pH per %-min",
+            "dosing_events_analyzed": 4,
+            "total_pump_output": 66480.6,
+            "total_sensor_change": 1.6679,
+            "response_lag_minutes": 4,
+            "output_result_correlation": -0.059
+          },
+          "red_flag": {
+            "issue": "HIGH_OUTPUT_NO_RESULT",
+            "description": "Pump running but no measured change",
+            "possible_causes": [
+              "Empty chemical tank",
+              "Blocked dosing line",
+              "Pump failure",
+              "Sensor fault"
+            ]
+          }
+        }
+      },
+      "pool_type": "swimming_pool",
+      "anomaly_thresholds": {
+        "zscore_warning": 2.5,
+        "zscore_alarm": 3.5,
+        "correlation_deviation_warning": 0.15,
+        "response_time_warning_minutes": 15
+      }
+    },
+    "Plunge": {
+      "last_baseline_update": "2026-02-26T15:02:14.448114",
+      "data_period": {
+        "start": "2026-01-28 22:00:00+00:00",
+        "end": "2026-02-08 23:58:00+00:00"
+      },
+      "data_points_in_baseline": 15959,
+      "normal_operating_ranges": {
+        "Chlorine_MeasuredValue": {
+          "count": 10752,
+          "mean": 1.2713,
+          "std": 0.3243,
+          "min": 0.0658,
+          "max": 9.99,
+          "p5": 1.07,
+          "p25": 1.16,
+          "p50": 1.18,
+          "p75": 1.5883,
+          "p95": 1.65
+        },
+        "pH_MeasuredValue": {
+          "count": 10752,
+          "mean": 7.3211,
+          "std": 0.0111,
+          "min": 7.29,
+          "max": 7.39,
+          "p5": 7.305,
+          "p25": 7.3144,
+          "p50": 7.32,
+          "p75": 7.33,
+          "p95": 7.3327
+        },
+        "ORP_MeasuredValue": {
+          "count": 10752,
+          "mean": 802.6858,
+          "std": 21.786,
+          "min": 455.0,
+          "max": 824.0,
+          "p5": 791.5,
+          "p25": 795.0,
+          "p50": 798.1111,
+          "p75": 818.0,
+          "p95": 823.0
+        },
+        "Temp_MeasuredValue": {
+          "count": 10752,
+          "mean": 13.3266,
+          "std": 3.087,
+          "min": 11.0,
+          "max": 22.6,
+          "p5": 11.1,
+          "p25": 11.2,
+          "p50": 11.3,
+          "p75": 15.9,
+          "p95": 19.0
+        }
+      },
+      "established_correlations": {
+        "chlorine_orp": {
+          "correlation": 0.6488,
+          "slope": 43.59,
+          "intercept": 747.27,
+          "r_squared": 0.421,
+          "best_lag_minutes": 0,
+          "best_correlation": 0.6488
+        },
+        "orp_ph": {
+          "correlation": -0.2462,
+          "slope": -481.82,
+          "intercept": 4330.12,
+          "r_squared": 0.0606
+        },
+        "chlorine_ph": {
+          "correlation": -0.3204
+        }
+      },
+      "pump_effectiveness": {
+        "chlorine": {
+          "activity": {
+            "mean_output_pct": 0.0,
+            "max_output_pct": 0.0,
+            "pct_time_active": 0.0,
+            "mean_when_active": 0
+          },
+          "effectiveness": {
+            "status": "NOT_ACTIVE",
+            "description": "Pump only active 0.0% of time"
+          },
+          "note": "Sensor varies despite low pump activity - manual dosing?"
+        },
+        "ph": {
+          "activity": {
+            "mean_output_pct": 4.84,
+            "max_output_pct": 10.0,
+            "pct_time_active": 91.94,
+            "mean_when_active": 5.26
+          },
+          "effectiveness": {
+            "value": -1e-06,
+            "unit": "pH per %-min",
+            "dosing_events_analyzed": 6,
+            "total_pump_output": 51991.5,
+            "total_sensor_change": -0.0737,
+            "response_lag_minutes": 1,
+            "output_result_correlation": -0.032
+          },
+          "red_flag": {
+            "issue": "HIGH_OUTPUT_NO_RESULT",
+            "description": "Pump running but no measured change",
+            "possible_causes": [
+              "Empty chemical tank",
+              "Blocked dosing line",
+              "Pump failure",
+              "Sensor fault"
+            ]
+          }
+        }
+      },
+      "pool_type": "cold_plunge",
+      "anomaly_thresholds": {
+        "zscore_warning": 2.5,
+        "zscore_alarm": 3.5,
+        "correlation_deviation_warning": 0.15,
+        "response_time_warning_minutes": 15
+      }
+    },
+    "Spa": {
+      "last_baseline_update": "2026-02-26T15:01:40.080799",
+      "data_period": {
+        "start": "2026-01-28 22:00:00+00:00",
+        "end": "2026-02-08 23:58:00+00:00"
+      },
+      "data_points_in_baseline": 15959,
+      "normal_operating_ranges": {
+        "Chlorine_MeasuredValue": {
+          "count": 13497,
+          "mean": 0.04,
+          "std": 0.0103,
+          "min": -0.0108,
+          "max": 0.9425,
+          "p5": 0.03,
+          "p25": 0.04,
+          "p50": 0.04,
+          "p75": 0.04,
+          "p95": 0.05
+        },
+        "pH_MeasuredValue": {
+          "count": 13497,
+          "mean": 7.084,
+          "std": 0.0319,
+          "min": 7.03,
+          "max": 7.1875,
+          "p5": 7.03,
+          "p25": 7.05,
+          "p50": 7.09,
+          "p75": 7.11,
+          "p95": 7.14
+        },
+        "ORP_MeasuredValue": {
+          "count": 13497,
+          "mean": 800.2861,
+          "std": 14.7296,
+          "min": 396.75,
+          "max": 812.0,
+          "p5": 792.0,
+          "p25": 797.0,
+          "p50": 803.25,
+          "p75": 806.0,
+          "p95": 810.0
+        },
+        "Temp_MeasuredValue": {
+          "count": 13497,
+          "mean": 10.2649,
+          "std": 1.5238,
+          "min": 6.7,
+          "max": 13.1,
+          "p5": 7.4,
+          "p25": 9.0,
+          "p50": 10.5167,
+          "p75": 11.4,
+          "p95": 12.5
+        }
+      },
+      "established_correlations": {
+        "chlorine_orp": {
+          "correlation": -0.0631,
+          "slope": -90.52,
+          "intercept": 803.91,
+          "r_squared": 0.004,
+          "best_lag_minutes": 30,
+          "best_correlation": 0.1094
+        },
+        "orp_ph": {
+          "correlation": 0.299,
+          "slope": 138.12,
+          "intercept": -178.15,
+          "r_squared": 0.0894
+        },
+        "chlorine_ph": {
+          "correlation": 0.4892
+        }
+      },
+      "pump_effectiveness": {
+        "chlorine": {
+          "activity": {
+            "mean_output_pct": 0.0,
+            "max_output_pct": 0.0,
+            "pct_time_active": 0.0,
+            "mean_when_active": 0
+          },
+          "effectiveness": {
+            "status": "NOT_ACTIVE",
+            "description": "Pump only active 0.0% of time"
+          }
+        },
+        "ph": {
+          "activity": {
+            "mean_output_pct": 0.0,
+            "max_output_pct": 0.0,
+            "pct_time_active": 0.0,
+            "mean_when_active": 0
+          },
+          "effectiveness": {
+            "status": "NOT_ACTIVE",
+            "description": "Pump only active 0.0% of time"
+          }
+        }
+      },
+      "pool_type": "unknown"
+    }
+  },
+  "deviation_detection": {
+    "_description": "Rules for detecting when current readings deviate from established baselines",
+    "methods": {
+      "zscore": {
+        "formula": "z = (current_value - baseline_mean) / baseline_std",
+        "warning_threshold": 2.5,
+        "alarm_threshold": 3.5
+      },
+      "percentile": {
+        "warning_if_below_p5_or_above_p95": true,
+        "alarm_if_below_p1_or_above_p99": true
+      },
+      "correlation_shift": {
+        "description": "Compare current correlation to baseline correlation",
+        "warning_if_difference_exceeds": 0.2,
+        "alarm_if_difference_exceeds": 0.35
+      },
+      "slope_shift": {
+        "description": "Compare current ORP-Chlorine slope to baseline",
+        "warning_if_change_percent_exceeds": 30,
+        "alarm_if_change_percent_exceeds": 50
+      },
+      "response_time_degradation": {
+        "description": "Compare current response time to baseline",
+        "warning_if_exceeds_baseline_by_percent": 50,
+        "alarm_if_exceeds_baseline_by_percent": 100
+      }
+    },
+    "interpretation_guide": {
+      "correlation_drop_chlorine_orp": [
+        "Sensor fouling (ORP or chlorine probe)",
+        "Air bubbles in sensor flow cell",
+        "Chemical interference (high cyanuric acid, metals)",
+        "Flow rate change past sensors"
+      ],
+      "slope_decrease_orp_chlorine": [
+        "ORP sensor aging/drift",
+        "Chlorine sensor calibration drift",
+        "Water chemistry change (CYA, temperature)",
+        "Increased organic load consuming chlorine"
+      ],
+      "response_time_increase": [
+        "Pump wear/degradation",
+        "Partially blocked dosing line",
+        "Low chemical tank level",
+        "Increased pool volume/dilution"
+      ]
+    }
+  },
+  "update_protocol": {
+    "frequency": "Weekly recommended, daily minimum for new pools",
+    "data_requirements": {
+      "minimum_data_points": 1000,
+      "minimum_time_span_hours": 24
+    },
+    "rolling_baseline": {
+      "enabled": true,
+      "lookback_days": 14,
+      "description": "Baselines are updated using rolling 14-day windows to adapt to seasonal changes"
+    },
+    "stability_check": {
+      "description": "Only update baseline if pool is in stable operation",
+      "exclude_if": [
+        "Pool was refilled within 48 hours",
+        "Major maintenance performed",
+        "Dosing system was offline",
+        "More than 10% anomalies detected"
+      ]
+    }
+  }
+}

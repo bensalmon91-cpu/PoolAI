@@ -1,0 +1,41 @@
+{
+  "technicians": [
+    {
+      "name": "Lead Technician",
+      "phone": "+447XXXXXXXXX",
+      "whatsapp": true,
+      "sms": true,
+      "alert_levels": ["CRITICAL", "WARNING"],
+      "notes": "On call 24/7 for critical alerts"
+    },
+    {
+      "name": "Backup Tech",
+      "phone": "+447XXXXXXXXX",
+      "whatsapp": true,
+      "sms": false,
+      "alert_levels": ["CRITICAL"],
+      "notes": "Critical alerts only"
+    }
+  ],
+  "alert_settings": {
+    "send_critical": true,
+    "send_warning": false,
+    "quiet_hours": {
+      "start": "22:00",
+      "end": "07:00",
+      "override_for_critical": true
+    },
+    "cooldown_hours": 4,
+    "escalation": {
+      "enabled": false,
+      "escalate_after_minutes": 30,
+      "escalate_to": "manager"
+    }
+  },
+  "pools": {
+    "Main": {"responsible": "Lead Technician"},
+    "Spa": {"responsible": "Lead Technician"},
+    "Vitality": {"responsible": "Lead Technician"},
+    "Plunge": {"responsible": "Lead Technician"}
+  }
+}

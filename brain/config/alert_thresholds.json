@@ -1,0 +1,111 @@
+{
+  "version": "1.1",
+  "generated": "2026-02-26",
+  "pools": {
+    "Main": {
+      "pH": {
+        "min": 7.2,
+        "max": 7.6,
+        "critical_min": 7.0,
+        "critical_max": 7.8,
+        "baseline": 7.43
+      },
+      "Temp": {
+        "min": 26.0,
+        "max": 30.0,
+        "critical_min": 24.0,
+        "critical_max": 32.0,
+        "baseline": 28.0,
+        "unit": "C"
+      },
+      "ORP": {
+        "min": 700,
+        "max": 900,
+        "critical_min": 650,
+        "critical_max": 950,
+        "baseline": 809,
+        "unit": "mV"
+      }
+    },
+    "Plunge": {
+      "pH": {
+        "min": 7.28,
+        "max": 7.36,
+        "critical_min": 7.2,
+        "critical_max": 7.45,
+        "baseline": 7.32
+      },
+      "Temp": {
+        "min": 10.0,
+        "max": 14.0,
+        "critical_min": 8.0,
+        "critical_max": 18.0,
+        "baseline": 13.4,
+        "unit": "C"
+      },
+      "ORP": {
+        "min": 780,
+        "max": 830,
+        "critical_min": 700,
+        "critical_max": 850,
+        "baseline": 804,
+        "unit": "mV"
+      }
+    },
+    "Spa": {
+      "pH": {
+        "min": 7.2,
+        "max": 7.6,
+        "critical_min": 7.0,
+        "critical_max": 7.8,
+        "baseline": 7.4
+      },
+      "Temp": {
+        "min": 36.0,
+        "max": 40.0,
+        "critical_min": 34.0,
+        "critical_max": 42.0,
+        "baseline": 38.0,
+        "unit": "C"
+      },
+      "ORP": {
+        "min": 700,
+        "max": 850,
+        "critical_min": 650,
+        "critical_max": 900,
+        "baseline": 800,
+        "unit": "mV"
+      }
+    },
+    "Vitality": {
+      "pH": {
+        "min": 7.2,
+        "max": 7.6,
+        "critical_min": 7.0,
+        "critical_max": 8.0,
+        "baseline": 7.53
+      },
+      "Temp": {
+        "min": 33.0,
+        "max": 35.5,
+        "critical_min": 30.0,
+        "critical_max": 37.0,
+        "baseline": 31.6,
+        "unit": "C"
+      },
+      "ORP": {
+        "min": 700,
+        "max": 900,
+        "critical_min": 600,
+        "critical_max": 950,
+        "baseline": 755,
+        "unit": "mV"
+      }
+    }
+  },
+  "alert_levels": {
+    "warning": "Value outside normal range (min/max)",
+    "critical": "Value outside critical range - immediate attention needed"
+  },
+  "sustained_duration_minutes": 30
+}
