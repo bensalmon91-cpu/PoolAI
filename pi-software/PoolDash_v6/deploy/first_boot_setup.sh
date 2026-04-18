@@ -324,6 +324,17 @@ with open(settings_path, 'w') as f:
 sudo systemctl restart avahi-daemon 2>/dev/null || true
 echo "OK - Hostname set to $NEW_HOSTNAME (access via $NEW_HOSTNAME.local)"
 
+# 13b. Ensure /etc/poolai/bootstrap.secret is in place for the new device.
+# The cloned SD card should already have it (inherited from the template),
+# but run the migration idempotently as a safety net - a missing secret
+# file would break auto-provisioning on a fresh boot.
+MIGRATE_SCRIPT="$APP_DIR/scripts/migrate_bootstrap_secret.sh"
+if [ -f "$MIGRATE_SCRIPT" ]; then
+    echo "Ensuring /etc/poolai/bootstrap.secret is present..."
+    sudo bash "$MIGRATE_SCRIPT" 2>&1 | sed 's/^/  /' || \
+        echo "  (no pre-existing secret in settings - set POOLAI_BOOTSTRAP_SECRET env or write the file manually)"
+fi
+
 # 14. Display access information
 IP_ADDR=$(hostname -I | awk '{print $1}')
 

@@ -578,6 +578,30 @@ def apply_update(archive_path):
             except Exception as e:
                 print(f"  Warning: Could not install dependencies: {e}")
 
+        # Run post-update migrations. Currently seeds /etc/poolai/bootstrap.secret
+        # from the per-device settings.json so the new env/file-based persist.py
+        # has the secret to load. Idempotent; no-op if already migrated.
+        print("Running post-update migrations...")
+        migrate_script = APP_DIR / "scripts" / "migrate_bootstrap_secret.sh"
+        if migrate_script.exists():
+            try:
+                result = subprocess.run(
+                    ["sudo", "bash", str(migrate_script)],
+                    capture_output=True, text=True, timeout=30
+                )
+                if result.returncode == 0:
+                    print("  Post-update migrations applied")
+                elif result.returncode == 3:
+                    # No bootstrap_secret in settings - not fatal; secret may
+                    # have been provisioned by the installer via another path.
+                    print("  No pre-existing bootstrap secret to migrate (ok)")
+                else:
+                    print(f"  Migration warning: {result.stderr.strip()}")
+            except Exception as e:
+                print(f"  Migration skipped: {e}")
+        else:
+            print("  migrate_bootstrap_secret.sh not present - skipping")
+
         # Configure firewall for port 80 using robust ports script
         print("Configuring firewall...")
         ports_script = APP_DIR / "scripts" / "ensure_ports.sh"

@@ -1,1 +1,0 @@
-0 3 * * * cd /opt/pooldash/portal/backend && /usr/bin/npm run cleanup-readings >> /var/log/pooldash_cleanup.log 2>&1

@@ -591,6 +591,15 @@ echo "Checking critical files..."
 [ -f "$SSH_DIR/authorized_keys" ] && echo "  [OK] SSH authorized_keys" || { echo "  [FAIL] SSH authorized_keys"; ERRORS=$((ERRORS+1)); }
 [ -f "$DATA_DIR/pooldash_settings.json" ] && echo "  [OK] settings template" || { echo "  [FAIL] settings template"; ERRORS=$((ERRORS+1)); }
 [ -f "$DATA_DIR/FIRST_BOOT" ] && echo "  [OK] FIRST_BOOT marker" || { echo "  [FAIL] FIRST_BOOT marker"; ERRORS=$((ERRORS+1)); }
+# Bootstrap secret MUST be on the template SD card or every clone will fail
+# to provision. persist.py reads it from this file.
+if [ -s /etc/poolai/bootstrap.secret ]; then
+    echo "  [OK] /etc/poolai/bootstrap.secret present"
+else
+    echo "  [FAIL] /etc/poolai/bootstrap.secret missing or empty - every clone will fail to provision"
+    echo "         Run: sudo bash $APP_DIR/scripts/migrate_bootstrap_secret.sh"
+    ERRORS=$((ERRORS+1))
+fi
 
 # Check AP infrastructure (CRITICAL for connectivity!)
 echo
