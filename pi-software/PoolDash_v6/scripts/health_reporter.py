@@ -20,7 +20,7 @@ import subprocess
 import socket
 import sqlite3
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # AI Assistant integration - optional
@@ -275,7 +275,10 @@ def get_controller_status():
         return []
 
     controllers = []
-    now = datetime.now()
+    # modbus_logger writes ts in UTC (+00:00), so compare in UTC too.
+    # Using naive datetime.now() here previously caused every controller to
+    # appear offline by the local tz offset (e.g. 60 min during BST).
+    now = datetime.now(timezone.utc)
 
     try:
         con = sqlite3.connect(str(POOL_DB), timeout=30)
@@ -315,15 +318,17 @@ def get_controller_status():
 
             last_ts = row['ts'] if row else None
 
-            # Parse timestamp
+            # Parse timestamp as tz-aware UTC (modbus_logger writes +00:00).
             last_reading = None
             if last_ts:
                 try:
                     if 'T' in last_ts:
-                        ts_clean = last_ts.replace('Z', '').split('+')[0]
+                        ts_clean = last_ts.replace('Z', '+00:00')
                         last_reading = datetime.fromisoformat(ts_clean)
                     else:
                         last_reading = datetime.strptime(last_ts, '%Y-%m-%d %H:%M:%S')
+                    if last_reading.tzinfo is None:
+                        last_reading = last_reading.replace(tzinfo=timezone.utc)
                 except:
                     pass
 
