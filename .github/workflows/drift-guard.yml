@@ -1,0 +1,39 @@
+name: drift-guard
+
+# Fails fast if files that are supposed to be byte-identical between the
+# admin backend (php_deploy/) and customer portal (poolai_deploy/) drift.
+# They live on different Hostinger domains and can't be symlinked, so we
+# keep two copies - this check is the guard.
+
+on:
+  push:
+    paths:
+      - 'web-portal/php_deploy/includes/PortalAuth.php'
+      - 'web-portal/poolai_deploy/includes/PortalAuth.php'
+      - '.github/workflows/drift-guard.yml'
+  pull_request:
+    paths:
+      - 'web-portal/php_deploy/includes/PortalAuth.php'
+      - 'web-portal/poolai_deploy/includes/PortalAuth.php'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PortalAuth copies must be byte-identical
+        run: |
+          A=web-portal/php_deploy/includes/PortalAuth.php
+          B=web-portal/poolai_deploy/includes/PortalAuth.php
+          if ! diff -q "$A" "$B"; then
+            echo "::error::PortalAuth.php copies have drifted."
+            echo "The admin backend and customer portal carry two copies of"
+            echo "PortalAuth.php (one per Hostinger domain; no symlink option)."
+            echo "They must match byte-for-byte. Update both copies together."
+            echo ""
+            echo "Diff:"
+            diff "$A" "$B" || true
+            exit 1
+          fi
+          echo "OK - copies are byte-identical."

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# PoolAIssistant pre-commit hook - local mirror of .github/workflows/drift-guard.yml.
+#
+# Catches the PortalAuth.php drift case before it hits CI, so you don't
+# push a commit that'll fail a pull request. The authoritative check is
+# still in GitHub Actions; this is just a faster signal.
+#
+# Install once per clone:
+#     git config core.hooksPath .githooks
+
+set -e
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+A="$REPO_ROOT/web-portal/php_deploy/includes/PortalAuth.php"
+B="$REPO_ROOT/web-portal/poolai_deploy/includes/PortalAuth.php"
+
+if [ -f "$A" ] && [ -f "$B" ]; then
+    if ! diff -q "$A" "$B" >/dev/null 2>&1; then
+        # Only fail if the diverged file(s) are in this commit.
+        if git diff --cached --name-only | grep -qE '(php_deploy|poolai_deploy)/includes/PortalAuth\.php$'; then
+            echo "pre-commit: PortalAuth.php copies have drifted." >&2
+            echo "Update both copies together; they must be byte-identical." >&2
+            echo "  $A" >&2
+            echo "  $B" >&2
+            exit 1
+        fi
+    fi
+fi
