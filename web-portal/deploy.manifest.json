@@ -1,0 +1,40 @@
+{
+  "$comment": "Declarative deploy manifest consumed by deploy.py. Paths are relative to web-portal/. Glob patterns are expanded by deploy.py.",
+  "targets": {
+    "admin-backend": {
+      "description": "poolaissistant.modprojects.co.uk - admin backend (FTP-chroot-inaccessible, uses PHP installer bundle)",
+      "deploy_method": "php_installer",
+      "server_base_path": "/home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant",
+      "installer_ftp_path": "_deploy_bundle.php",
+      "installer_run_url": "https://poolai.modprojects.co.uk/_deploy_bundle.php",
+      "verify_url": "https://poolaissistant.modprojects.co.uk/api/admin/_verify.php",
+      "session_cookie_name": "mod_admin_session",
+      "files": [
+        {"glob": "php_deploy/admin/**/*.php", "src_prefix": "php_deploy"},
+        {"glob": "php_deploy/api/**/*.php", "src_prefix": "php_deploy"},
+        {"glob": "php_deploy/config/**/*.php", "src_prefix": "php_deploy"},
+        {"glob": "php_deploy/includes/**/*.php", "src_prefix": "php_deploy"},
+        {"glob": "php_deploy/portal/**/*.php", "src_prefix": "php_deploy"},
+        {"glob": "php_deploy/staff/**/*", "src_prefix": "php_deploy"},
+        {"glob": "php_deploy/scripts/**/*.php", "src_prefix": "php_deploy"},
+        {"glob": "php_deploy/database/**/*.sql", "src_prefix": "php_deploy"}
+      ]
+    },
+    "customer-portal": {
+      "description": "poolai.modprojects.co.uk - customer portal (FTP root)",
+      "deploy_method": "ftp",
+      "server_base_path": "/home/u931726538/domains/poolai.modprojects.co.uk",
+      "ftp_base_subdir": "",
+      "verify_url": "https://poolaissistant.modprojects.co.uk/api/admin/_verify.php",
+      "session_cookie_name": "mod_admin_session",
+      "files": [
+        {"glob": "poolai_deploy/**/*.php", "src_prefix": "poolai_deploy"},
+        {"glob": "poolai_deploy/**/*.html", "src_prefix": "poolai_deploy"},
+        {"glob": "poolai_deploy/**/*.css", "src_prefix": "poolai_deploy"},
+        {"glob": "poolai_deploy/**/*.js", "src_prefix": "poolai_deploy"},
+        {"glob": "poolai_deploy/**/*.json", "src_prefix": "poolai_deploy"},
+        {"glob": "poolai_deploy/.htaccess", "src_prefix": "poolai_deploy"}
+      ]
+    }
+  }
+}

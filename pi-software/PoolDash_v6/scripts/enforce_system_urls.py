@@ -15,10 +15,30 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+
+def _load_bootstrap_secret() -> str:
+    """Source the bootstrap secret from env or /etc/poolai/bootstrap.secret.
+
+    Mirrors pooldash_app/persist.py so this midnight-enforcer works in
+    whatever execution context it's launched from (systemd timer,
+    manual SSH run, etc.) without pulling persist.py as a dependency.
+    """
+    env_val = os.environ.get("POOLAI_BOOTSTRAP_SECRET", "").strip()
+    if env_val:
+        return env_val
+    try:
+        secret_path = Path("/etc/poolai/bootstrap.secret")
+        if secret_path.is_file():
+            return secret_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
+    return ""
+
+
 # System URLs - MUST match persist.py SYSTEM_URLS
 SYSTEM_URLS = {
     "backend_url": "https://poolaissistant.modprojects.co.uk",
-    "bootstrap_secret": "e1d6eeeb68c011b8c40d8d3386018137be53342a1af7c4d9",
+    "bootstrap_secret": _load_bootstrap_secret(),
 }
 
 SETTINGS_PATH = Path("/opt/PoolAIssistant/data/pooldash_settings.json")
@@ -55,6 +75,11 @@ def main():
 
     # Check and enforce each system URL
     for key, expected_value in SYSTEM_URLS.items():
+        if not expected_value:
+            # Source unavailable (e.g. bootstrap.secret missing on this run).
+            # Do NOT overwrite an existing value with empty - leave it alone.
+            log(f"SKIP: {key} has no expected value available; leaving settings as-is")
+            continue
         current_value = settings.get(key, "")
         if current_value != expected_value:
             log(f"MISMATCH: {key} was '{current_value}', reverting to '{expected_value}'")

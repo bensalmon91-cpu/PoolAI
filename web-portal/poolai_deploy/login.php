@@ -129,6 +129,10 @@ $csrfToken = $auth->generateCSRFToken();
 
         <div class="auth-footer">
             <p>&copy; <?= date('Y') ?> PoolAIssistant. All rights reserved.</p>
+            <p style="font-size: 0.8rem; margin-top: 0.25rem;">
+                <a href="/terms.php">Terms</a> &middot;
+                <a href="/privacy.php">Privacy</a>
+            </p>
         </div>
     </div>
 

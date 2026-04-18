@@ -1,0 +1,31 @@
+{
+  "name": "PoolAI Staff",
+  "short_name": "PoolAI Staff",
+  "description": "Staff operations and AI governance for PoolAIssistant",
+  "start_url": "/staff/",
+  "scope": "/staff/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/staff/icon.php?size=192",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/staff/icon.php?size=512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/staff/icon.php?size=512&maskable=1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

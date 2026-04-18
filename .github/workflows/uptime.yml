@@ -1,0 +1,30 @@
+name: uptime-probe
+
+# Polls production endpoints every 5 minutes. Failed runs email the repo
+# owner via GitHub's default workflow-failure notifications (no SMTP setup
+# required). The script asserts on both status code and a marker substring
+# so a soft 500 returning empty body (exactly today's admin-login failure
+# mode) is also caught.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/uptime.yml'
+      - '.github/scripts/uptime_probe.sh'
+
+concurrency:
+  group: uptime-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run probes
+        run: bash .github/scripts/uptime_probe.sh

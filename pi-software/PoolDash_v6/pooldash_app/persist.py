@@ -6,6 +6,34 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple
 from contextlib import contextmanager
 
+
+def _load_bootstrap_secret() -> str:
+    """Load the server bootstrap secret without baking it into source.
+
+    Precedence:
+      1. POOLAI_BOOTSTRAP_SECRET env var
+      2. /etc/poolai/bootstrap.secret  (file owned by root, mode 600)
+
+    Returns empty string if neither is present; the caller is responsible
+    for surfacing a clear error in that case. This keeps the shared secret
+    out of git while preserving the "permanent, tamper-revert" behaviour -
+    the loaded value is still re-applied at midnight, we just source it
+    from the filesystem rather than from source code.
+    """
+    env_val = os.environ.get("POOLAI_BOOTSTRAP_SECRET", "").strip()
+    if env_val:
+        return env_val
+    try:
+        secret_path = Path("/etc/poolai/bootstrap.secret")
+        if secret_path.is_file():
+            return secret_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
+    return ""
+
+
+_BOOTSTRAP_SECRET = _load_bootstrap_secret()
+
 # File locking to prevent concurrent access corruption
 @contextmanager
 def file_lock(path: Path, timeout: float = 5.0):
@@ -52,7 +80,7 @@ DEFAULTS = {
     "upload_interval_minutes": 10,
     # Server connection (PERMANENT - do not change)
     "backend_url": "https://poolaissistant.modprojects.co.uk",
-    "bootstrap_secret": "e1d6eeeb68c011b8c40d8d3386018137be53342a1af7c4d9",
+    "bootstrap_secret": _BOOTSTRAP_SECRET,
 
     # Device identification (unique per Pi installation)
     "device_id": "",              # Auto-generated unique ID (UUID)
@@ -143,7 +171,7 @@ DEFAULTS = {
 SYSTEM_URLS = {
     "update_server": "https://poolaissistant.modprojects.co.uk",
     "backend_url": "https://poolaissistant.modprojects.co.uk",
-    "bootstrap_secret": "e1d6eeeb68c011b8c40d8d3386018137be53342a1af7c4d9",
+    "bootstrap_secret": _BOOTSTRAP_SECRET,
 }
 
 def settings_path(app_instance_path: str) -> Path:

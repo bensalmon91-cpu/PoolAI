@@ -43,6 +43,18 @@ DOWNLOAD_DIR = DATA_DIR / "updates"
 # HARDCODED UPDATE SERVER - survives clone prep, always works
 UPDATE_SERVER_URL = "https://poolaissistant.modprojects.co.uk"
 
+# Trust: a server-compromise attacker can replace the tarball AND its
+# checksum. Signature verification closes that gap - the private key lives
+# off-server, the public key is baked into every installed copy.
+TRUST_DIR = APP_DIR / "trust"
+SIGNING_KEY_PUB = TRUST_DIR / "update_signing_key.pub"
+
+# Rollout flag: until every published update carries a signature, we permit
+# unsigned updates with a logged warning. Once operations has been signing
+# for one full release cycle, flip this to True (or drop a file named
+# `require_signature` into TRUST_DIR, which takes precedence).
+REQUIRE_SIGNATURE_DEFAULT = False
+
 # How long before a cached error is considered stale and auto-refreshed
 ERROR_CACHE_EXPIRY_MINUTES = 5
 
@@ -277,6 +289,73 @@ def check_for_updates(settings, current_version, skip_network_check=False):
         return None, f"Request failed: {e}"
 
 
+def _signature_required() -> bool:
+    """Hard-fail unsigned updates iff ops has opted in (marker file or flag)."""
+    if (TRUST_DIR / "require_signature").is_file():
+        return True
+    return REQUIRE_SIGNATURE_DEFAULT
+
+
+def verify_ed25519_signature(tarball_path, signature_path, pubkey_path):
+    """Verify a detached Ed25519 signature. Returns (ok: bool, error: str|None)."""
+    try:
+        from cryptography.hazmat.primitives.serialization import load_pem_public_key, load_ssh_public_key
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    except ImportError as e:
+        return False, f"cryptography library not installed: {e}"
+
+    try:
+        pubkey_bytes = pubkey_path.read_bytes()
+    except OSError as e:
+        return False, f"cannot read public key: {e}"
+
+    # Accept either PEM or OpenSSH format (both are common for Ed25519).
+    pubkey = None
+    for loader in (load_pem_public_key, load_ssh_public_key):
+        try:
+            candidate = loader(pubkey_bytes)
+            if isinstance(candidate, Ed25519PublicKey):
+                pubkey = candidate
+                break
+        except Exception:
+            continue
+    if pubkey is None:
+        return False, "public key is not a recognised Ed25519 key"
+
+    try:
+        sig = signature_path.read_bytes()
+    except OSError as e:
+        return False, f"cannot read signature: {e}"
+    try:
+        data = tarball_path.read_bytes()
+    except OSError as e:
+        return False, f"cannot read tarball: {e}"
+
+    try:
+        pubkey.verify(sig, data)
+    except InvalidSignature:
+        return False, "signature does not match public key"
+    except Exception as e:
+        return False, f"verification error: {e}"
+    return True, None
+
+
+def download_signature(download_url, api_key):
+    """Fetch <tarball_url>.sig; returns (bytes, None) or (None, error_str)."""
+    sig_url = download_url + ".sig"
+    try:
+        headers = {"X-API-Key": api_key} if api_key else {}
+        r = requests.get(sig_url, headers=headers, timeout=60)
+    except requests.RequestException as e:
+        return None, f"signature fetch failed: {e}"
+    if r.status_code == 404:
+        return None, "not_found"
+    if r.status_code != 200:
+        return None, f"signature fetch HTTP {r.status_code}"
+    return r.content, None
+
+
 def download_update(settings, version, download_url, expected_checksum):
     """Download update package."""
     # Always use hardcoded server URL
@@ -323,6 +402,38 @@ def download_update(settings, version, download_url, expected_checksum):
             if actual_checksum.lower() != expected_checksum.lower():
                 download_path.unlink()
                 return None, f"Checksum mismatch! Expected {expected_checksum[:16]}..., got {actual_checksum[:16]}..."
+
+        # Verify signature (Ed25519). Trust lives in TRUST_DIR on this Pi,
+        # not in what the server says - so a server compromise alone
+        # cannot push code.
+        signature_required = _signature_required()
+        if SIGNING_KEY_PUB.is_file():
+            sig_bytes, sig_err = download_signature(download_url, api_key)
+            if sig_bytes is None:
+                msg = f"Update signature unavailable: {sig_err}"
+                if signature_required:
+                    download_path.unlink(missing_ok=True)
+                    logger.error(msg + " (refusing to install unsigned update)")
+                    return None, msg
+                logger.warning(msg + " (proceeding in permissive mode)")
+            else:
+                sig_path = download_path.with_suffix(download_path.suffix + ".sig")
+                sig_path.write_bytes(sig_bytes)
+                ok, verify_err = verify_ed25519_signature(
+                    download_path, sig_path, SIGNING_KEY_PUB
+                )
+                if not ok:
+                    download_path.unlink(missing_ok=True)
+                    sig_path.unlink(missing_ok=True)
+                    logger.error(f"Update signature INVALID: {verify_err}")
+                    return None, f"Signature verification failed: {verify_err}"
+                logger.info("Update signature verified (Ed25519)")
+        else:
+            msg = f"No signing public key installed at {SIGNING_KEY_PUB}"
+            if signature_required:
+                download_path.unlink(missing_ok=True)
+                return None, msg + " (refusing to install unsigned update)"
+            logger.warning(msg + " (update accepted on checksum only)")
 
         print(f"Downloaded and verified: {download_path}")
         return download_path, None

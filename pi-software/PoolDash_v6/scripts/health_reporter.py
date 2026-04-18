@@ -44,6 +44,26 @@ except ImportError:
 DATA_DIR = Path("/opt/PoolAIssistant/data")
 LOGS_DIR = Path("/opt/PoolAIssistant/logs")
 SETTINGS_FILE = DATA_DIR / "pooldash_settings.json"
+
+# Keep this in sync with web-portal/php_deploy/includes/RemoteSettings.php.
+# These are the only pooldash_settings.json keys that the admin panel may
+# write via apply_settings commands, and the keys reported in the heartbeat
+# snapshot. Do not add device identity, API keys, or backend URLs here.
+REMOTE_SETTABLE_KEYS = {
+    'cloud_upload_enabled', 'cloud_upload_interval_minutes',
+    'upload_interval_minutes',
+    'data_retention_enabled', 'data_retention_full_days',
+    'data_retention_hourly_days', 'data_retention_daily_days',
+    'storage_threshold_percent',
+    'screen_rotation',
+    'appearance_theme', 'appearance_font_size', 'appearance_accent_color',
+    'appearance_compact_mode',
+    'eco_mode_enabled', 'eco_timeout_minutes', 'eco_brightness_percent',
+    'eco_wake_on_touch',
+    'chart_downsample', 'chart_max_points',
+    'language',
+    'scheduled_reboot_enabled', 'scheduled_reboot_time',
+}
 POOL_DB = DATA_DIR / "pool_readings.sqlite3"
 CHUNK_TRACKER = DATA_DIR / "chunks" / "chunk_status.json"
 HEALTH_STATE_FILE = DATA_DIR / "health_state.json"
@@ -492,6 +512,64 @@ def execute_command(settings, command):
                 success = proc.returncode == 0
                 result = proc.stdout[-500:] if proc.stdout else proc.stderr[-500:]
 
+        elif command_type == 'apply_settings':
+            # Admin pushed new setting values. Merge only allow-listed keys
+            # into pooldash_settings.json; restart UI so changes take effect.
+            # The allow-list on this Pi (REMOTE_SETTABLE_KEYS) is the final
+            # authority - even if the server queues a key we don't recognise,
+            # we ignore it.
+            proposed = {}
+            if isinstance(payload, dict):
+                proposed = payload.get('settings') or {}
+            if not isinstance(proposed, dict) or not proposed:
+                success = False
+                result = "No settings in payload"
+            else:
+                applied = {}
+                rejected = {}
+                for key, value in proposed.items():
+                    if key not in REMOTE_SETTABLE_KEYS:
+                        rejected[key] = 'not in allow-list'
+                        continue
+                    applied[key] = value
+
+                if not applied:
+                    success = False
+                    result = f"All keys rejected: {rejected}"
+                else:
+                    try:
+                        # Load, merge, atomic-write.
+                        current = {}
+                        if SETTINGS_FILE.exists():
+                            with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                                current = json.load(f)
+                        current.update(applied)
+                        tmp = SETTINGS_FILE.with_suffix('.json.tmp')
+                        with open(tmp, 'w', encoding='utf-8') as f:
+                            json.dump(current, f, indent=2, sort_keys=True)
+                        tmp.replace(SETTINGS_FILE)
+
+                        # Restart the web UI so the new settings take effect.
+                        # Best-effort: if sudo rule isn't in place this
+                        # returns non-zero but the settings are already
+                        # saved - next service restart will pick them up.
+                        try:
+                            subprocess.run(
+                                ['sudo', 'systemctl', 'restart', 'poolaissistant_ui'],
+                                timeout=30, capture_output=True,
+                            )
+                        except Exception as e:
+                            log(f"apply_settings: restart warning: {e}", "WARNING")
+
+                        success = True
+                        result = (
+                            f"Applied: {list(applied.keys())}"
+                            + (f"; rejected: {rejected}" if rejected else "")
+                        )
+                    except Exception as e:
+                        success = False
+                        result = f"apply_settings write failed: {e}"
+
         else:
             result = f"Unknown command type: {command_type}"
             log(result, "WARNING")
@@ -596,6 +674,9 @@ def main():
         # Device alias for bi-directional sync
         'device_alias': settings.get('device_alias', ''),
         'device_alias_updated_at': settings.get('device_alias_updated_at', ''),
+        # Snapshot of admin-editable settings so the admin panel can show
+        # live state and detect drift from pushed values.
+        'settings_snapshot': {k: settings.get(k) for k in REMOTE_SETTABLE_KEYS if k in settings},
         # Timestamp
         'reported_at': datetime.now().isoformat(),
     }

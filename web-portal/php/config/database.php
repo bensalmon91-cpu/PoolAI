@@ -2,42 +2,60 @@
 /**
  * Portal Database Connection
  *
- * This includes the main database configuration from php_deploy
- * For deployment, ensure both folders share the same .env file
+ * Delegates to the admin backend's database.php when co-located, otherwise
+ * loads credentials from a sibling .env file. Never hardcode credentials
+ * here - this directory is potentially orphaned and due for removal in
+ * Phase 4 cleanup, but until then it must not carry secrets.
  */
 
-// When deployed on server, paths are relative to document root
 $deployConfigPath = __DIR__ . '/../../php_deploy/config/database.php';
 $directConfigPath = __DIR__ . '/../../config/database.php';
 
 if (file_exists($deployConfigPath)) {
     require_once $deployConfigPath;
-} elseif (file_exists($directConfigPath)) {
+    return;
+}
+if (file_exists($directConfigPath)) {
     require_once $directConfigPath;
-} else {
-    // Fallback: define database connection inline for standalone deployment
-    if (!function_exists('db')) {
-        // Database credentials - update for production
-        if (!defined('DB_HOST')) define('DB_HOST', 'localhost');
-        if (!defined('DB_NAME')) define('DB_NAME', 'u931726538_PoolAIssistant');
-        if (!defined('DB_USER')) define('DB_USER', 'u931726538_mbs_modproject');
-        if (!defined('DB_PASS')) define('DB_PASS', 'PoolAI2026!');
+    return;
+}
 
-        function db(): PDO {
-            static $pdo = null;
-
-            if ($pdo === null) {
-                $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
-                $options = [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_EMULATE_PREPARES => false,
-                ];
-
-                $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+if (!function_exists('db')) {
+    $envFile = __DIR__ . '/../.env';
+    if (file_exists($envFile)) {
+        foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+            $line = ltrim($line);
+            if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+            [$name, $value] = explode('=', $line, 2);
+            $name = trim($name);
+            $value = trim($value, " \t\n\r\0\x0B\"'");
+            if ($name !== '' && getenv($name) === false) {
+                putenv("$name=$value");
+                $_ENV[$name] = $value;
             }
-
-            return $pdo;
         }
+    }
+
+    if (!defined('DB_HOST')) define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+    if (!defined('DB_NAME')) define('DB_NAME', getenv('DB_NAME') ?: '');
+    if (!defined('DB_USER')) define('DB_USER', getenv('DB_USER') ?: '');
+    if (!defined('DB_PASS')) define('DB_PASS', getenv('DB_PASS') ?: '');
+
+    function db(): PDO {
+        static $pdo = null;
+        if ($pdo === null) {
+            if (DB_NAME === '' || DB_USER === '') {
+                http_response_code(500);
+                error_log('web-portal/php: DB credentials missing. Expected web-portal/php/.env');
+                die(json_encode(['error' => 'Database configuration missing']));
+            }
+            $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
+            $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]);
+        }
+        return $pdo;
     }
 }

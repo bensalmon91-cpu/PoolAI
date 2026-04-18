@@ -91,9 +91,25 @@ try {
         !empty($input['has_issues']) ? 1 : 0,
     ]);
 
-    // Update device last_seen
-    $stmt = $pdo->prepare("UPDATE pi_devices SET last_seen = NOW() WHERE id = ?");
-    $stmt->execute([$device_id]);
+    // Update device last_seen, and settings snapshot if the Pi sent one.
+    // Silently tolerates hosts where the schema migration hasn't run yet.
+    if (!empty($input['settings_snapshot']) && is_array($input['settings_snapshot'])) {
+        try {
+            $snap = json_encode($input['settings_snapshot']);
+            $pdo->prepare("UPDATE pi_devices
+                SET last_seen = NOW(),
+                    settings_snapshot_json = ?,
+                    settings_snapshot_at = NOW()
+                WHERE id = ?")->execute([$snap, $device_id]);
+        } catch (PDOException $e) {
+            // Column doesn't exist yet - fall back to just last_seen.
+            $pdo->prepare("UPDATE pi_devices SET last_seen = NOW() WHERE id = ?")
+                ->execute([$device_id]);
+        }
+    } else {
+        $pdo->prepare("UPDATE pi_devices SET last_seen = NOW() WHERE id = ?")
+            ->execute([$device_id]);
+    }
 
     // Check for pending commands
     $stmt = $pdo->prepare("

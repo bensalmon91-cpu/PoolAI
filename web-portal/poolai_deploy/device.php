@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/includes/PortalAuth.php';
 require_once __DIR__ . '/includes/PortalDevices.php';
+require_once __DIR__ . '/includes/ai_disclaimer.php';
 
 $auth = new PortalAuth();
 $auth->requireAuth();
@@ -216,6 +217,29 @@ $csrfToken = $auth->generateCSRFToken();
                 grid-template-columns: 1fr;
             }
         }
+        .ai-disclaimer {
+            background: #fff7ed;
+            border: 1px solid #fdba74;
+            border-left: 4px solid #f97316;
+            color: #7c2d12;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            line-height: 1.45;
+        }
+        .ai-disclaimer strong { color: #7c2d12; }
+        .ai-disclaimer--strong {
+            background: #fef2f2;
+            border-color: #fca5a5;
+            border-left-color: #dc2626;
+            color: #7f1d1d;
+        }
+        .ai-disclaimer__hsg {
+            margin-top: 0.4rem;
+            font-size: 0.8rem;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -341,6 +365,7 @@ $csrfToken = $auth->generateCSRFToken();
         <div class="two-column" style="margin-top: 2rem;">
             <div>
                 <h3 class="section-title">AI Suggestions</h3>
+                <?php render_ai_disclaimer(); ?>
                 <?php if (!empty($suggestions)): ?>
                     <?php foreach ($suggestions as $s): ?>
                     <div class="suggestion-card">

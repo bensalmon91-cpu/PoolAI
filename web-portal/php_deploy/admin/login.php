@@ -1,33 +1,50 @@
 <?php
 /**
  * Admin Login Page
+ *
+ * Verifies credentials against admin_users directly so this page does not
+ * depend on a loginAdmin() helper (the production auth.php predates it).
  */
+
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 
 require_once __DIR__ . '/../includes/auth.php';
 
 $error = '';
 
+if (isAdmin()) {
+    header('Location: /admin/');
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    if (empty($username) || empty($password)) {
+    if ($username === '' || $password === '') {
         $error = 'Please enter username and password';
     } else {
-        $result = loginAdmin($username, $password);
-        if ($result['success']) {
-            header('Location: /admin/');
-            exit;
-        } else {
-            $error = $result['error'];
+        try {
+            $pdo = db();
+            $stmt = $pdo->prepare("SELECT id, username, password_hash FROM admin_users WHERE username = ?");
+            $stmt->execute([$username]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($user && password_verify($password, $user['password_hash'])) {
+                startSecureSession();
+                session_regenerate_id(true);
+                $_SESSION['admin_id'] = (int)$user['id'];
+                $_SESSION['admin_username'] = $user['username'];
+                header('Location: /admin/');
+                exit;
+            }
+            $error = 'Invalid username or password';
+        } catch (Throwable $e) {
+            error_log('admin/login.php: ' . $e->getMessage());
+            $error = 'Login error. Please try again.';
         }
     }
-}
-
-// Already logged in?
-if (isAdmin()) {
-    header('Location: /admin/');
-    exit;
 }
 ?>
 <!DOCTYPE html>

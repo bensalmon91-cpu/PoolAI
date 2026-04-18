@@ -24,8 +24,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirmPassword = $_POST['confirm_password'] ?? '';
     $csrf = $_POST['csrf_token'] ?? '';
 
+    $acceptedTos = !empty($_POST['accept_tos']);
+
     if (!$auth->validateCSRFToken($csrf)) {
         $error = 'Invalid request. Please try again.';
+    } elseif (!$acceptedTos) {
+        $error = 'You must accept the Terms and Privacy Policy to create an account.';
     } elseif ($password !== $confirmPassword) {
         $error = 'Passwords do not match.';
     } else {
@@ -37,6 +41,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
 
         if ($result['ok']) {
+            // Record the ToS acceptance. Looked up by email so we don't
+            // have to extend PortalAuth::register(). Failure to record is
+            // non-fatal but logged.
+            try {
+                $pdo = db();
+                $pdo->exec("ALTER TABLE portal_users
+                    ADD COLUMN IF NOT EXISTS tos_accepted_at TIMESTAMP NULL,
+                    ADD COLUMN IF NOT EXISTS tos_accepted_version VARCHAR(32) NULL");
+                $stmt = $pdo->prepare("UPDATE portal_users
+                    SET tos_accepted_at = NOW(), tos_accepted_version = ?
+                    WHERE email = ? AND tos_accepted_at IS NULL");
+                $stmt->execute(['v1-' . date('Y-m-d'), strtolower(trim($formData['email']))]);
+            } catch (Throwable $e) {
+                error_log('register.php tos_accepted_at update failed: ' . $e->getMessage());
+            }
             header('Location: login.php?registered=1');
             exit;
         } else {
@@ -98,6 +117,18 @@ $csrfToken = $auth->generateCSRFToken();
                 <div class="form-group">
                     <label for="confirm_password">Confirm Password *</label>
                     <input type="password" id="confirm_password" name="confirm_password" required>
+                </div>
+
+                <div class="form-group form-check" style="display:flex; gap:0.6rem; align-items:flex-start; margin: 1rem 0;">
+                    <input type="checkbox" id="accept_tos" name="accept_tos" value="1" required
+                           style="margin-top:0.25rem; flex-shrink:0;">
+                    <label for="accept_tos" style="font-size:0.85rem; line-height:1.4;">
+                        I have read and accept the
+                        <a href="/terms.php" target="_blank" rel="noopener">Terms of Service</a>
+                        and
+                        <a href="/privacy.php" target="_blank" rel="noopener">Privacy Policy</a>,
+                        and I understand that AI suggestions are advisory only.
+                    </label>
                 </div>
 
                 <button type="submit" class="btn btn-primary btn-block">Create Account</button>
