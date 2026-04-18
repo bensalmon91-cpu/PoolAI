@@ -71,7 +71,7 @@ CHUNK_MANAGER = Path("/home/poolaissistant/chunk_manager.py")
 VENV_PYTHON = Path("/opt/PoolAIssistant/venv/bin/python")
 
 # Thresholds
-CONTROLLER_OFFLINE_MINUTES = 10  # Controller considered offline after this
+CONTROLLER_OFFLINE_MINUTES = 60  # Controller considered offline after this
 DISK_WARNING_PCT = 80
 MEMORY_WARNING_PCT = 85
 TEMP_WARNING_C = 70
