@@ -220,6 +220,30 @@ $updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
         .alias-saved.show { opacity: 1; }
 
+        .device-link {
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .device-link:hover {
+            color: var(--accent);
+            text-decoration: underline;
+        }
+        .edit-name-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px 6px;
+            font-size: 0.875rem;
+            margin-left: 4px;
+            border-radius: 4px;
+        }
+        .edit-name-btn:hover {
+            background: var(--surface-2);
+            color: var(--text);
+        }
+
         .actions { display: flex; gap: 8px; }
 
         .badge.clickable { cursor: pointer; }
@@ -372,6 +396,9 @@ $updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <?php endif; ?>
                             </td>
                             <td>
+                                <a href="device.php?id=<?= $device['id'] ?>" class="device-link" title="View device details">
+                                    <?= htmlspecialchars($device['name'] ?: 'Device ' . $device['id']) ?>
+                                </a>
                                 <input type="text"
                                        class="editable-alias"
                                        value="<?= htmlspecialchars($device['name'] ?: 'Device ' . $device['id']) ?>"
@@ -379,7 +406,9 @@ $updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                        data-original="<?= htmlspecialchars($device['name'] ?: '') ?>"
                                        placeholder="Enter name..."
                                        onchange="saveAlias(this)"
-                                       onkeydown="if(event.key==='Enter')this.blur()">
+                                       onkeydown="if(event.key==='Enter')this.blur()"
+                                       style="display: none;">
+                                <button class="edit-name-btn" onclick="toggleEditName(<?= $device['id'] ?>)" title="Edit name">&#9998;</button>
                                 <span class="alias-saved" id="saved-<?= $device['id'] ?>">Saved!</span>
                             </td>
                             <td class="mono"><?= htmlspecialchars(substr($device['device_uuid'] ?? '', 0, 8)) ?>...</td>
@@ -570,10 +599,33 @@ $updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return div.innerHTML;
     }
 
+    function toggleEditName(deviceId) {
+        const row = document.querySelector(`tr[data-device-id="${deviceId}"]`);
+        const link = row.querySelector('.device-link');
+        const input = row.querySelector('.editable-alias');
+        const editBtn = row.querySelector('.edit-name-btn');
+
+        if (link.style.display === 'none') {
+            // Switch back to link view
+            link.style.display = '';
+            input.style.display = 'none';
+            editBtn.innerHTML = '&#9998;';
+        } else {
+            // Switch to edit mode
+            link.style.display = 'none';
+            input.style.display = '';
+            input.focus();
+            input.select();
+            editBtn.innerHTML = '&times;';
+        }
+    }
+
     function saveAlias(input) {
         const deviceId = input.dataset.deviceId;
         const alias = input.value.trim();
         const savedEl = document.getElementById('saved-' + deviceId);
+        const row = document.querySelector(`tr[data-device-id="${deviceId}"]`);
+        const link = row.querySelector('.device-link');
 
         fetch('/api/device_alias.php', {
             method: 'POST',
@@ -586,6 +638,10 @@ $updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 savedEl.classList.add('show');
                 setTimeout(() => savedEl.classList.remove('show'), 2000);
                 input.dataset.original = alias;
+                // Update the link text too
+                link.textContent = alias || 'Device ' + deviceId;
+                // Switch back to link view
+                toggleEditName(deviceId);
             } else {
                 alert('Failed to save: ' + (data.error || 'Unknown error'));
                 input.value = input.dataset.original;

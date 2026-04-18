@@ -10,9 +10,8 @@ require_once __DIR__ . '/../includes/auth.php';
 
 header('Content-Type: application/json');
 
-// Require admin login (session-based)
-session_start();
-if (empty($_SESSION['admin_id'])) {
+// Require admin login (uses startSecureSession with correct session name)
+if (!isAdmin()) {
     http_response_code(401);
     echo json_encode(['ok' => false, 'error' => 'Unauthorized']);
     exit;
