@@ -88,14 +88,14 @@ probe \
     "https://poolai.modprojects.co.uk/login.php" \
     200 "PoolAIssistant"
 
-# Enable once _verify.php is deployed (Phase 2.2). Current prod 404s it.
-# probe \
-#     "drift verify endpoint needs auth (401)"    \
-#     POST                                        \
-#     "https://poolaissistant.modprojects.co.uk/api/admin/_verify.php" \
-#     401 ""                                      \
-#     -H "Accept: application/json"               \
-#     -d '{"paths":[]}'
+probe \
+    "drift verify endpoint needs auth (401)"    \
+    POST                                        \
+    "https://poolaissistant.modprojects.co.uk/api/admin/_verify.php" \
+    401 ""                                      \
+    -H "Accept: application/json"               \
+    -H "Content-Type: application/json"         \
+    -d '{"paths":[]}'
 
 rm -f /tmp/body.$$ /tmp/err.$$
 
