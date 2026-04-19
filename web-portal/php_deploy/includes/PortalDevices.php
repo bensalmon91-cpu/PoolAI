@@ -351,6 +351,184 @@ class PortalDevices {
     }
 
     /**
+     * Get latest readings for a device
+     */
+    public function getLatestReadings($deviceId, $pool = null) {
+        if (!$this->hasAccess($deviceId)) {
+            return [];
+        }
+
+        $sql = "
+            SELECT pool, metric, value, unit, ts
+            FROM device_readings_latest
+            WHERE device_id = ?
+        ";
+        $params = [$deviceId];
+
+        if ($pool !== null) {
+            $sql .= " AND pool = ?";
+            $params[] = $pool;
+        }
+
+        $sql .= " ORDER BY pool, metric";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Group by pool
+        $grouped = [];
+        foreach ($rows as $row) {
+            $poolName = $row['pool'] ?: 'Default';
+            if (!isset($grouped[$poolName])) {
+                $grouped[$poolName] = [];
+            }
+            $grouped[$poolName][$row['metric']] = [
+                'value' => $row['value'],
+                'unit' => $row['unit'],
+                'ts' => $row['ts'],
+                'status' => $this->getReadingStatus($row['metric'], $row['value']),
+            ];
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * Get reading status (green/yellow/red) based on thresholds
+     */
+    private function getReadingStatus($metric, $value) {
+        $metric = strtolower($metric);
+        $value = floatval($value);
+
+        // pH thresholds
+        if (strpos($metric, 'ph') !== false) {
+            if ($value >= 7.2 && $value <= 7.6) return 'green';
+            if ($value >= 7.0 && $value <= 7.8) return 'yellow';
+            return 'red';
+        }
+
+        // Chlorine thresholds (mg/L)
+        if (strpos($metric, 'chlorine') !== false || strpos($metric, 'cl') !== false) {
+            if ($value >= 1.0 && $value <= 3.0) return 'green';
+            if ($value >= 0.5 && $value <= 4.0) return 'yellow';
+            return 'red';
+        }
+
+        // ORP thresholds (mV)
+        if (strpos($metric, 'orp') !== false) {
+            if ($value >= 650 && $value <= 750) return 'green';
+            if ($value >= 600 && $value <= 800) return 'yellow';
+            return 'red';
+        }
+
+        // Temperature - always show as OK unless extreme
+        if (strpos($metric, 'temp') !== false) {
+            if ($value >= 20 && $value <= 32) return 'green';
+            if ($value >= 15 && $value <= 38) return 'yellow';
+            return 'red';
+        }
+
+        return 'green';  // Default to green for unknown metrics
+    }
+
+    /**
+     * Get readings history for charts
+     */
+    public function getReadingsHistory($deviceId, $metric = null, $pool = null, $hours = 24) {
+        if (!$this->hasAccess($deviceId)) {
+            return [];
+        }
+
+        $sql = "
+            SELECT pool, metric, value, unit, ts
+            FROM device_readings_history
+            WHERE device_id = ?
+              AND ts > DATE_SUB(NOW(), INTERVAL ? HOUR)
+        ";
+        $params = [$deviceId, $hours];
+
+        if ($metric !== null) {
+            $sql .= " AND metric = ?";
+            $params[] = $metric;
+        }
+
+        if ($pool !== null) {
+            $sql .= " AND pool = ?";
+            $params[] = $pool;
+        }
+
+        $sql .= " ORDER BY ts ASC";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get current alarms for a device
+     */
+    public function getCurrentAlarms($deviceId) {
+        if (!$this->hasAccess($deviceId)) {
+            return [];
+        }
+
+        $stmt = $this->pdo->prepare("
+            SELECT pool, alarm_source, alarm_name, severity, started_at,
+                   acknowledged, acknowledged_by, acknowledged_at
+            FROM device_alarms_current
+            WHERE device_id = ?
+            ORDER BY
+                CASE severity
+                    WHEN 'critical' THEN 1
+                    WHEN 'warning' THEN 2
+                    ELSE 3
+                END,
+                started_at DESC
+        ");
+        $stmt->execute([$deviceId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get controller status for a device
+     */
+    public function getControllerStatus($deviceId) {
+        if (!$this->hasAccess($deviceId)) {
+            return [];
+        }
+
+        $stmt = $this->pdo->prepare("
+            SELECT host, name, is_online, minutes_ago, received_at
+            FROM device_controllers_status
+            WHERE device_id = ?
+            ORDER BY name
+        ");
+        $stmt->execute([$deviceId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get available pools for a device
+     */
+    public function getDevicePools($deviceId) {
+        if (!$this->hasAccess($deviceId)) {
+            return [];
+        }
+
+        $stmt = $this->pdo->prepare("
+            SELECT DISTINCT pool
+            FROM device_readings_latest
+            WHERE device_id = ?
+            ORDER BY pool
+        ");
+        $stmt->execute([$deviceId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        return array_filter($rows, fn($p) => $p !== '');
+    }
+
+    /**
      * Generate a link code for a device (called from Pi)
      * This is a static method called by the device API
      */

@@ -24,8 +24,35 @@ if (!$device) {
 $health = $devicesManager->getDeviceHealth($device['device_id']);
 $suggestions = $devicesManager->getAISuggestions($device['device_id'], 5);
 $responses = $devicesManager->getAIResponses($device['device_id'], 5);
+$readings = $devicesManager->getLatestReadings($device['device_id']);
+$currentAlarms = $devicesManager->getCurrentAlarms($device['device_id']);
+$controllerStatus = $devicesManager->getControllerStatus($device['device_id']);
+$pools = $devicesManager->getDevicePools($device['device_id']);
 
 $csrfToken = $auth->generateCSRFToken();
+
+// Helper function for time ago display
+function timeAgo($datetime) {
+    if (!$datetime) return 'Never';
+    $now = new DateTime();
+    $then = new DateTime($datetime);
+    $diff = $now->diff($then);
+
+    if ($diff->days > 0) return $diff->days . ' day' . ($diff->days > 1 ? 's' : '') . ' ago';
+    if ($diff->h > 0) return $diff->h . ' hour' . ($diff->h > 1 ? 's' : '') . ' ago';
+    if ($diff->i > 0) return $diff->i . ' min' . ($diff->i > 1 ? 's' : '') . ' ago';
+    return 'Just now';
+}
+
+// Get the most recent reading timestamp for "last updated" display
+$lastReadingTs = null;
+foreach ($readings as $poolName => $metrics) {
+    foreach ($metrics as $metric => $data) {
+        if ($data['ts'] && (!$lastReadingTs || $data['ts'] > $lastReadingTs)) {
+            $lastReadingTs = $data['ts'];
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -206,6 +233,148 @@ $csrfToken = $auth->generateCSRFToken();
                 grid-template-columns: 1fr;
             }
         }
+
+        /* Pool Readings Styles */
+        .pool-section {
+            margin-bottom: 2rem;
+        }
+        .pool-section-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .pool-section-title::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--primary-color);
+            border-radius: 50%;
+        }
+        .readings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 1rem;
+        }
+        .reading-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.25rem;
+            box-shadow: var(--shadow-sm);
+            position: relative;
+            overflow: hidden;
+        }
+        .reading-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+        .reading-card.status-green::before {
+            background: #22c55e;
+        }
+        .reading-card.status-yellow::before {
+            background: #f59e0b;
+        }
+        .reading-card.status-red::before {
+            background: #ef4444;
+        }
+        .reading-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+            letter-spacing: 0.5px;
+        }
+        .reading-value {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .reading-value.status-green {
+            color: #22c55e;
+        }
+        .reading-value.status-yellow {
+            color: #f59e0b;
+        }
+        .reading-value.status-red {
+            color: #ef4444;
+        }
+        .reading-unit {
+            font-size: 0.875rem;
+            font-weight: 400;
+            color: var(--text-muted);
+        }
+        .reading-time {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+        .last-updated-banner {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 0.75rem 1rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.875rem;
+        }
+        .last-updated-banner .pulse {
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .alarms-panel {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .alarm-item {
+            padding: 0.75rem;
+            border-left: 3px solid;
+            margin-bottom: 0.5rem;
+            border-radius: 0 4px 4px 0;
+        }
+        .alarm-item.critical {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+        .alarm-item.warning {
+            border-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+        }
+        .alarm-item:last-child {
+            margin-bottom: 0;
+        }
+        .alarm-source {
+            font-weight: 500;
+        }
+        .alarm-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+        .no-data-message {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 2rem;
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+        }
     </style>
 </head>
 <body>
@@ -242,6 +411,99 @@ $csrfToken = $auth->generateCSRFToken();
                 <?= ucfirst(htmlspecialchars($device['status'])) ?>
             </div>
         </div>
+
+        <!-- Pool Readings Section -->
+        <?php if (!empty($readings)): ?>
+        <div class="last-updated-banner">
+            <div style="display: flex; align-items: center;">
+                <div class="pulse"></div>
+                <span>Last updated: <?= $lastReadingTs ? timeAgo($lastReadingTs) : 'Unknown' ?></span>
+            </div>
+            <span style="color: var(--text-muted);">Auto-refresh in 60s</span>
+        </div>
+
+        <?php foreach ($readings as $poolName => $metrics): ?>
+        <div class="pool-section">
+            <?php if (count($readings) > 1): ?>
+            <div class="pool-section-title"><?= htmlspecialchars($poolName) ?></div>
+            <?php else: ?>
+            <h3 class="section-title">Pool Readings</h3>
+            <?php endif; ?>
+
+            <div class="readings-grid">
+                <?php
+                // Define display order and labels
+                $metricDisplay = [
+                    'pH' => ['label' => 'pH', 'icon' => ''],
+                    'Chlorine' => ['label' => 'Chlorine', 'icon' => ''],
+                    'ORP' => ['label' => 'ORP', 'icon' => ''],
+                    'Temperature' => ['label' => 'Temperature', 'icon' => ''],
+                    'Temp' => ['label' => 'Temperature', 'icon' => ''],
+                ];
+
+                // Sort metrics with known ones first
+                $sortedMetrics = [];
+                foreach ($metricDisplay as $key => $info) {
+                    foreach ($metrics as $metricName => $data) {
+                        if (stripos($metricName, $key) !== false) {
+                            $sortedMetrics[$metricName] = $data;
+                        }
+                    }
+                }
+                // Add any remaining metrics
+                foreach ($metrics as $metricName => $data) {
+                    if (!isset($sortedMetrics[$metricName])) {
+                        $sortedMetrics[$metricName] = $data;
+                    }
+                }
+
+                foreach ($sortedMetrics as $metricName => $data):
+                    $status = $data['status'] ?? 'green';
+                    $value = $data['value'] !== null ? number_format(floatval($data['value']), 2) : '--';
+                    $unit = $data['unit'] ?? '';
+                ?>
+                <div class="reading-card status-<?= $status ?>">
+                    <div class="reading-label"><?= htmlspecialchars($metricName) ?></div>
+                    <div class="reading-value status-<?= $status ?>">
+                        <?= $value ?>
+                        <?php if ($unit): ?>
+                        <span class="reading-unit"><?= htmlspecialchars($unit) ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($data['ts']): ?>
+                    <div class="reading-time"><?= timeAgo($data['ts']) ?></div>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endforeach; ?>
+        <?php else: ?>
+        <div class="no-data-message">
+            <p>No pool readings available yet. Data will appear after the device uploads its first snapshot.</p>
+        </div>
+        <?php endif; ?>
+
+        <!-- Active Alarms Section -->
+        <?php if (!empty($currentAlarms)): ?>
+        <h3 class="section-title">Active Alarms (<?= count($currentAlarms) ?>)</h3>
+        <div class="alarms-panel">
+            <?php foreach ($currentAlarms as $alarm): ?>
+            <div class="alarm-item <?= htmlspecialchars($alarm['severity'] ?? 'warning') ?>">
+                <div class="alarm-source"><?= htmlspecialchars($alarm['alarm_name'] ?: $alarm['alarm_source']) ?></div>
+                <div class="alarm-meta">
+                    <?php if ($alarm['pool']): ?>
+                    <?= htmlspecialchars($alarm['pool']) ?> &bull;
+                    <?php endif; ?>
+                    Since <?= date('M j, H:i', strtotime($alarm['started_at'])) ?>
+                    <?php if ($alarm['acknowledged']): ?>
+                    &bull; Acknowledged
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
 
         <?php if ($health): ?>
         <!-- System Health Cards -->
