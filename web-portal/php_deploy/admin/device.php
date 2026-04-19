@@ -979,8 +979,9 @@ try {
 
     function executeConfirmedCommand() {
         if (pendingCommand) {
+            const cmd = pendingCommand;
             closeModal();
-            sendCommand(pendingCommand);
+            sendCommand(cmd);
         }
     }
 
