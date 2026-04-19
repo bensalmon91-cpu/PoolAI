@@ -17,9 +17,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     errorResponse('Method not allowed', 405);
 }
 
-// Require admin authentication
-session_start();
-if (empty($_SESSION['admin_id'])) {
+// Require admin authentication (uses startSecureSession with correct session name)
+if (!isAdmin()) {
     errorResponse('Admin authentication required', 401);
 }
 
