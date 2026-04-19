@@ -39,8 +39,9 @@ if (preg_match('/^update-v[\d.]+\.tar\.gz$/', $file)) {
     exit;
 }
 
-// Path to updates directory (relative to document root)
-$updates_dir = $_SERVER['DOCUMENT_ROOT'] . '/poolaissistant/data/updates/';
+// Path to updates directory, resolved relative to this script so it works
+// regardless of how DOCUMENT_ROOT is configured on the host.
+$updates_dir = realpath(__DIR__ . '/../../data/updates') . '/';
 $filepath = $updates_dir . $file;
 
 // Check if file exists
