@@ -16,8 +16,7 @@ require_once __DIR__ . '/../../includes/AdminClients.php';
 
 header('Content-Type: application/json');
 
-// Require admin auth
-if (!isAdminLoggedIn()) {
+if (!isAdmin()) {
     http_response_code(401);
     echo json_encode(['ok' => false, 'error' => 'Unauthorized']);
     exit;

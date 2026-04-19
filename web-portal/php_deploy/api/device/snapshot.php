@@ -135,10 +135,11 @@ try {
     // STORE ALARMS
     // =========================================================================
 
-    if (!empty($alarms['active']) && is_array($alarms['active'])) {
-        // Clear existing alarms for this device (will be replaced with current state)
-        $pdo->prepare("DELETE FROM device_alarms_current WHERE device_id = ?")->execute([$deviceId]);
+    // Each snapshot is authoritative: wipe prior "current" rows and re-insert
+    // whatever the Pi reports, including the empty case (all alarms cleared).
+    $pdo->prepare("DELETE FROM device_alarms_current WHERE device_id = ?")->execute([$deviceId]);
 
+    if (!empty($alarms['active']) && is_array($alarms['active'])) {
         $stmtAlarm = $pdo->prepare("
             INSERT INTO device_alarms_current
                 (device_id, pool, alarm_source, alarm_name, severity, started_at, received_at)

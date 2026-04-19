@@ -410,7 +410,7 @@ function sortIcon($column, $currentSort, $currentDir) {
         const reason = prompt('Reason for suspending ' + email + ':');
         if (reason === null) return;
 
-        fetch('/api/admin/clients/' + id + '/suspend', {
+        fetch('/api/admin/client_actions.php/' + id + '/suspend', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ reason: reason })
@@ -429,7 +429,7 @@ function sortIcon($column, $currentSort, $currentDir) {
     function activateClient(id) {
         if (!confirm('Activate this account?')) return;
 
-        fetch('/api/admin/clients/' + id + '/activate', {
+        fetch('/api/admin/client_actions.php/' + id + '/activate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         })
