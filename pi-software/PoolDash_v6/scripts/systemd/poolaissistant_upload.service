@@ -1,0 +1,24 @@
+[Unit]
+Description=PoolAIssistant Cloud Upload Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=poolai
+Group=poolai
+WorkingDirectory=/opt/PoolAIssistant/app/scripts
+ExecStart=/usr/bin/python3 /opt/PoolAIssistant/app/scripts/cloud_upload.py
+Environment="POOLAISSISTANT_DATA=/opt/PoolAIssistant/data"
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=poolaissistant_upload
+
+# Resource limits
+MemoryMax=100M
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

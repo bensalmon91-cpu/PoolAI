@@ -1,0 +1,17 @@
+[Unit]
+Description=PoolAIssistant Cloud Upload Timer (6 minute intervals)
+Requires=poolaissistant_upload.service
+
+[Timer]
+# Run every 6 minutes
+OnBootSec=2min
+OnUnitActiveSec=6min
+
+# Add some randomization to spread load across devices
+RandomizedDelaySec=30
+
+# Persistent timer survives reboots
+Persistent=true
+
+[Install]
+WantedBy=timers.target
