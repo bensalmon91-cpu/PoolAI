@@ -21,10 +21,19 @@ probe() {
     shift 5
     local curl_extra=("$@")
 
-    local status body
-    body=$(curl -sS --max-time 20 -o /tmp/body.$$ -w '%{http_code}' \
-        -X "$method" "${curl_extra[@]}" "$url" 2>/tmp/err.$$ || true)
-    status="$body"
+    # Retry on status "000" (curl network-level failure: connection refused,
+    # DNS, TLS, timeout). Runner<->Hostinger has transient blips a few times a
+    # day that otherwise page on every incident. Real site failures produce a
+    # real HTTP code, not 000, so they bypass the retry.
+    local status body attempt=0
+    while (( attempt < 3 )); do
+        body=$(curl -sS --max-time 20 -o /tmp/body.$$ -w '%{http_code}' \
+            -X "$method" "${curl_extra[@]}" "$url" 2>/tmp/err.$$ || true)
+        status="$body"
+        [[ "$status" != "000" ]] && break
+        attempt=$((attempt + 1))
+        sleep 5
+    done
 
     if [[ "$status" != "$expected_code" ]]; then
         echo "FAIL  $name"
