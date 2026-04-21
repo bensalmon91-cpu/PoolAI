@@ -420,13 +420,20 @@ echo
 echo "[13/14] Configuring SSH for remote access after clone..."
 sudo rm -f /etc/ssh/ssh_host_*
 
-# Create robust first-boot SSH setup service
+# Guard service: runs every boot to keep SSH enabled/started. Kept under the
+# original "firstboot" name for continuity with previously-deployed Pis.
+#
+# Why no Before=ssh.service / After=network.target:
+#   - DefaultDependencies=no + After=network.target left this waiting on a
+#     flaky wlan stack for 4h+ on one real incident. sshd binds 0.0.0.0
+#     regardless of interfaces, so it doesn't need network.target.
+#   - Before=ssh.service + `systemctl start ssh` in ExecStart deadlocks when
+#     the unit is manually re-run (systemd queues an ssh restart that waits
+#     for the guard, which is waiting for the start).
+#   - --no-block on the start call prevents that hang even with Before=.
 sudo tee /etc/systemd/system/poolaissistant-ssh-firstboot.service > /dev/null <<'SSHSERVICE'
 [Unit]
-Description=PoolAIssistant SSH First Boot Setup
-After=network.target local-fs.target
-Before=ssh.service sshd.service
-DefaultDependencies=no
+Description=PoolAIssistant SSH Guard (ensure SSH enabled every boot)
 
 [Service]
 Type=oneshot
@@ -437,8 +444,8 @@ ExecStart=/bin/bash -c '\
   fi; \
   /bin/systemctl unmask ssh sshd 2>/dev/null || true; \
   /bin/systemctl enable ssh 2>/dev/null || true; \
-  /bin/systemctl start ssh 2>/dev/null || true; \
-  echo "SSH service started"'
+  /bin/systemctl --no-block start ssh 2>/dev/null || true; \
+  echo "SSH guard: completed"'
 RemainAfterExit=yes
 StandardOutput=journal
 StandardError=journal
