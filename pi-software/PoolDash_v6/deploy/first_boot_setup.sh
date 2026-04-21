@@ -219,12 +219,23 @@ if [ "$DISABLE_DESKTOP" = "yes" ]; then
     echo "OK - Desktop disabled (headless mode)"
 fi
 
-# 7b. Enable SSH
+# 7b. Enable SSH + install guard unit that re-enables it on every boot
 echo "Enabling SSH for remote access..."
 sudo ssh-keygen -A 2>/dev/null || true
 sudo systemctl enable ssh
 sudo systemctl start ssh
-echo "OK - SSH enabled"
+
+GUARD_SRC="/opt/PoolAIssistant/app/scripts/systemd/poolaissistant-ssh-firstboot.service"
+GUARD_DST="/etc/systemd/system/poolaissistant-ssh-firstboot.service"
+if [ -f "$GUARD_SRC" ]; then
+    sudo cp "$GUARD_SRC" "$GUARD_DST"
+    sudo chmod 644 "$GUARD_DST"
+    sudo systemctl daemon-reload
+    sudo systemctl enable poolaissistant-ssh-firstboot.service
+    echo "OK - SSH enabled (guard installed)"
+else
+    echo "OK - SSH enabled (guard source missing; will self-heal on next update)"
+fi
 
 # 7c. Enable auto-update timer
 echo "Enabling automatic update checks..."

@@ -1,0 +1,20 @@
+[Unit]
+Description=PoolAIssistant SSH Guard (ensure SSH enabled every boot)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '\
+  if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then \
+    /usr/bin/ssh-keygen -A; \
+    echo "SSH host keys generated"; \
+  fi; \
+  /bin/systemctl unmask ssh sshd 2>/dev/null || true; \
+  /bin/systemctl enable ssh 2>/dev/null || true; \
+  /bin/systemctl --no-block start ssh 2>/dev/null || true; \
+  echo "SSH guard: completed"'
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

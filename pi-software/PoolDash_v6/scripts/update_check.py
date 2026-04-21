@@ -740,6 +740,39 @@ def apply_update(archive_path):
         except Exception as e:
             print(f"  Warning: Could not install update timer: {e}")
 
+        # Self-heal the SSH guard unit. Older Pis shipped with a unit that had
+        # After=network.target + DefaultDependencies=no, which left SSH unable
+        # to come up for hours when network.target was delayed by a flaky
+        # wlan. Unconditionally overwrite the installed unit every update so
+        # deployed Pis converge on the corrected version and never get
+        # stranded without SSH.
+        print("Refreshing SSH guard unit...")
+        try:
+            guard_src = APP_DIR / "scripts" / "systemd" / "poolaissistant-ssh-firstboot.service"
+            guard_dst = "/etc/systemd/system/poolaissistant-ssh-firstboot.service"
+            if guard_src.exists():
+                subprocess.run(
+                    ["sudo", "cp", str(guard_src), guard_dst],
+                    capture_output=True, text=True, timeout=30
+                )
+                subprocess.run(
+                    ["sudo", "chmod", "644", guard_dst],
+                    capture_output=True, text=True, timeout=10
+                )
+                subprocess.run(
+                    ["sudo", "systemctl", "daemon-reload"],
+                    capture_output=True, text=True, timeout=30
+                )
+                subprocess.run(
+                    ["sudo", "systemctl", "reenable", "poolaissistant-ssh-firstboot.service"],
+                    capture_output=True, text=True, timeout=15
+                )
+                print("  SSH guard unit refreshed")
+            else:
+                print("  Warning: SSH guard source not found in update tarball")
+        except Exception as e:
+            print(f"  Warning: Could not refresh SSH guard unit: {e}")
+
         # Run maintenance logs migration (merge into pool_readings.sqlite3)
         print("Running database migrations...")
         migration_script = APP_DIR / "scripts" / "migrate_maintenance_logs.py"
