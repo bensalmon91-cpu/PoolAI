@@ -1564,7 +1564,11 @@ def poll_bayrol_controller(
             logging.debug("[%s %s] failed to update health: %s", pool_name, host, e)
 
 
-def main_bayrol_loop(con: sqlite3.Connection, db_path: str) -> int:
+def main_bayrol_loop(
+    con: sqlite3.Connection,
+    db_path: str,
+    initial_alarm_states: Optional[Dict[Tuple[str, str], Dict[str, bool]]] = None,
+) -> int:
     """
     Main polling loop for BAYROL profile.
     Uses BayrolPoolManagerModbus reader instead of batch register reads.
@@ -1582,8 +1586,11 @@ def main_bayrol_loop(con: sqlite3.Connection, db_path: str) -> int:
     # Notify systemd that we're ready
     notify_ready()
 
-    # Track alarm states per controller: {(pool, host): {alarm_key: bool}}
-    last_alarm_states: Dict[Tuple[str, str], Dict[str, bool]] = {}
+    # Track alarm states per controller: {(pool, host): {alarm_key: bool}}.
+    # Seeded from open alarm_events so 1->0 transitions fire on first real poll.
+    last_alarm_states: Dict[Tuple[str, str], Dict[str, bool]] = {
+        k: dict(v) for k, v in (initial_alarm_states or {}).items()
+    }
 
     while True:
         loop_start = time.time()
@@ -1631,6 +1638,43 @@ def main_bayrol_loop(con: sqlite3.Connection, db_path: str) -> int:
     # return 0
 
 
+def rehydrate_alarm_state(
+    con: sqlite3.Connection,
+) -> Tuple[Dict[Tuple[str, str, str], int], Dict[Tuple[str, str], Dict[str, bool]]]:
+    # Rebuild in-memory alarm caches from open rows so a first-poll read of a
+    # cleared controller produces a 1->0 transition and closes the row instead
+    # of silently baselining. Without this, an alarm that opens, the logger
+    # restarts, and the condition clears during downtime leaves the row with
+    # ended_ts NULL forever.
+    bitfields: Dict[Tuple[str, str, str], int] = {}
+    bayrol_states: Dict[Tuple[str, str], Dict[str, bool]] = {}
+
+    cur = con.cursor()
+    cur.execute(
+        "SELECT pool, host, source_label, bit_name "
+        "FROM alarm_events "
+        "WHERE ended_ts IS NULL OR ended_ts = ''"
+    )
+    for pool, host, source_label, bit_name in cur.fetchall():
+        if source_label == "BAYROL_Alarm":
+            bayrol_states.setdefault((pool, host), {})[bit_name] = True
+        elif bit_name and bit_name.startswith("b"):
+            try:
+                bit = int(bit_name[1:])
+            except ValueError:
+                continue
+            key = (pool, host, source_label)
+            bitfields[key] = bitfields.get(key, 0) | (1 << bit)
+
+    if bitfields or bayrol_states:
+        logging.info(
+            "Rehydrated open alarms from DB: %d bitfield key(s), %d BAYROL controller(s)",
+            len(bitfields),
+            len(bayrol_states),
+        )
+    return bitfields, bayrol_states
+
+
 def main() -> int:
     global _poll_count
     setup_logging()
@@ -1644,10 +1688,12 @@ def main() -> int:
     logging.info("Connection settings: timeout=%.1fs, retries=%d, ping_check=%s, backoff=%s",
                  MODBUS_TIMEOUT, MODBUS_RETRIES, PING_CHECK_ENABLED, BACKOFF_ENABLED)
 
+    rehydrated_bitfields, rehydrated_bayrol = rehydrate_alarm_state(con)
+
     # BAYROL profile uses a different polling architecture
     if IS_BAYROL_PROFILE:
         logging.info("BAYROL profile detected - using BayrolPoolManagerModbus reader")
-        return main_bayrol_loop(con, db_path)
+        return main_bayrol_loop(con, db_path, rehydrated_bayrol)
 
     meta_points, event_points, numeric_points = build_point_sets()
 
@@ -1664,8 +1710,10 @@ def main() -> int:
     # Notify systemd that we're ready
     notify_ready()
 
-    # Keep last known bit states per (pool, host, source_label) -> int value
-    last_bitfield_value: Dict[Tuple[str, str, str], int] = {}
+    # Keep last known bit states per (pool, host, source_label) -> int value.
+    # Seeded from open alarm_events so any bit already recorded as "on" shows a
+    # 1->0 transition on the first real poll if the controller has cleared it.
+    last_bitfield_value: Dict[Tuple[str, str, str], int] = dict(rehydrated_bitfields)
 
     while True:
         loop_start = time.time()
