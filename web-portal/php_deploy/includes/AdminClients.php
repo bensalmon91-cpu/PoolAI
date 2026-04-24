@@ -64,7 +64,11 @@ class AdminClients {
         $stmt->execute($params);
         $total = $stmt->fetch()['total'];
 
-        // Get clients
+        // Get clients.
+        // $sortBy is already whitelisted above; interpolate directly to avoid
+        // the 1267 collation mismatch that bound params triggered against
+        // portal_users' utf8mb4_general_ci columns.
+        $orderColumn = $sortBy === 'device_count' ? 'device_count' : "u.$sortBy";
         $offset = ($page - 1) * $perPage;
         $sql = "
             SELECT
@@ -89,31 +93,10 @@ class AdminClients {
             LEFT JOIN user_subscriptions s ON s.user_id = u.id
             LEFT JOIN subscription_plans p ON p.id = s.plan_id
             WHERE $whereClause
-            ORDER BY
-                CASE WHEN ? = 'device_count' THEN (SELECT COUNT(*) FROM user_devices ud WHERE ud.user_id = u.id) END $sortDir,
-                CASE WHEN ? != 'device_count' THEN
-                    CASE ?
-                        WHEN 'email' THEN u.email
-                        WHEN 'name' THEN u.name
-                        WHEN 'company' THEN u.company
-                        WHEN 'status' THEN u.status
-                        ELSE NULL
-                    END
-                END $sortDir,
-                CASE WHEN ? IN ('created_at', 'last_login_at') THEN
-                    CASE ?
-                        WHEN 'created_at' THEN u.created_at
-                        WHEN 'last_login_at' THEN u.last_login_at
-                    END
-                END $sortDir
+            ORDER BY $orderColumn $sortDir
             LIMIT ? OFFSET ?
         ";
 
-        $params[] = $sortBy;
-        $params[] = $sortBy;
-        $params[] = $sortBy;
-        $params[] = $sortBy;
-        $params[] = $sortBy;
         $params[] = $perPage;
         $params[] = $offset;
 

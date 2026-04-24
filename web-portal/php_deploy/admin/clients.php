@@ -20,21 +20,34 @@ $page = max(1, intval($_GET['page'] ?? 1));
 $sortBy = $_GET['sort'] ?? 'created_at';
 $sortDir = $_GET['dir'] ?? 'DESC';
 
-// Get clients
-$result = $adminClients->listClients([
-    'search' => $search,
-    'status' => $status,
-    'page' => $page,
-    'sort_by' => $sortBy,
-    'sort_dir' => $sortDir,
-]);
+// Temporary diagnostic: ?debug=1 surfaces PDO/schema errors as plain text
+// instead of the generic 500 page. Safe to leave in; guarded by admin auth above.
+try {
+    $result = $adminClients->listClients([
+        'search' => $search,
+        'status' => $status,
+        'page' => $page,
+        'sort_by' => $sortBy,
+        'sort_dir' => $sortDir,
+    ]);
+    $stats = $adminClients->getStats();
+} catch (Throwable $e) {
+    if (isset($_GET['debug'])) {
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "clients.php failed\n";
+        echo "===================\n\n";
+        echo "Exception: " . get_class($e) . "\n";
+        echo "Message:   " . $e->getMessage() . "\n";
+        echo "File:      " . $e->getFile() . ":" . $e->getLine() . "\n\n";
+        echo "Trace:\n" . $e->getTraceAsString() . "\n";
+        exit;
+    }
+    throw $e;
+}
 
 $clients = $result['clients'];
 $total = $result['total'];
 $totalPages = $result['total_pages'];
-
-// Get stats
-$stats = $adminClients->getStats();
 
 // Helper for sort links
 function sortLink($column, $currentSort, $currentDir) {

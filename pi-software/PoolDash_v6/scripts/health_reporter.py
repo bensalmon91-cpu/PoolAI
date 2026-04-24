@@ -14,6 +14,7 @@ Run via cron every 15 minutes:
 """
 
 import os
+import re
 import sys
 import json
 import subprocess
@@ -22,6 +23,9 @@ import sqlite3
 import requests
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+# /usr/sbin is not in the poolai user's PATH, so reference iw by absolute path.
+IW = '/usr/sbin/iw'
 
 # AI Assistant integration - optional
 AI_SYNC_AVAILABLE = False
@@ -235,6 +239,92 @@ def get_ip_address():
         return ip
     except:
         return None
+
+
+def _run_stdout(cmd, timeout=5):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return r.stdout if r.returncode == 0 else ''
+    except Exception:
+        return ''
+
+
+def collect_network_health():
+    """
+    Snapshot of network connectivity for the heartbeat payload.
+
+    Dual-path aware: reports wifi + ethernet independently plus which one
+    carries the default route. 24h stability is pulled from wpa_supplicant's
+    journal (requires NOPASSWD sudo for journalctl).
+    """
+    data = {
+        'primary_interface': None,
+        'wifi_connected': False,
+        'ethernet_connected': False,
+        'wifi_ssid': None,
+        'wifi_rssi_dbm': None,
+        'wifi_freq_mhz': None,
+        'regdom_current': None,
+        'regdom_conflict_24h': False,
+        'wifi_disconnects_24h': 0,
+    }
+
+    # Default route → which interface carries production traffic.
+    out = _run_stdout(['ip', '-o', 'route', 'show', 'default'], timeout=3)
+    m = re.search(r'\bdev\s+(\S+)', out)
+    if m:
+        data['primary_interface'] = m.group(1)
+
+    # Interface states via NetworkManager.
+    out = _run_stdout(['nmcli', '-t', '-f', 'DEVICE,TYPE,STATE', 'dev', 'status'], timeout=3)
+    for line in out.splitlines():
+        parts = line.split(':')
+        if len(parts) < 3:
+            continue
+        dev, iface_type, state = parts[0], parts[1], parts[2]
+        if iface_type == 'wifi' and state == 'connected':
+            data['wifi_connected'] = True
+        elif iface_type == 'ethernet' and state == 'connected':
+            data['ethernet_connected'] = True
+
+    # WiFi link details — only if wifi is up.
+    if data['wifi_connected']:
+        out = _run_stdout([IW, 'dev', 'wlan0', 'link'], timeout=3)
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith('SSID:'):
+                data['wifi_ssid'] = line.split(':', 1)[1].strip()
+            elif line.startswith('freq:'):
+                try:
+                    data['wifi_freq_mhz'] = int(float(line.split(':', 1)[1].strip()))
+                except ValueError:
+                    pass
+            elif line.startswith('signal:'):
+                try:
+                    data['wifi_rssi_dbm'] = int(line.split()[1])
+                except (IndexError, ValueError):
+                    pass
+
+    # Current regulatory domain.
+    out = _run_stdout([IW, 'reg', 'get'], timeout=3)
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith('country '):
+            data['regdom_current'] = line.split()[1].rstrip(':')
+            break
+
+    # 24h stability — count disconnects and detect regdom intersection events.
+    # journalctl needs sudo for poolai user; NOPASSWD is configured.
+    out = _run_stdout(
+        ['sudo', '-n', 'journalctl', '-u', 'wpa_supplicant',
+         '--since', '24 hours ago', '--no-pager', '-q'],
+        timeout=15
+    )
+    if out:
+        data['wifi_disconnects_24h'] = out.count('CTRL-EVENT-DISCONNECTED')
+        data['regdom_conflict_24h'] = 'INTERSECTION' in out
+
+    return data
 
 
 def get_software_version():
@@ -682,6 +772,9 @@ def main():
         # Snapshot of admin-editable settings so the admin panel can show
         # live state and detect drift from pushed values.
         'settings_snapshot': {k: settings.get(k) for k in REMOTE_SETTABLE_KEYS if k in settings},
+        # Connectivity snapshot — primary iface, wifi link details, regdom state,
+        # 24h disconnect count. Lets the admin panel surface flaky installs.
+        'network': collect_network_health(),
         # Timestamp
         'reported_at': datetime.now().isoformat(),
     }
@@ -705,6 +798,13 @@ def main():
     log(f"Controllers: {online_count} online, {offline_count} offline")
     log(f"Alarms: {alarms.get('total', 0)} total ({alarms.get('critical', 0)} critical)")
     log(f"Uploads: pending={health_data['pending_chunks']}, failed={health_data['failed_uploads']}")
+    net = health_data.get('network') or {}
+    log(
+        f"Network: primary={net.get('primary_interface')} wifi={net.get('wifi_ssid')}"
+        f"@{net.get('wifi_rssi_dbm')}dBm regdom={net.get('regdom_current')}"
+        f" disconnects_24h={net.get('wifi_disconnects_24h')}"
+        f" regdom_conflict={net.get('regdom_conflict_24h')}"
+    )
 
     if issues:
         log(f"ISSUES DETECTED ({len(issues)}):")

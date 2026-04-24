@@ -91,6 +91,19 @@ try {
         !empty($input['has_issues']) ? 1 : 0,
     ]);
 
+    // Network health (v6.12+). Stored on the row we just inserted.
+    // Tolerates hosts where device_health.network_json hasn't been added.
+    if (!empty($input['network']) && is_array($input['network'])) {
+        try {
+            $healthId = (int)$pdo->lastInsertId();
+            $net = json_encode($input['network']);
+            $pdo->prepare("UPDATE device_health SET network_json = ? WHERE id = ?")
+                ->execute([$net, $healthId]);
+        } catch (PDOException $e) {
+            // network_json column doesn't exist yet - silently skip until migration runs.
+        }
+    }
+
     // Update device last_seen, and settings snapshot if the Pi sent one.
     // Silently tolerates hosts where the schema migration hasn't run yet.
     if (!empty($input['settings_snapshot']) && is_array($input['settings_snapshot'])) {

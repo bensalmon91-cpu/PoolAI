@@ -43,6 +43,10 @@ UPLOAD_STATE_PATH = DATA_DIR / "cloud_upload_state.json"
 
 DEFAULT_INTERVAL_MINUTES = 6
 REQUEST_TIMEOUT = 30
+# Max readings to send per upload tick. Bounds payload size and catch-up time
+# after a network outage. At 4 controllers polling ~10 metrics/min each,
+# steady state is ~240 rows per 6-min tick — 5000 gives ~2hr of backlog headroom.
+READINGS_BATCH_LIMIT = 5000
 
 
 # =============================================================================
@@ -176,44 +180,69 @@ def collect_health_data() -> Dict[str, Any]:
 # DATABASE QUERIES
 # =============================================================================
 
-def get_latest_readings(db_path: Path, minutes: int = 10) -> List[Dict]:
+def load_upload_state() -> Dict[str, Any]:
+    """Load cursor + stats for cloud uploads. Missing file => empty dict."""
+    return load_json(UPLOAD_STATE_PATH)
+
+
+def save_upload_state(state: Dict[str, Any]) -> None:
+    """Persist cursor + stats. Separate from pooldash_settings.json so
+    operational state doesn't bloat user-facing config."""
+    save_json(UPLOAD_STATE_PATH, state)
+
+
+def get_max_readings_rowid(db_path: Path) -> int:
+    """Return the current MAX(rowid) in readings, or 0 if table is empty / missing."""
+    if not db_path.exists():
+        return 0
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=10)
+        row = conn.execute("SELECT MAX(rowid) FROM readings").fetchone()
+        conn.close()
+        return int(row[0] or 0)
+    except Exception as e:
+        print(f"Error reading MAX(rowid): {e}")
+        return 0
+
+
+def get_readings_since_cursor(
+    db_path: Path, cursor_rowid: int, limit: int = READINGS_BATCH_LIMIT
+) -> tuple[List[Dict], int]:
     """
-    Get the latest reading for each pool/metric combination from the last N minutes.
+    Return (readings, max_rowid_sent) for rows with rowid > cursor_rowid,
+    ordered oldest-first, bounded by `limit`.
+
+    Using rowid (monotonic, unique) rather than ts (can collide across
+    controllers polled at the same second) avoids skip/dupe at boundaries.
     """
     if not db_path.exists():
-        return []
+        return [], cursor_rowid
 
-    readings = []
+    readings: List[Dict] = []
+    max_rowid_sent = cursor_rowid
     try:
         conn = sqlite3.connect(str(db_path), timeout=10)
         conn.row_factory = sqlite3.Row
-
-        # Get readings from the last N minutes, taking the most recent per pool/metric
-        cutoff = (utc_now() - timedelta(minutes=minutes)).isoformat()
         query = """
-            SELECT pool, point_label as metric, value, ts,
-                   ROW_NUMBER() OVER (PARTITION BY pool, point_label ORDER BY ts DESC) as rn
+            SELECT rowid, pool, point_label AS metric, value, ts
             FROM readings
-            WHERE ts > ?
+            WHERE rowid > ?
+            ORDER BY rowid ASC
+            LIMIT ?
         """
-        cursor = conn.execute(query, (cutoff,))
-        rows = cursor.fetchall()
-
-        # Filter to only the most recent per pool/metric
-        for row in rows:
-            if row["rn"] == 1:
-                readings.append({
-                    "pool": row["pool"] or "",
-                    "metric": row["metric"],
-                    "value": row["value"],
-                    "ts": row["ts"],
-                })
-
+        for row in conn.execute(query, (cursor_rowid, limit)):
+            readings.append({
+                "pool": row["pool"] or "",
+                "metric": row["metric"],
+                "value": row["value"],
+                "ts": row["ts"],
+            })
+            max_rowid_sent = row["rowid"]
         conn.close()
     except Exception as e:
-        print(f"Error reading database: {e}")
+        print(f"Error fetching readings batch: {e}")
 
-    return readings
+    return readings, max_rowid_sent
 
 
 def get_active_alarms(db_path: Path) -> Dict[str, Any]:
@@ -332,12 +361,17 @@ def get_controller_status(db_path: Path) -> List[Dict]:
 # SNAPSHOT BUILDING
 # =============================================================================
 
-def build_snapshot() -> Dict[str, Any]:
-    """Build the complete snapshot payload to upload."""
+def build_snapshot(cursor_rowid: int) -> tuple[Dict[str, Any], int]:
+    """
+    Build the snapshot payload for upload. Readings come from rowid > cursor
+    (so offline time doesn't drop data); alarms/controllers/health are
+    point-in-time. Returns (snapshot, max_rowid_sent) — caller advances the
+    cursor only after the server acks a successful store.
+    """
     settings = load_json(SETTINGS_PATH)
     device_id = settings.get("device_id", "")
 
-    readings = get_latest_readings(DB_PATH)
+    readings, max_rowid_sent = get_readings_since_cursor(DB_PATH, cursor_rowid)
     health = collect_health_data()
     controllers = get_controller_status(DB_PATH)
     alarms = get_active_alarms(DB_PATH)
@@ -346,7 +380,7 @@ def build_snapshot() -> Dict[str, Any]:
     controllers_online = sum(1 for c in controllers if c.get("online"))
     controllers_offline = len(controllers) - controllers_online
 
-    return {
+    snapshot = {
         "device_id": device_id,
         "timestamp": utc_now_iso(),
         "readings": readings,
@@ -358,6 +392,7 @@ def build_snapshot() -> Dict[str, Any]:
         "controllers": controllers,
         "alarms": alarms,
     }
+    return snapshot, max_rowid_sent
 
 
 # =============================================================================
@@ -422,13 +457,24 @@ def main() -> int:
         print("Skipping upload - not enough time elapsed or uploads disabled")
         return 0
 
-    # Load device token
-    token_data = load_json(TOKEN_PATH)
-    api_key = token_data.get("token", "")
-    backend_url = token_data.get("backend", "") or get_setting("backend_url", "")
+    # Load device auth from pooldash_settings.json. The old design used a
+    # separate device_token.json, but provisioning writes api_key +
+    # backend_url straight into settings (matches health_reporter.py). Fall
+    # back to device_token.json for Pi images that used the older path.
+    settings = load_json(SETTINGS_PATH)
+    api_key = (
+        settings.get("api_key")
+        or settings.get("remote_api_key")
+        or load_json(TOKEN_PATH).get("token", "")
+    )
+    backend_url = (
+        settings.get("backend_url")
+        or settings.get("remote_sync_url")
+        or load_json(TOKEN_PATH).get("backend", "")
+    )
 
     if not api_key:
-        print("ERROR: Device not provisioned (no API token)")
+        print("ERROR: Device not provisioned (no API key in settings)")
         update_settings({
             "cloud_upload_last_status": "error",
             "cloud_upload_last_error": "Device not provisioned",
@@ -443,11 +489,26 @@ def main() -> int:
         })
         return 1
 
+    # Load cursor. First-run bootstrap: if there's no cursor yet, jump to
+    # current MAX(rowid) so we don't flood the server with the 2.7M-row
+    # backlog. Historical backfill is out of scope; new data streams from
+    # here forward.
+    upload_state = load_upload_state()
+    cursor_rowid = int(upload_state.get("readings_cursor_rowid", 0))
+    first_run = "readings_cursor_rowid" not in upload_state
+    if first_run:
+        cursor_rowid = get_max_readings_rowid(DB_PATH)
+        upload_state["readings_cursor_rowid"] = cursor_rowid
+        upload_state["bootstrapped_at"] = utc_now_iso()
+        save_upload_state(upload_state)
+        print(f"First run: cursor bootstrapped to rowid={cursor_rowid} (no backfill)")
+
     # Build snapshot
     try:
-        snapshot = build_snapshot()
+        snapshot, max_rowid_sent = build_snapshot(cursor_rowid)
         readings_count = len(snapshot.get("readings", []))
-        print(f"Built snapshot with {readings_count} readings")
+        print(f"Built snapshot with {readings_count} readings "
+              f"(cursor {cursor_rowid} -> {max_rowid_sent})")
     except Exception as e:
         print(f"ERROR: Failed to build snapshot: {e}")
         update_settings({
@@ -456,10 +517,20 @@ def main() -> int:
         })
         return 1
 
-    # Upload
+    # Upload. Advance cursor ONLY on successful response — failed uploads
+    # retry from the same cursor next tick so no data is lost.
     try:
         result = upload_snapshot(backend_url, api_key, snapshot)
         print(f"Upload successful: {result}")
+
+        if max_rowid_sent > cursor_rowid:
+            upload_state["readings_cursor_rowid"] = max_rowid_sent
+            upload_state["readings_uploaded_total"] = int(
+                upload_state.get("readings_uploaded_total", 0)
+            ) + readings_count
+            upload_state["last_upload_at"] = utc_now_iso()
+            save_upload_state(upload_state)
+
         update_settings({
             "cloud_upload_last_ts": utc_now_iso(),
             "cloud_upload_last_status": "ok",

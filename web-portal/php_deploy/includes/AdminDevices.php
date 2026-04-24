@@ -112,6 +112,26 @@ class AdminDevices {
             if ($device['api_key']) {
                 $device['api_key_masked'] = substr($device['api_key'], 0, 8) . '...' . substr($device['api_key'], -4);
             }
+
+            // Network health (v6.12+). Returns tri-state so the admin panel can
+            // distinguish "column missing" from "column exists but no data yet"
+            // from "data present." Ensures the Network card always renders with
+            // an explanation of what the Pi has reported.
+            $device['network'] = null;
+            $device['network_status'] = 'no_data';   // 'no_data' | 'schema_missing' | 'ok'
+            if (!empty($device['health_id'])) {
+                try {
+                    $netStmt = $this->pdo->prepare("SELECT network_json FROM device_health WHERE id = ?");
+                    $netStmt->execute([$device['health_id']]);
+                    $row = $netStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($row && !empty($row['network_json'])) {
+                        $device['network'] = json_decode($row['network_json'], true);
+                        $device['network_status'] = 'ok';
+                    }
+                } catch (PDOException $e) {
+                    $device['network_status'] = 'schema_missing';
+                }
+            }
         }
 
         return $device;

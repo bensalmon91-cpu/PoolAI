@@ -578,6 +578,91 @@ try {
                     </div>
                 </div>
 
+                <!-- Network Health Card (v6.12+). Always renders so users can see status. -->
+                <div class="card section">
+                    <div class="card-header">
+                        <h2>Network</h2>
+                        <?php if (!empty($device['network']) && !empty($device['network']['regdom_conflict_24h'])): ?>
+                        <span class="badge danger" title="Pi regdom and AP country beacon disagree — causes disconnects.">Regdom conflict</span>
+                        <?php elseif (!empty($device['network']) && ($device['network']['wifi_disconnects_24h'] ?? 0) > 20): ?>
+                        <span class="badge warning" title="&gt;20 disconnect events in the last 24h.">Flappy</span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="card-body">
+                        <?php if (($device['network_status'] ?? 'no_data') === 'schema_missing'): ?>
+                            <p class="text-muted">
+                                <strong>Schema migration not run.</strong>
+                                Visit <code>/admin/_run_migration_network.php</code> once to add the
+                                <code>device_health.network_json</code> column, then wait for the next
+                                Pi heartbeat (~15 min).
+                            </p>
+                        <?php elseif (empty($device['network'])): ?>
+                            <p class="text-muted">
+                                <strong>No network data yet.</strong>
+                                The Pi hasn't sent a heartbeat with network fields since the migration
+                                ran. Heartbeat timer fires every 15 min; data will appear automatically.
+                                Software version on this Pi: <?= htmlspecialchars($device['software_version'] ?? '-') ?>
+                                (needs v6.11.1+ for network reporting).
+                            </p>
+                        <?php else: $net = $device['network']; ?>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="label">Primary link</div>
+                                <div class="value"><?= htmlspecialchars($net['primary_interface'] ?? '-') ?></div>
+                                <div class="text-sm text-muted">
+                                    wifi: <?= !empty($net['wifi_connected']) ? 'up' : 'down' ?>
+                                    &middot; eth: <?= !empty($net['ethernet_connected']) ? 'up' : 'down' ?>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="label">WiFi SSID</div>
+                                <div class="value"><?= htmlspecialchars($net['wifi_ssid'] ?? '-') ?></div>
+                                <?php if (($net['wifi_freq_mhz'] ?? null) !== null): ?>
+                                <div class="text-sm text-muted">
+                                    <?= $net['wifi_freq_mhz'] > 5000 ? '5 GHz' : '2.4 GHz' ?>
+                                    (<?= intval($net['wifi_freq_mhz']) ?> MHz)
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="info-item">
+                                <div class="label">WiFi signal</div>
+                                <?php $rssi = $net['wifi_rssi_dbm'] ?? null; ?>
+                                <div class="value large">
+                                    <?php if ($rssi !== null): ?>
+                                        <span style="color: <?= $rssi > -60 ? 'var(--success)' : ($rssi > -72 ? 'var(--warning)' : 'var(--danger)') ?>">
+                                            <?= intval($rssi) ?> dBm
+                                        </span>
+                                    <?php else: ?>-<?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="label">Regdom (current)</div>
+                                <div class="value large"><?= htmlspecialchars($net['regdom_current'] ?? '-') ?></div>
+                            </div>
+                            <div class="info-item">
+                                <div class="label">Disconnects (24h)</div>
+                                <div class="value large">
+                                    <?php $dc = $net['wifi_disconnects_24h'] ?? 0; ?>
+                                    <span style="color: <?= $dc < 5 ? 'var(--success)' : ($dc < 20 ? 'var(--warning)' : 'var(--danger)') ?>">
+                                        <?= intval($dc) ?>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="label">Regdom conflict (24h)</div>
+                                <div class="value">
+                                    <?php if (!empty($net['regdom_conflict_24h'])): ?>
+                                    <span style="color: var(--danger)">Yes &mdash; router advertises a country the Pi doesn't match.</span>
+                                    <?php else: ?>
+                                    <span style="color: var(--success)">No</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
                 <!-- Controllers Grid -->
                 <?php if (!empty($controllers) || !empty($device['controllers'])): ?>
                 <div class="card section">
