@@ -1,0 +1,25 @@
+# Default: let git decide line endings for text files
+* text=auto
+
+# Shell, Python, and systemd unit files MUST be LF on disk.
+# Bash silently breaks if a script has CRLF (it reads `pipefail\r` as the
+# option name and exits on line 2 — see project_installer_improvements.md
+# item 1 for the full story). Forcing LF here protects every contributor
+# regardless of their git autocrlf setting or editor.
+*.sh        text eol=lf
+*.py        text eol=lf
+*.service   text eol=lf
+*.timer     text eol=lf
+*.conf      text eol=lf
+
+# JSON and SQL we want LF for too — server-side scripts run on Linux.
+*.json      text eol=lf
+*.sql       text eol=lf
+
+# PHP runs on the (Linux) Hostinger host
+*.php       text eol=lf
+
+# Templates (Jinja, HTML) — keep LF so checked-out copies match production
+*.html      text eol=lf
+*.css       text eol=lf
+*.js        text eol=lf

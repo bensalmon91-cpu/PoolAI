@@ -23,8 +23,18 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 if ! grep -q '^POOLS_JSON=' "$ENV_FILE"; then
-  echo "POOLS_JSON is not set."
-  read -r -p "Configure pools now? (y/N): " do_setup
+  # Post-install now defaults to using the web UI's pooldash_settings.json
+  # as the source of truth for controllers (the logger reads it when
+  # POOLS_JSON is unset). We only offer the interactive env-var seeder if
+  # we actually have a TTY and a human to type answers. On automated
+  # deploys (cloud install, update_check.py, CI) we just skip silently.
+  if [ ! -t 0 ]; then
+    echo "POOLS_JSON is not set (non-interactive install; configure via web UI later)."
+    echo "Post-install complete."
+    exit 0
+  fi
+  echo "POOLS_JSON is not set (the web UI's Controllers panel is the usual path)."
+  read -r -p "Configure pools via prompt instead? (y/N): " do_setup
   if [[ "$do_setup" =~ ^[Yy]$ ]]; then
     read -r -p "How many pools? " pool_count
     if [[ ! "$pool_count" =~ ^[0-9]+$ ]] || [ "$pool_count" -le 0 ]; then

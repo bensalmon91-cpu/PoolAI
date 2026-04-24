@@ -10,9 +10,15 @@ APP_DIR="/opt/PoolAIssistant/app"
 
 echo "Installing PoolAIssistant Boot Check..."
 
-# Copy boot_check.sh to app directory
-sudo cp "$SCRIPT_DIR/boot_check.sh" "$APP_DIR/scripts/"
-sudo chmod +x "$APP_DIR/scripts/boot_check.sh"
+# Copy boot_check.sh into the app dir, unless it's already there.
+# The installer is usually run from within $APP_DIR/scripts/, so src == dst
+# and cp fails with "are the same file". Guard against it.
+BOOT_CHECK_SRC="$SCRIPT_DIR/boot_check.sh"
+BOOT_CHECK_DST="$APP_DIR/scripts/boot_check.sh"
+if [ "$(readlink -f "$BOOT_CHECK_SRC")" != "$(readlink -f "$BOOT_CHECK_DST")" ]; then
+    sudo cp "$BOOT_CHECK_SRC" "$BOOT_CHECK_DST"
+fi
+sudo chmod +x "$BOOT_CHECK_DST"
 
 # Install systemd service
 sudo cp "$SCRIPT_DIR/systemd/poolaissistant_boot_check.service" /etc/systemd/system/

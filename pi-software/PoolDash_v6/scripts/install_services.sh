@@ -196,6 +196,20 @@ if [ -f "/opt/PoolAIssistant/data/pool_readings.sqlite3" ]; then
     python3 "$SCRIPT_DIR/db_optimize.py" || true
 fi
 
+# Auto-start the core services so the install is "done done" — previously
+# they were only enabled, so SSH-based installers would finish with a Pi
+# that wasn't actually serving the UI until the next reboot.
+echo "Starting core services..."
+systemctl start poolaissistant_ports.service 2>/dev/null || true
+systemctl start poolaissistant_ui.service 2>/dev/null || true
+# Give the Flask UI a moment to come up, then probe it
+sleep 3
+if systemctl is-active --quiet poolaissistant_ui.service; then
+    echo "  -> poolaissistant_ui: running on http://$(hostname -I | awk '{print $1}'):80/"
+else
+    echo "  WARNING: poolaissistant_ui failed to start. Check: journalctl -u poolaissistant_ui"
+fi
+
 echo
 echo "=== Installation Complete ==="
 echo

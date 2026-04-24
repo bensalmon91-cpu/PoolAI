@@ -112,11 +112,25 @@ setup_scripts() {
     log "Scripts configured."
 }
 
+# Create the poolai service user if it doesn't exist. Belt-and-braces:
+# setup_pi.sh already creates it, but this lets ensure_dependencies.sh run
+# standalone against a fresh Pi without depending on setup_pi.sh first.
+ensure_poolai_user() {
+    if id poolai >/dev/null 2>&1; then
+        return 0
+    fi
+    log "Creating poolai service user..."
+    useradd -m -s /bin/bash -G sudo,dialout,gpio,i2c,spi poolai
+    echo 'poolai:12345678' | chpasswd
+    loginctl enable-linger poolai 2>/dev/null || true
+    log "poolai user created."
+}
+
 # Configure sudoers for poolai user
 setup_sudoers() {
     local sudoers_file="/etc/sudoers.d/poolaissistant"
 
-    # Only create if poolai user exists
+    # At this point ensure_poolai_user() has already created the user.
     if ! id poolai >/dev/null 2>&1; then
         log "User 'poolai' not found, skipping sudoers setup"
         return 0
@@ -195,6 +209,7 @@ fi
 
 ensure_directories
 install_missing
+ensure_poolai_user
 setup_scripts
 setup_sudoers
 setup_services
