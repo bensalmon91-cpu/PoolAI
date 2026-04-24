@@ -41,7 +41,8 @@
       "Bash(\"/c/Program Files/nodejs/npm.cmd\" audit)",
       "Bash(\"/c/Program Files/nodejs/npm.cmd\" install nodemailer@latest)",
       "Bash(\"/c/Program Files/nodejs/npm.cmd\" install multer@latest supertest@latest)",
-      "Bash(\"/c/Program Files/nodejs/node.exe\" \"./node_modules/jest/bin/jest.js\" --testPathPattern=\"routes\")"
+      "Bash(\"/c/Program Files/nodejs/node.exe\" \"./node_modules/jest/bin/jest.js\" --testPathPattern=\"routes\")",
+      "PowerShell(Test-NetConnection *)"
     ]
   }
 }

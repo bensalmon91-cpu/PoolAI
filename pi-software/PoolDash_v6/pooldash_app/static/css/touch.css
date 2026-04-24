@@ -2321,3 +2321,101 @@ footer.card {
   border-radius: var(--radius-md);
   padding: var(--space-3);
 }
+
+/* ===== Settings page tab bar ===== */
+.settings-tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3) 0;
+  padding: 4px;
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-md);
+}
+.settings-tab {
+  flex: 1 1 0;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-2);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.settings-tab:hover {
+  background: var(--color-bg);
+}
+.settings-tab[aria-selected="true"] {
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+
+/* ===== Connectivity summary card ===== */
+.connectivity-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.connectivity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-md);
+}
+.connectivity-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  width: 2rem;
+  text-align: center;
+}
+.connectivity-info {
+  flex: 1;
+  min-width: 0;
+}
+.connectivity-label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+}
+.connectivity-detail {
+  font-size: var(--text-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.connectivity-badge {
+  font-size: var(--text-lg);
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.connectivity-badge.ok {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+.connectivity-footer {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.ap-toggle-form {
+  margin: 0;
+  flex-shrink: 0;
+}
+.text-muted {
+  color: var(--color-text-muted);
+}

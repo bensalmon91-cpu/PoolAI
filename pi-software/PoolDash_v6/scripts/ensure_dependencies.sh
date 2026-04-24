@@ -94,6 +94,7 @@ setup_scripts() {
         "update_ethernet.sh"
         "network_reset.sh"
         "poolaissistant_ap_manager.sh"
+        "ap_control.sh"
     )
 
     for script in "${scripts[@]}"; do
@@ -126,6 +127,7 @@ setup_sudoers() {
 poolai ALL=(ALL) NOPASSWD: /usr/local/bin/update_wifi.sh
 poolai ALL=(ALL) NOPASSWD: /usr/local/bin/update_ethernet.sh
 poolai ALL=(ALL) NOPASSWD: /usr/local/bin/network_reset.sh
+poolai ALL=(ALL) NOPASSWD: /usr/local/bin/ap_control.sh
 poolai ALL=(ALL) NOPASSWD: /sbin/reboot
 poolai ALL=(ALL) NOPASSWD: /bin/systemctl restart poolaissistant_*
 poolai ALL=(ALL) NOPASSWD: /bin/systemctl start poolaissistant_*

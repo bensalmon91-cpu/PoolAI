@@ -139,11 +139,6 @@ done
 # Prefer NetworkManager if present
 if command -v nmcli >/dev/null 2>&1; then
   IFACE="wlan0"
-  CONN_DIR="/etc/NetworkManager/system-connections"
-
-  # Use UUID-based filename to avoid collision issues with special SSID characters
-  CONN_UUID="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "$(date +%s)-$$-wifi")"
-  CONN_FILE="${CONN_DIR}/${CONN_UUID}.nmconnection"
 
   # Ensure WiFi radio is on
   nmcli radio wifi on 2>/dev/null || true
@@ -157,16 +152,20 @@ if command -v nmcli >/dev/null 2>&1; then
   nmcli device disconnect "$IFACE" 2>/dev/null || true
   sleep 1
 
-  # Delete any existing connections with this SSID to start fresh
-  # Use string comparison instead of regex to avoid injection
-  for existing in $(nmcli -t -f NAME,TYPE con show | grep ":wifi$" | cut -d: -f1); do
-    # Check if this connection is for our SSID
-    existing_ssid="$(nmcli -t -f 802-11-wireless.ssid con show "$existing" 2>/dev/null | cut -d: -f2 || true)"
+  # Remove ALL existing WiFi profiles for this SSID (including legacy
+  # UUID-named duplicates). Iterate every connection and filter by type
+  # via the SSID probe: non-wifi profiles return empty from the ssid
+  # field, so the comparison fails harmlessly. This replaces the old
+  # grep ':wifi$' filter, which never matched because the real type
+  # string is '802-11-wireless'.
+  while IFS=: read -r conn_name; do
+    [[ -z "$conn_name" ]] && continue
+    existing_ssid="$(nmcli -t -f 802-11-wireless.ssid con show "$conn_name" 2>/dev/null | cut -d: -f2 || true)"
     if [[ "$existing_ssid" == "$SSID" ]]; then
-      echo "Deleting existing connection: $existing"
-      nmcli con delete "$existing" 2>/dev/null || true
+      echo "Removing existing profile for SSID '$SSID': $conn_name"
+      nmcli con delete "$conn_name" 2>/dev/null || true
     fi
-  done
+  done < <(nmcli -t -f NAME con show)
 
   # Also delete netplan-generated connections that might conflict
   for conn in $(nmcli -t -f NAME con show | grep "^netplan-wlan0" || true); do
@@ -178,96 +177,41 @@ if command -v nmcli >/dev/null 2>&1; then
   nmcli device wifi rescan 2>/dev/null || true
   sleep 3
 
-  # Escape special characters for nmconnection file format
-  # In keyfile format, backslash and semicolon need escaping
-  escape_keyfile_value() {
-    local val="$1"
-    # Escape backslashes first, then semicolons
-    val="${val//\\/\\\\}"
-    val="${val//;/\\;}"
-    echo "$val"
-  }
-
-  ESCAPED_SSID="$(escape_keyfile_value "$SSID")"
-  ESCAPED_PSK="$(escape_keyfile_value "$PSK")"
-
-  # Create connection file directly (more reliable than nmcli device wifi connect)
-  # This avoids the "key-mgmt: property is missing" bug
-  echo "Creating connection file for '$SSID'..."
-
+  # Create the connection via nmcli so NetworkManager owns the keyfile
+  # format and the UUID. Name = SSID, so subsequent reconfigures can
+  # find and replace this exact profile (no more duplicate accretion).
+  CONN_NAME="$SSID"
+  echo "Creating connection '$CONN_NAME'..."
   if [[ -n "$PSK" ]]; then
-    # WPA/WPA2 secured network
-    cat > "$CONN_FILE" << NMEOF
-[connection]
-id=${ESCAPED_SSID}
-uuid=${CONN_UUID}
-type=wifi
-interface-name=${IFACE}
-
-[wifi]
-mode=infrastructure
-ssid=${ESCAPED_SSID}
-
-[wifi-security]
-auth-alg=open
-key-mgmt=wpa-psk
-psk=${ESCAPED_PSK}
-
-[ipv4]
-method=auto
-
-[ipv6]
-addr-gen-mode=default
-method=auto
-
-[proxy]
-NMEOF
+    if ! nmcli con add type wifi \
+        ifname "$IFACE" \
+        con-name "$CONN_NAME" \
+        ssid "$SSID" \
+        connection.autoconnect yes \
+        ipv4.method auto \
+        802-11-wireless-security.key-mgmt wpa-psk \
+        802-11-wireless-security.psk "$PSK" 2>&1; then
+      echo "ERROR: nmcli con add failed"
+      exit 1
+    fi
   else
-    # Open network (no password)
-    cat > "$CONN_FILE" << NMEOF
-[connection]
-id=${ESCAPED_SSID}
-uuid=${CONN_UUID}
-type=wifi
-interface-name=${IFACE}
-
-[wifi]
-mode=infrastructure
-ssid=${ESCAPED_SSID}
-
-[wifi-security]
-key-mgmt=none
-
-[ipv4]
-method=auto
-
-[ipv6]
-addr-gen-mode=default
-method=auto
-
-[proxy]
-NMEOF
+    if ! nmcli con add type wifi \
+        ifname "$IFACE" \
+        con-name "$CONN_NAME" \
+        ssid "$SSID" \
+        connection.autoconnect yes \
+        ipv4.method auto 2>&1; then
+      echo "ERROR: nmcli con add failed"
+      exit 1
+    fi
   fi
-
-  # Set correct permissions (required by NetworkManager)
-  if ! chmod 600 "$CONN_FILE" || ! chown root:root "$CONN_FILE"; then
-    echo "ERROR: Could not set permissions on connection file"
-    rm -f "$CONN_FILE"
-    exit 1
-  fi
-
-  # Reload connections
-  echo "Reloading NetworkManager connections..."
-  nmcli con reload
-  sleep 1
 
   # Try to connect with retries
   connected=false
   for attempt in $(seq 1 $MAX_RETRIES); do
     echo "Connection attempt $attempt of $MAX_RETRIES..."
 
-    # Activate the connection using nmcli con up (more reliable)
-    if nmcli con up uuid "$CONN_UUID" 2>&1; then
+    if nmcli con up "$CONN_NAME" 2>&1; then
       echo "nmcli con up succeeded"
     else
       echo "nmcli con up failed, retrying..."
@@ -304,9 +248,8 @@ NMEOF
     exit 0
   else
     echo "FAILED: Could not connect to '$SSID' after $MAX_RETRIES attempts"
-    echo "Restarting AP manager for recovery access..."
-    # Clean up failed connection file
-    rm -f "$CONN_FILE" 2>/dev/null || true
+    echo "Removing failed profile and restarting AP manager for recovery access..."
+    nmcli con delete "$CONN_NAME" 2>/dev/null || true
     systemctl start poolaissistant_ap_manager.service 2>/dev/null || true
     exit 1
   fi

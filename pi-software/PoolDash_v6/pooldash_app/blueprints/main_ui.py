@@ -19,7 +19,7 @@ from ..utils.net import tcp_connect_ok, scan_all_subnets_for_modbus, test_modbus
 
 # ---- Network info cache (avoid slow subprocess calls on every page load) ----
 _net_cache = {"ssid": "", "wlan_ip": "", "eth_ip": "", "ts": 0}
-_net_cache_ttl = 30  # Cache for 30 seconds
+_net_cache_ttl = 10  # Cache for 10 seconds (short enough that a dropped WiFi is visible on next page load)
 _net_cache_lock = threading.Lock()
 
 
@@ -77,26 +77,102 @@ def _get_cached_network_info():
         pass
 
     def ip_of(dev: str) -> str:
+        # `ip -4 -o addr show dev <dev>` prints one line per address.
+        # When an interface has multiple IPs (e.g. wlan0 carrying both a
+        # DHCP lease and a leftover AP-mode 192.168.4.1 alias), pick the
+        # DHCP one: skip the AP subnet and prefer addresses whose
+        # valid_lft is not "forever".
         try:
             out = subprocess.check_output(
                 ["ip", "-4", "-o", "addr", "show", "dev", dev],
                 text=True, timeout=2
-            ).strip()
-            # Parse: "2: eth0    inet 10.0.30.80/24 ..."
-            if out:
-                parts = out.split()
-                for i, p in enumerate(parts):
-                    if p == "inet" and i + 1 < len(parts):
-                        return parts[i + 1].split("/")[0]
+            )
         except Exception:
-            pass
-        return ""
+            return ""
+        fallback = ""
+        for line in out.splitlines():
+            parts = line.split()
+            ip_str = ""
+            for i, p in enumerate(parts):
+                if p == "inet" and i + 1 < len(parts):
+                    ip_str = parts[i + 1].split("/")[0]
+                    break
+            if not ip_str or ip_str.startswith("192.168.4."):
+                continue
+            if "valid_lft" in parts:
+                idx = parts.index("valid_lft")
+                if idx + 1 < len(parts) and parts[idx + 1] != "forever":
+                    return ip_str
+            if not fallback:
+                fallback = ip_str
+        return fallback
 
     wlan_ip = ip_of("wlan0")
     eth_ip = ip_of("eth0")
 
     _net_cache = {"ssid": ssid, "wlan_ip": wlan_ip, "eth_ip": eth_ip, "ts": now}
     return ssid, wlan_ip, eth_ip
+
+
+def _default_route_iface_ip():
+    """Return (iface, src_ip) for the current IPv4 default route, or ("", "").
+
+    The src field tells us which IP the kernel uses as the source address
+    for outbound traffic — that's the IP a phone on the same network can
+    actually reach, which is what we want to display as the device IP.
+    """
+    try:
+        out = subprocess.check_output(
+            ["ip", "-4", "route", "show", "default"],
+            text=True, timeout=2
+        )
+    except Exception:
+        return "", ""
+    for line in out.splitlines():
+        parts = line.split()
+        if not parts or parts[0] != "default":
+            continue
+        iface = ""
+        src = ""
+        for i, p in enumerate(parts):
+            if p == "dev" and i + 1 < len(parts):
+                iface = parts[i + 1]
+            elif p == "src" and i + 1 < len(parts):
+                src = parts[i + 1]
+        if iface:
+            return iface, src
+    return "", ""
+
+
+def _ap_is_active():
+    """True when the setup-mode hotspot is currently running."""
+    try:
+        result = subprocess.run(
+            ["systemctl", "is-active", "hostapd"],
+            capture_output=True, text=True, timeout=2
+        )
+        return result.stdout.strip() == "active"
+    except Exception:
+        return False
+
+
+def _primary_device_ip():
+    """Pick the single IP address to display as 'the device IP'.
+
+    Prefers the interface carrying the default route, because that's the
+    one a phone on the same network can actually reach. Falls back to
+    wlan0 then eth0 when there's no default route (e.g. ethernet-only
+    deployments on an isolated pool-controller LAN).
+    """
+    ssid, wlan_ip, eth_ip = _get_cached_network_info()
+    default_iface, default_src = _default_route_iface_ip()
+    if default_src:
+        return default_src
+    if default_iface == "wlan0":
+        return wlan_ip
+    if default_iface == "eth0":
+        return eth_ip
+    return wlan_ip or eth_ip or ""
 
 
 def _get_ethernet_config():
@@ -574,14 +650,9 @@ def settings():
         except Exception:
             update_status = {}
 
-    # Get cached network info (avoids slow subprocess calls on every page load)
-    ssid, ap_ip, eth_ip = _get_cached_network_info()
-    device_ip = ap_ip or eth_ip or ""
-    if not device_ip:
-        try:
-            device_ip = socket.gethostbyname(socket.gethostname())
-        except Exception:
-            device_ip = ""
+    ssid, wlan_ip, eth_ip = _get_cached_network_info()
+    device_ip = _primary_device_ip()
+    ap_active = _ap_is_active()
 
     # Advanced settings data (merged into protected section)
     storage_info = _get_storage_info()
@@ -607,6 +678,8 @@ def settings():
         bootstrap_secret=current_app.config.get("BOOTSTRAP_SECRET", ""),
         update_status=update_status,
         device_ip=device_ip,
+        wlan_ip=wlan_ip,
+        ap_active=ap_active,
         # Advanced settings (protected section)
         device_id=data.get("device_id", ""),
         device_alias=data.get("device_alias", ""),
@@ -643,8 +716,8 @@ def qr_code():
     import qrcode.image.svg
 
     # Get device info
-    ssid, ap_ip, eth_ip = _get_cached_network_info()
-    device_ip = ap_ip or eth_ip or ""
+    ssid, wlan_ip, eth_ip = _get_cached_network_info()
+    device_ip = _primary_device_ip()
     data = _persisted()
     device_id = data.get("device_id", "")
 
@@ -673,8 +746,8 @@ def qr_code():
 @main_bp.route("/connect")
 def smart_connect():
     """Smart connect landing page - detects local vs cloud and prompts for PWA install."""
-    ssid, ap_ip, eth_ip = _get_cached_network_info()
-    device_ip = ap_ip or eth_ip or ""
+    ssid, wlan_ip, eth_ip = _get_cached_network_info()
+    device_ip = _primary_device_ip()
     data = _persisted()
     device_id = data.get("device_id", "")
     backend_url = data.get("backend_url", "https://poolaissistant.modprojects.co.uk")
@@ -944,8 +1017,8 @@ def smart_connect():
 @main_bp.route("/qr/page")
 def qr_page():
     """Full-page QR code display for easy scanning."""
-    ssid, ap_ip, eth_ip = _get_cached_network_info()
-    device_ip = ap_ip or eth_ip or ""
+    ssid, wlan_ip, eth_ip = _get_cached_network_info()
+    device_ip = _primary_device_ip()
     url = f"http://{device_ip}/connect" if device_ip else "http://poolai.local/connect"
 
     html = f'''<!DOCTYPE html>
@@ -1548,22 +1621,37 @@ def manage_ap():
     """Start/stop Access Point or update AP settings."""
     action = (request.form.get("action") or "").strip().lower()
 
+    # ap_control.sh is the single source of truth for AP start/stop.
+    # Calling systemctl on hostapd/dnsmasq directly (the old behaviour)
+    # didn't assign 192.168.4.1 to wlan0, didn't hand the interface off
+    # from NetworkManager, and didn't clean up on stop — so the AP either
+    # failed to serve DHCP or left ghost IPs behind when torn down.
     if action == "start":
         try:
-            # Start hostapd and dnsmasq
-            subprocess.run(["sudo", "systemctl", "start", "hostapd"], capture_output=True, timeout=30)
-            subprocess.run(["sudo", "systemctl", "start", "dnsmasq"], capture_output=True, timeout=30)
-            flash("Access Point started. Connect to 'PoolAI' WiFi.")
+            result = subprocess.run(
+                ["sudo", "/usr/local/bin/ap_control.sh", "start"],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode == 0:
+                flash("Setup mode on. Connect your phone to the 'PoolAI' WiFi, then browse to 192.168.4.1.")
+            else:
+                flash(f"Failed to start setup mode: {result.stderr.strip() or result.stdout.strip() or 'unknown error'}")
         except Exception as e:
-            flash(f"Failed to start AP: {e}")
+            flash(f"Failed to start setup mode: {e}")
 
     elif action == "stop":
         try:
-            subprocess.run(["sudo", "systemctl", "stop", "hostapd"], capture_output=True, timeout=30)
-            subprocess.run(["sudo", "systemctl", "stop", "dnsmasq"], capture_output=True, timeout=30)
-            flash("Access Point stopped.")
+            result = subprocess.run(
+                ["sudo", "/usr/local/bin/ap_control.sh", "stop"],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode == 0:
+                flash("Setup mode off. Reconnecting to WiFi...")
+            else:
+                flash(f"Failed to stop setup mode: {result.stderr.strip() or result.stdout.strip() or 'unknown error'}")
+            _invalidate_net_cache()
         except Exception as e:
-            flash(f"Failed to stop AP: {e}")
+            flash(f"Failed to stop setup mode: {e}")
 
     elif action == "update":
         ssid = (request.form.get("ap_ssid") or "PoolAI").strip()

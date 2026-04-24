@@ -91,6 +91,7 @@
     {% endfor %}
     <a class="tab {{ 'active' if active_tab=='AI' else '' }}" href="{{ url_for('ai.index') }}" {% if active_tab=='AI' %}aria-current="page"{% endif %}>AI</a>
     <a class="tab {{ 'active' if active_tab=='Settings' else '' }}" href="{{ url_for('main.settings') }}" {% if active_tab=='Settings' %}aria-current="page"{% endif %}>Settings</a>
+    <a class="tab {{ 'active' if active_tab=='Connect' else '' }}" href="{{ url_for('main.qr_page') }}" {% if active_tab=='Connect' %}aria-current="page"{% endif %} title="QR code + phone connect">Connect</a>
   </nav>
 
   <!-- ALARM STATUS STRIP (color-based, non-intrusive) -->

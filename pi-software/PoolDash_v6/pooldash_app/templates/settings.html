@@ -48,49 +48,100 @@
 
 <h2>{{ _('settings') }}</h2>
 
-<!-- ===== QUICK CONNECT SECTION ===== -->
-<div class="card">
-  <h3>{{ _('quick_connect') }}</h3>
-  <div class="quick-connect-layout">
-    <a href="/qr/page" class="qr-image-large">
-      <img src="/qr" alt="QR Code">
-    </a>
+<!-- ===== TAB NAVIGATION ===== -->
+<nav class="settings-tabs" role="tablist" aria-label="Settings tabs">
+  <button type="button" class="settings-tab" data-tab="connectivity" role="tab" aria-selected="true">{{ _('connectivity') if _('connectivity') != 'connectivity' else 'Connectivity' }}</button>
+  <button type="button" class="settings-tab" data-tab="controllers" role="tab" aria-selected="false">{{ _('controllers') if _('controllers') != 'controllers' else 'Controllers' }}</button>
+  <button type="button" class="settings-tab" data-tab="maintenance" role="tab" aria-selected="false">{{ _('maintenance') if _('maintenance') != 'maintenance' else 'Maintenance' }}</button>
+  <button type="button" class="settings-tab" data-tab="system" role="tab" aria-selected="false">{{ _('system') if _('system') != 'system' else 'System' }}</button>
+</nav>
 
-    <div class="quick-connect-credentials">
-      <h4>{{ _('connection_details') }}</h4>
-      <div class="credential-row">
-        <span class="credential-label">{{ _('ip_address') }}:</span>
-        <code class="credential-value">{{ device_ip or _('unknown') }}</code>
-      </div>
-      <form method="post" action="{{ url_for('main.update_device_name') }}" class="hostname-form">
-        <div class="hostname-row">
-          <span class="credential-label">{{ _('hostname') }}:</span>
-          <div class="hostname-input-group">
-            <span class="hostname-prefix">PoolAI-</span>
-            <input type="text" name="device_name" id="deviceName"
-                   value="{{ device_name or '' }}"
-                   placeholder="XX"
-                   maxlength="12"
-                   pattern="[a-zA-Z0-9-]+"
-                   title="Letters, numbers, and hyphens only"
-                   class="hostname-input">
-            <span class="hostname-suffix">.local</span>
-            <button type="submit" class="hostname-save-btn" title="{{ _('save') }}">&#10003;</button>
-          </div>
+<!-- ===== CONNECTIVITY SUMMARY (first card of Connectivity tab) ===== -->
+<div class="card" data-tab="connectivity">
+  <h3>Connectivity</h3>
+  <div class="connectivity-rows">
+    <div class="connectivity-row">
+      <span class="connectivity-icon" aria-hidden="true">&#127968;</span>
+      <div class="connectivity-info">
+        <div class="connectivity-label">Home WiFi</div>
+        <div class="connectivity-detail">
+          {% if current_ssid %}
+            <strong>{{ current_ssid }}</strong> &mdash; {{ wlan_ip or 'No IP' }}
+          {% else %}
+            <span class="text-muted">Not connected</span>
+          {% endif %}
         </div>
-        <p class="hostname-hint">Set a unique name to access this device. Type <code>PoolAI-{{ device_name or 'XX' }}.local</code> in your browser.</p>
-      </form>
+      </div>
+      {% if current_ssid and wlan_ip %}<span class="connectivity-badge ok" title="Connected">&#10003;</span>{% endif %}
     </div>
 
-    <!-- Portal Link Status -->
-    <div id="portalStatus" class="portal-status not-linked w-full">
+    <div class="connectivity-row">
+      <span class="connectivity-icon" aria-hidden="true">&#128674;</span>
+      <div class="connectivity-info">
+        <div class="connectivity-label">Pool subnet</div>
+        <div class="connectivity-detail">
+          {% if eth_ip %}
+            <strong>eth0</strong> &mdash; {{ eth_ip }}
+          {% else %}
+            <span class="text-muted">No ethernet cable connected</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="connectivity-row">
+      <span class="connectivity-icon" aria-hidden="true">&#128246;</span>
+      <div class="connectivity-info">
+        <div class="connectivity-label">Setup hotspot</div>
+        <div class="connectivity-detail">
+          {% if ap_active %}
+            <span class="status-ok">Active</span> &mdash; SSID: <strong>{{ ap_ssid_display }}</strong> &mdash; 192.168.4.1
+          {% else %}
+            <span class="text-muted">Off</span>
+          {% endif %}
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('main.manage_ap') }}" class="ap-toggle-form">
+        {% if ap_active %}
+          <input type="hidden" name="action" value="stop">
+          <button type="submit" class="btn btn--sm btn--outline">Turn Off</button>
+        {% else %}
+          <input type="hidden" name="action" value="start">
+          <button type="submit" class="btn btn--sm"
+                  onclick="return confirm('Turning on setup mode will disconnect this Pi from WiFi until you turn it off. Continue?');">Turn On</button>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  <!-- Hostname + portal link (preserved from old Quick Connect, condensed) -->
+  <div class="connectivity-footer">
+    <form method="post" action="{{ url_for('main.update_device_name') }}" class="hostname-form">
+      <div class="hostname-row">
+        <span class="credential-label">{{ _('hostname') }}:</span>
+        <div class="hostname-input-group">
+          <span class="hostname-prefix">PoolAI-</span>
+          <input type="text" name="device_name" id="deviceName"
+                 value="{{ device_name or '' }}"
+                 placeholder="XX" maxlength="12"
+                 pattern="[a-zA-Z0-9-]+"
+                 title="Letters, numbers, and hyphens only"
+                 class="hostname-input">
+          <span class="hostname-suffix">.local</span>
+          <button type="submit" class="hostname-save-btn" title="{{ _('save') }}">&#10003;</button>
+        </div>
+      </div>
+      <p class="hostname-hint">Type <code>PoolAI-{{ device_name or 'XX' }}.local</code> in your browser.</p>
+    </form>
+
+    <div id="portalStatus" class="portal-status not-linked">
       <span class="portal-status-icon">...</span>
       <span class="portal-status-text">Checking portal status...</span>
     </div>
-    <div id="linkCodeContainer" class="w-full mt-2">
-      <button type="button" class="btn btn--sm btn--secondary btn--full" onclick="generateLinkCode()">Link to Portal Account</button>
+    <div id="linkCodeContainer" class="mt-2">
+      <button type="button" class="btn btn--sm btn--secondary" onclick="generateLinkCode()">Link to Portal Account</button>
     </div>
-    <div id="linkCodeDisplay" style="display: none;" class="w-full mt-2">
+    <div id="linkCodeDisplay" style="display: none;" class="mt-2">
       <div class="link-code-box">
         <span id="linkCodeValue" class="link-code"></span>
         <p class="form-hint mt-2">Enter this code at <a href="https://poolaissistant.modprojects.co.uk/portal" target="_blank">poolaissistant.modprojects.co.uk/portal</a></p>
@@ -99,71 +150,6 @@
     </div>
   </div>
 </div>
-
-<!-- ===== GET THE APP SECTION (hidden when offline) ===== -->
-<div class="card pwa-promo" id="pwaPromoSection" style="display: none;">
-  <div class="pwa-promo-content">
-    <div class="pwa-promo-icon">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-        <line x1="12" y1="18" x2="12.01" y2="18"></line>
-      </svg>
-    </div>
-    <div class="pwa-promo-text">
-      <h4>Get the PoolAIssistant App</h4>
-      <p>Monitor your pool from anywhere on your phone or tablet</p>
-    </div>
-    <a href="https://poolai.modprojects.co.uk" target="_blank" class="btn btn--sm">
-      Open Portal
-    </a>
-  </div>
-  <p class="pwa-promo-hint">
-    Visit the portal on your phone and tap "Add to Home Screen" to install the app.
-    <span class="pwa-promo-note">Works best on Safari (iOS) or Chrome (Android).</span>
-  </p>
-</div>
-
-<style>
-.pwa-promo {
-  background: linear-gradient(135deg, var(--color-accent-light) 0%, var(--color-surface-raised) 100%);
-  border: 1px solid var(--color-accent);
-}
-.pwa-promo-content {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-.pwa-promo-icon {
-  color: var(--color-accent);
-  flex-shrink: 0;
-}
-.pwa-promo-text {
-  flex: 1;
-  min-width: 200px;
-}
-.pwa-promo-text h4 {
-  margin: 0 0 4px 0;
-  font-size: var(--text-md);
-}
-.pwa-promo-text p {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-}
-.pwa-promo-hint {
-  margin: var(--space-2) 0 0 0;
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--color-border);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-.pwa-promo-note {
-  display: block;
-  margin-top: 4px;
-  opacity: 0.7;
-}
-</style>
 
 <style>
 .link-code-box {
@@ -353,7 +339,7 @@ function generateLinkCode() {
 </script>
 
 <!-- ===== WIFI SECTION ===== -->
-<div class="card" id="wifi-section">
+<div class="card" id="wifi-section" data-tab="connectivity">
   <h3>{{ _('wifi_settings') }}</h3>
 
   <!-- Current Connection (always visible) -->
@@ -488,7 +474,7 @@ document.getElementById('wifiChangeDetails').addEventListener('toggle', function
 </script>
 
 <!-- ===== ETHERNET NETWORK ===== -->
-<div class="card" id="ethernet-section">
+<div class="card" id="ethernet-section" data-tab="connectivity">
   <h3>Ethernet Network</h3>
 
   <!-- Current Network Status -->
@@ -969,7 +955,7 @@ function toggleEthernetMode() {
 </script>
 
 <!-- ===== POOL CONTROLLERS ===== -->
-<div class="card" id="controllers-section">
+<div class="card" id="controllers-section" data-tab="controllers">
   <h3>{{ _('controllers') }}</h3>
   <div class="controller-type-row mb-3">
     <form method="post" action="{{ url_for('main.update_modbus_profile') }}" class="controller-type-form">
@@ -1347,7 +1333,7 @@ function addSubnetControllers() {
 </script>
 
 <!-- ===== RS485 WATER TESTER ===== -->
-<div class="card" id="rs485-section">
+<div class="card" id="rs485-section" data-tab="controllers">
   <h3>RS485 Water Tester</h3>
   <p class="form-hint mb-3">Configure RS485 serial water testing devices (TDS, conductivity, etc.)</p>
 
@@ -1560,7 +1546,7 @@ document.querySelectorAll('select[name^="rs485_port__"]').forEach(sel => {
 </script>
 
 <!-- ===== QUICK LOG ACTIONS ===== -->
-<div class="card" id="quick-log-actions">
+<div class="card" id="quick-log-actions" data-tab="maintenance">
   <h3>Quick Log Actions</h3>
   <p class="form-hint mb-3">Quick actions are configured per-pool on each pool's Maintenance page.</p>
 
@@ -1627,13 +1613,38 @@ document.querySelectorAll('select[name^="rs485_port__"]').forEach(sel => {
 </style>
 
 <!-- ===== SYSTEM LINK ===== -->
-<a href="{{ url_for('main.system_page') }}" class="system-link-card">
-  <span class="system-link-icon">&#9881;</span>
-  <div class="system-link-content">
-    <div class="system-link-title">System Settings</div>
-    <div class="system-link-description">Appearance, Updates, Storage, Screen, SSH, Advanced</div>
-  </div>
-  <span class="system-link-arrow">&rarr;</span>
-</a>
+<div data-tab="system">
+  <a href="{{ url_for('main.system_page') }}" class="system-link-card">
+    <span class="system-link-icon">&#9881;</span>
+    <div class="system-link-content">
+      <div class="system-link-title">System Settings</div>
+      <div class="system-link-description">Appearance, Updates, Storage, Screen, SSH, Advanced</div>
+    </div>
+    <span class="system-link-arrow">&rarr;</span>
+  </a>
+</div>
+
+<!-- ===== TAB SWITCHING JS ===== -->
+<script>
+(function(){
+  const tabs = document.querySelectorAll('.settings-tabs .settings-tab');
+  const panels = document.querySelectorAll('[data-tab]:not(.settings-tab)');
+  function show(name) {
+    tabs.forEach(t => t.setAttribute('aria-selected', t.dataset.tab === name ? 'true' : 'false'));
+    panels.forEach(p => { p.hidden = p.dataset.tab !== name; });
+    window.scrollTo(0, 0);
+    try { localStorage.setItem('settingsTab', name); } catch(e) {}
+  }
+  tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
+  // Priority: ?tab=X URL override > saved preference > default 'connectivity'.
+  // The try/catch protects against Chromium kiosk modes that disable storage.
+  const urlTab = new URLSearchParams(location.search).get('tab');
+  let saved = null;
+  try { saved = localStorage.getItem('settingsTab'); } catch(e) {}
+  const valid = ['connectivity', 'controllers', 'maintenance', 'system'];
+  const initial = [urlTab, saved, 'connectivity'].find(t => valid.includes(t));
+  show(initial);
+})();
+</script>
 
 {% endblock %}

@@ -1,0 +1,18 @@
+[Unit]
+Description=PoolAIssistant health watchdog (reboot if stuck)
+After=network.target
+Documentation=file:///opt/PoolAIssistant/app/scripts/health_watchdog.sh
+# Don't spam restart if the script itself is broken
+# (StartLimit* directives live in [Unit], not [Service] — common gotcha)
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/health_watchdog.sh
+Restart=always
+RestartSec=30
+Nice=15
+
+[Install]
+WantedBy=multi-user.target

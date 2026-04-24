@@ -47,30 +47,63 @@ echo "  -> AP dependencies: OK"
 echo
 
 # ============================================
-# Install AP Manager service (CRITICAL - provides network fallback)
+# AP Manager daemon: DISABLED.
+# The old poolaissistant_ap_manager.service auto-started an AP whenever
+# it thought the network was down, but its 10s polling raced against
+# NetworkManager and repeatedly killed working WiFi connections. Every
+# production Pi now has a touchscreen, so AP is manual-only via the
+# Settings → Connectivity toggle. See ap_control.sh and the new
+# health_watchdog service below.
+#
+# We keep /usr/local/bin/poolaissistant_ap_manager.sh on disk for one
+# release so a manual rollback is possible. It will be deleted in the
+# next release.
 # ============================================
-echo "Installing AP Manager service..."
-if [ -f "$SCRIPT_DIR/systemd/poolaissistant_ap_manager.service" ]; then
-    cp "$SCRIPT_DIR/systemd/poolaissistant_ap_manager.service" "$SYSTEMD_DIR/"
+echo "Disabling legacy AP Manager daemon..."
+systemctl disable poolaissistant_ap_manager.service 2>/dev/null || true
+systemctl stop poolaissistant_ap_manager.service 2>/dev/null || true
+# Remove the unit file so it doesn't get re-enabled by daemon-reload
+rm -f "$SYSTEMD_DIR/poolaissistant_ap_manager.service"
+# Keep the script on disk (per rollback window)
+if [ -f "$SCRIPT_DIR/poolaissistant_ap_manager.sh" ]; then
     cp "$SCRIPT_DIR/poolaissistant_ap_manager.sh" "/usr/local/bin/"
     chmod +x "/usr/local/bin/poolaissistant_ap_manager.sh"
+fi
+mkdir -p /etc/hostapd /etc/dnsmasq.d 2>/dev/null || true
 
-    # Create required directories
-    mkdir -p /etc/hostapd /etc/dnsmasq.d 2>/dev/null || true
+# Install the manual AP control CLI (called by the Flask /settings/ap endpoint
+# and the first-boot oneshot).
+if [ -f "$SCRIPT_DIR/ap_control.sh" ]; then
+    cp "$SCRIPT_DIR/ap_control.sh" "/usr/local/bin/"
+    chmod +x "/usr/local/bin/ap_control.sh"
+    echo "  -> ap_control.sh installed to /usr/local/bin/"
+fi
 
+# Install the health watchdog (reboot if stuck for 10 min)
+echo "Installing health watchdog..."
+if [ -f "$SCRIPT_DIR/systemd/poolaissistant_health_watchdog.service" ]; then
+    cp "$SCRIPT_DIR/systemd/poolaissistant_health_watchdog.service" "$SYSTEMD_DIR/"
+    cp "$SCRIPT_DIR/health_watchdog.sh" "/usr/local/bin/"
+    chmod +x "/usr/local/bin/health_watchdog.sh"
+    mkdir -p /var/lib/poolaissistant 2>/dev/null || true
     systemctl daemon-reload
-    systemctl enable poolaissistant_ap_manager.service
-
-    # Start or restart the service
-    if systemctl is-active --quiet poolaissistant_ap_manager.service; then
-        systemctl restart poolaissistant_ap_manager.service
-    else
-        systemctl start poolaissistant_ap_manager.service 2>/dev/null || true
-    fi
-
-    echo "  -> AP Manager: provides fallback WiFi access point when no network"
+    systemctl enable poolaissistant_health_watchdog.service
+    systemctl restart poolaissistant_health_watchdog.service 2>/dev/null || \
+        systemctl start poolaissistant_health_watchdog.service 2>/dev/null || true
+    echo "  -> Health watchdog: reboots Pi if network is stuck for >10 min"
 else
-    echo "  WARNING: AP Manager service file not found!"
+    echo "  WARNING: Health watchdog service file not found!"
+fi
+
+# Install first-boot AP oneshot (runs once when FIRST_BOOT marker exists)
+echo "Installing first-boot AP oneshot..."
+if [ -f "$SCRIPT_DIR/systemd/poolaissistant-firstboot-ap.service" ]; then
+    cp "$SCRIPT_DIR/systemd/poolaissistant-firstboot-ap.service" "$SYSTEMD_DIR/"
+    cp "$SCRIPT_DIR/firstboot_ap.sh" "/usr/local/bin/"
+    chmod +x "/usr/local/bin/firstboot_ap.sh"
+    systemctl daemon-reload
+    systemctl enable poolaissistant-firstboot-ap.service
+    echo "  -> First-boot AP: starts setup hotspot if no WiFi/ethernet on fresh clone"
 fi
 
 # ============================================

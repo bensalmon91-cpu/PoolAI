@@ -1,0 +1,18 @@
+[Unit]
+Description=PoolAIssistant first-boot setup hotspot (oneshot)
+Documentation=file:///opt/PoolAIssistant/app/scripts/firstboot_ap.sh
+# Only runs when the FIRST_BOOT marker exists. clone_prep.sh creates this
+# marker; firstboot_ap.sh deletes it on exit so we never run twice.
+ConditionPathExists=/opt/PoolAIssistant/data/FIRST_BOOT
+After=NetworkManager-wait-online.service
+Wants=NetworkManager-wait-online.service
+Before=poolaissistant_ui.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/firstboot_ap.sh
+RemainAfterExit=no
+TimeoutStartSec=90
+
+[Install]
+WantedBy=multi-user.target
