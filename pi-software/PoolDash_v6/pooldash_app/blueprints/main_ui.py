@@ -175,6 +175,91 @@ def _primary_device_ip():
     return wlan_ip or eth_ip or ""
 
 
+def _get_wifi_ip_config():
+    """Get current WiFi (wlan0) IPv4 configuration.
+
+    WiFi IP is a property of the NetworkManager connection profile, not of
+    the interface — so we look up the active profile bound to wlan0 and
+    read ipv4.method / ipv4.addresses / ipv4.gateway from there.
+    """
+    config = {
+        "mode": "dhcp",     # "dhcp" or "static"
+        "ip": "",
+        "netmask": "24",
+        "gateway": "",
+        "current_ip": "",
+        "conn_name": "",
+    }
+
+    # Find the active WiFi profile name (the one we'll modify)
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "con", "show", "--active"],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.splitlines():
+            parts = line.split(":")
+            if len(parts) >= 3 and parts[1] == "802-11-wireless" and parts[2] == "wlan0":
+                config["conn_name"] = parts[0]
+                break
+    except Exception:
+        pass
+
+    # Current observed IP (what the kernel has on wlan0 right now).
+    # Reuse the same picker logic as ip_of() — skip the AP subnet, prefer
+    # the DHCP lease over any static alias.
+    try:
+        out = subprocess.check_output(
+            ["ip", "-4", "-o", "addr", "show", "dev", "wlan0"],
+            text=True, timeout=2
+        )
+        for line in out.splitlines():
+            parts = line.split()
+            ip_cidr = ""
+            for i, p in enumerate(parts):
+                if p == "inet" and i + 1 < len(parts):
+                    ip_cidr = parts[i + 1]
+                    break
+            if not ip_cidr:
+                continue
+            ip_only = ip_cidr.split("/")[0]
+            if ip_only.startswith("192.168.4."):
+                continue
+            config["current_ip"] = ip_only
+            break
+    except Exception:
+        pass
+
+    # Authoritative configured method / address / gateway from the profile.
+    # This is what the UI form should reflect, even if the current runtime
+    # IP was obtained differently (e.g. the lease hasn't refreshed yet).
+    if config["conn_name"]:
+        try:
+            result = subprocess.run(
+                ["nmcli", "-t", "-f", "ipv4.method,ipv4.addresses,ipv4.gateway",
+                 "con", "show", config["conn_name"]],
+                capture_output=True, text=True, timeout=5
+            )
+            for line in result.stdout.splitlines():
+                key, _, val = line.partition(":")
+                val = val.strip()
+                if key == "ipv4.method":
+                    config["mode"] = "static" if val == "manual" else "dhcp"
+                elif key == "ipv4.addresses" and val and val != "--":
+                    # nmcli can return "10.0.30.50/24" or a comma-separated list
+                    first = val.split(",")[0].strip()
+                    if "/" in first:
+                        config["ip"], config["netmask"] = first.split("/", 1)
+                    else:
+                        config["ip"] = first
+                elif key == "ipv4.gateway" and val and val != "--":
+                    config["gateway"] = val
+        except Exception:
+            pass
+
+    return config
+
+
 def _get_ethernet_config():
     """Get current ethernet configuration."""
     config = {
@@ -657,6 +742,7 @@ def settings():
     # Advanced settings data (merged into protected section)
     storage_info = _get_storage_info()
     ethernet_config = _get_ethernet_config()
+    wifi_ip_config = _get_wifi_ip_config()
 
     return render_template(
         "settings.html",
@@ -664,6 +750,7 @@ def settings():
         current_ssid=ssid,
         eth_ip=eth_ip,
         ethernet_config=ethernet_config,
+        wifi_ip_config=wifi_ip_config,
         actions_text=actions_text,
         controllers=controllers,
         pools=pools,
@@ -1363,6 +1450,75 @@ def update_ethernet():
         flash(f"Ethernet configuration error: {e}")
 
     return redirect(url_for("main.settings") + "#ethernet-section")
+
+
+@main_bp.route("/settings/wifi/ip", methods=["POST"])
+def update_wifi_ip():
+    """Set wlan0 to DHCP or a static IPv4 address.
+
+    This edits the currently-active WiFi NM profile, not the interface,
+    so the setting persists across reboots (and across re-associations
+    with the same SSID). Warn the user in the UI: a wrong static config
+    will leave the Pi unreachable until a touchscreen/console recovery.
+    """
+    import re
+
+    mode = (request.form.get("wifi_mode") or "dhcp").strip().lower()
+    ip = (request.form.get("wifi_ip") or "").strip()
+    netmask = (request.form.get("wifi_netmask") or "24").strip()
+    gateway = (request.form.get("wifi_gateway") or "").strip()
+
+    if mode not in ("dhcp", "static"):
+        flash("Invalid mode. Use 'dhcp' or 'static'.")
+        return redirect(url_for("main.settings") + "?tab=connectivity")
+
+    if mode == "static":
+        if not ip or not gateway:
+            flash("Static mode requires both IP and gateway.")
+            return redirect(url_for("main.settings") + "?tab=connectivity")
+
+        # Validate IP + gateway. Keep the rules in sync with the Ethernet
+        # validation — same addressing conventions apply.
+        ip_re = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$")
+        for label, addr in (("IP", ip), ("gateway", gateway)):
+            m = ip_re.match(addr)
+            if not m:
+                flash(f"Invalid {label} address format.")
+                return redirect(url_for("main.settings") + "?tab=connectivity")
+            octets = [int(g) for g in m.groups()]
+            if any(o < 0 or o > 255 for o in octets):
+                flash(f"Invalid {label}: octets must be 0-255.")
+                return redirect(url_for("main.settings") + "?tab=connectivity")
+            if octets[0] in (0, 127) or octets == [255, 255, 255, 255]:
+                flash(f"Invalid {label}: reserved address.")
+                return redirect(url_for("main.settings") + "?tab=connectivity")
+
+    # Build command for the shell script
+    if mode == "static":
+        cmd = ["sudo", "/usr/local/bin/update_wifi_ip.sh", "static", ip, netmask, gateway]
+    else:
+        cmd = ["sudo", "/usr/local/bin/update_wifi_ip.sh", "dhcp"]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
+        _invalidate_net_cache()
+        if result.returncode == 0:
+            if mode == "static":
+                flash(f"WiFi set to static {ip}/{netmask} (gateway {gateway}). Reconnecting…")
+            else:
+                flash("WiFi set to DHCP. Reconnecting…")
+        else:
+            err = (result.stderr or result.stdout or "").strip().splitlines()[-1:] or ["unknown error"]
+            flash(f"Failed to update WiFi IP: {err[-1]}")
+    except subprocess.TimeoutExpired:
+        _invalidate_net_cache()
+        flash("WiFi IP change timed out. The device may briefly disconnect; check /settings after ~30 seconds.")
+    except FileNotFoundError:
+        flash("update_wifi_ip.sh not found on this Pi. Rerun ensure_dependencies.sh.")
+    except Exception as e:
+        flash(f"WiFi IP configuration error: {e}")
+
+    return redirect(url_for("main.settings") + "?tab=connectivity")
 
 
 @main_bp.route("/settings/network/reset", methods=["POST"])
