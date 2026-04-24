@@ -1,6 +1,15 @@
 # PoolAIssistant Pi Software
 
-**Current Version: 6.8.9** (March 2026)
+**Current Version: 6.11.4** (2026-04-24)
+
+## Live Pi fleet (2026-04-24)
+
+| Host | IP | Role |
+|---|---|---|
+| `PoolAI-swanwood` | `10.0.30.5` (WiFi, **static**) + `192.168.200.100` (eth0) | Production — Swanwood Spa pool monitoring |
+| `tvcctv`          | `10.0.30.131` (WiFi, DHCP) + `192.168.200.101` (eth0)    | Second unit, full install, reaches the same pool controllers |
+
+Both on **v6.11.4**. Both running the new manual-AP / health-watchdog / tabbed-settings stack from the 6.11.2–6.11.4 work.
 
 ## Quick Reference
 
@@ -9,7 +18,9 @@
 SSH Access (when enabled):
   Username: poolai
   Host: poolai@<pi-ip> or poolai@poolai.local
-  Example: poolai@10.0.30.144
+  Examples:
+    poolai@10.0.30.5     (Swanwood, production — pinned static IP)
+    poolai@10.0.30.131   (tvcctv, DHCP)
   SSH Password: 12345678
   Sudo: NOPASSWD configured (no password needed)
 
@@ -53,9 +64,13 @@ VERSION:  /opt/PoolAIssistant/app/VERSION
 
 ### Services
 ```bash
-sudo systemctl status poolaissistant_ui      # Flask web UI (port 8080)
-sudo systemctl status poolaissistant_logger  # Modbus data logger
-sudo systemctl restart poolaissistant_ui     # Restart web UI
+sudo systemctl status poolaissistant_ui                # Flask web UI (port 80)
+sudo systemctl status poolaissistant_logger            # Modbus data logger
+sudo systemctl status poolaissistant_health_watchdog   # Reboots Pi if stuck >10 min
+sudo systemctl restart poolaissistant_ui               # Restart web UI
+
+# Manual AP toggle (v6.11.2+) — also wired to the UI:
+sudo /usr/local/bin/ap_control.sh {start|stop|status}
 ```
 
 ---
@@ -163,27 +178,101 @@ sudo shutdown -h now
 
 ---
 
-## Key Features (v6.4.0)
+## Key Features — current (v6.11.x)
 
-### SSH Enable Without Reboot
-- SSH can be enabled via web UI and works immediately
-- Generates host keys if missing, then starts service
-- No reboot required after clone prep
+### Tabbed Settings page (v6.11.2+)
+Single `/settings` page split into 4 tabs: **Connectivity / Controllers / Maintenance / System**. Tab state persists in localStorage and also reads `?tab=` from the URL. On each card tap, scroll resets to top (friendly on the 800×480 touchscreen).
 
-### Instant Screen Rotation
-- Screen rotation applies immediately via wlr-randr (Wayland)
-- Settings: 0° (Normal), 90° (Counter-clockwise), 180° (Upside Down), 270° (Clockwise)
-- Touchscreen calibration may need reboot
+### Manual setup-mode AP (v6.11.2+)
+No more auto-failover daemon that raced with NetworkManager. AP starts ONLY when the user taps "Turn On" in Settings → Connectivity, or during the first-boot oneshot if the clone has no WiFi and no ethernet. `ap_control.sh {start|stop|status}` is the single-source-of-truth CLI, with proper `192.168.4.1` cleanup on stop (the old daemon forgot this, leaving a ghost address that poisoned the IP display).
 
-### Controller Proxy
-- Access controller web UIs through the Pi from any network
-- URL: `/proxy/ui/?host=<controller-ip>`
-- Session-based host persistence for CSS/JS requests
-- "Back to PoolAIssistant" button included
+### Health watchdog (v6.11.2+)
+`poolaissistant_health_watchdog.service` replaces the old AP manager. Every 60s, checks the default-route gateway; after 10 consecutive fails it reboots the Pi. Respects ethernet-only deployments (eth0 carrier + IP = healthy even without a default route) and refuses to trigger more than 3 reboots per hour.
 
-### Touch Scroll Buttons
-- Scroll buttons appear when content is scrollable
-- Works in Chromium kiosk mode on Pi touchscreen
+### WiFi static IP via UI (v6.11.4)
+Settings → Connectivity → WiFi card → **WiFi IP Configuration** (collapsible). Set wlan0 to DHCP or a static IP+gateway+netmask. Backend writes to the active WiFi NetworkManager profile (not the interface), so the setting persists across reboots and re-associations. Same pattern as the existing Ethernet static-IP flow.
+
+### Install-time standard (v6.11.3)
+Fresh installs now come up working without manual intervention: `setup_pi.sh` creates the `poolai` user, creates `/opt/PoolAIssistant/venv`, configures eth0 via NetworkManager on the pool subnet (default `192.168.200.100/24`), adds the hostname to `/etc/hosts`, and `install_services.sh` auto-starts the UI at the end. `.gitattributes` enforces LF line endings so shell scripts no longer silently break on line 2.
+
+### Per-heartbeat network health (v6.11.2)
+Pi uploads WiFi signal / regdom / disconnect-count metrics alongside each heartbeat; portal admin pages render a "Network" card with "Regdom conflict" / "Flappy" badges. Adds `device_health.network_json` column via idempotent migration.
+
+### SSH enable without reboot
+SSH can be enabled via web UI and works immediately (`ssh-keygen -A` + systemctl start ssh).
+
+### Instant screen rotation
+Rotation applies immediately via wlr-randr (Wayland). Touchscreen calibration still needs reboot.
+
+### Controller proxy
+Access controller web UIs through the Pi: `/proxy/ui/?host=<controller-ip>`. Session-based host persistence for subresource requests. "Back to PoolAIssistant" button.
+
+### Touch scroll buttons
+Scroll buttons appear when content overflows (Chromium kiosk mode on the touchscreen).
+
+---
+
+## Fresh SD Card Install Plan — v6.11.4
+
+**Context:** v6.11.3 shipped a suite of install-time fixes to make fresh installs work end-to-end without manual intervention. All the fixes are in git and shipped to the release tarball, but **they have not yet been exercised on a clean Pi** — the two existing Pis (Swanwood, tvcctv) are both past install. The next fresh SD card flash is the validation moment. This plan is what to run and what to check.
+
+### Prerequisites
+- Blank microSD card (32 GB+ recommended)
+- Raspberry Pi OS flashed (Debian trixie 64-bit, matches production)
+- Touchscreen attached for recovery if anything goes wrong
+- Ethernet cable plugged into the pool controller subnet (192.168.200.x)
+- Home WiFi credentials (SSID + password) available
+
+### Two install paths
+
+**Path A — cloning from Swanwood (fastest, recommended):** Run `clone_prep.sh` on Swanwood, shutdown, clone the SD. New Pi boots with v6.11.4 code in place and the FIRST_BOOT marker triggers first-boot AP if no network.
+
+**Path B — fresh OS flash:** Drop the v6.11.4 tarball onto a fresh Raspberry Pi OS install at `/opt/PoolAIssistant/app/`, then run the install scripts in order:
+```bash
+cd /opt/PoolAIssistant/app
+sudo bash scripts/setup_pi.sh             # user, venv, eth0 static IP, hostname
+sudo bash scripts/ensure_dependencies.sh  # apt packages, sudoers, symlinks
+sudo bash scripts/install_services.sh     # timers + starts UI
+```
+For a unit that's not the first on the pool subnet, override the default eth0 IP:
+```bash
+sudo POOLAI_ETH_IP=192.168.200.102/24 bash scripts/setup_pi.sh
+```
+
+### Post-install verification checklist
+
+- [ ] `cat /opt/PoolAIssistant/app/VERSION` → `6.11.4`
+- [ ] `systemctl is-active poolaissistant_ui poolaissistant_logger poolaissistant_health_watchdog` → all `active`
+- [ ] `id poolai` returns the service user with sudo group membership
+- [ ] `/opt/PoolAIssistant/venv/bin/python --version` runs (venv created)
+- [ ] `ip -4 -o addr show eth0` shows the pool-subnet static IP (192.168.200.x)
+- [ ] `ping -c 2 192.168.200.11` succeeds (controllers reachable)
+- [ ] `sudo -n true` as poolai succeeds (NOPASSWD configured)
+- [ ] No `unable to resolve host …` warnings from sudo (hostname in `/etc/hosts`)
+- [ ] `curl -sS http://localhost/settings | grep -c 'data-tab='` returns 4 (all tabs present)
+- [ ] Browser at `http://<ip>/settings` renders the tab UI, Connectivity summary card shows correct IPs
+- [ ] Settings → Controllers panel loads a pool controller list (or empty, pre-config)
+- [ ] Settings → Connectivity → WiFi IP Configuration form renders and pre-fills current config
+- [ ] Tap AP "Turn On" → wlan0 switches to `192.168.4.1` only (no 10.0.30.x); tap "Turn Off" → wlan0 returns to home WiFi with NO ghost `192.168.4.1`
+- [ ] After 60s+ of uptime, `sqlite3 /opt/PoolAIssistant/data/pool_readings.sqlite3 'SELECT COUNT(*) FROM readings'` > 0
+- [ ] Reboot the Pi. After it comes back: all of the above still pass, VERSION still 6.11.4, static IPs survive.
+
+### Symptoms-to-cause cheat sheet (for recovery)
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Shell scripts fail on line 2 with "pipefail: invalid option name" | CRLF line endings snuck in | `find /opt/PoolAIssistant/app -name '*.sh' -exec sed -i 's/\r$//' {} \;` then retry. `.gitattributes` prevents this for future clones. |
+| Flask service restart-loops at boot | `/opt/PoolAIssistant/venv` missing | `sudo -u poolai python3 -m venv /opt/PoolAIssistant/venv && sudo -u poolai /opt/PoolAIssistant/venv/bin/pip install -r /opt/PoolAIssistant/app/requirements.txt` |
+| `journalctl -u poolaissistant_ui` → "User poolai does not exist" | poolai user wasn't created | Rerun `sudo bash /opt/PoolAIssistant/app/scripts/setup_pi.sh` |
+| Logger spams "host unreachable" in logs | eth0 not on pool subnet | `sudo nmcli con show PoolAI-Ethernet` — if missing/wrong, rerun `setup_pi.sh` or manually create the profile |
+| Sudo emits "unable to resolve host ..." warnings | hostname missing from `/etc/hosts` | `echo "127.0.1.1 $(hostname)" | sudo tee -a /etc/hosts` |
+| Setup mode stuck on (ghost 192.168.4.1 on wlan0) | Stop command forgot cleanup (old bug) | `sudo ip addr del 192.168.4.1/24 dev wlan0` — and ensure `ap_control.sh` is v6.11.2+ |
+| UI shows wrong IP (eth0 pool subnet, or stale DHCP) | `_primary_device_ip()` fallback needed updating, or cache stale | Wait 10s for cache TTL, or `systemctl restart poolaissistant_ui` |
+
+### Reference material
+- Previous deploy playbook (network redesign): `~/.claude/projects/.../memory/project_network_redesign_deploy.md`
+- Installer improvement history / remaining backlog: same directory, `project_installer_improvements.md`
+- Original design plan: `~/.claude/plans/sharded-crafting-hoare.md`
 
 ---
 

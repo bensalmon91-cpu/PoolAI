@@ -1,8 +1,15 @@
 # PoolAIssistant Project - Cloud Integration Roadmap
 
-**Last Updated:** April 2026
+**Last Updated:** 2026-04-24 · **Pi software current:** v6.11.4
 
 This master document tracks the PoolAIssistant ecosystem including the Pi software, web portal, and cloud integration features.
+
+## Current state snapshot
+
+- **Pi software:** v6.11.4 (network redesign + installer cleanup + WiFi static IP UI shipped)
+- **Active Pis:** Swanwood (production) @ `10.0.30.5` (WiFi static), tvcctv (second unit) @ `10.0.30.131`
+- **Next milestone:** fresh SD card install — validates the v6.11.3 installer cleanup end-to-end on a clean Pi. Plan logged in `pi-software/CLAUDE.md` under "Fresh SD Card Install Plan".
+- **Open backlog:** 2 items — hardcoded `poolai:12345678` default password (security), SSH/sudo TTY docs. See `.claude/projects/.../memory/project_installer_improvements.md`.
 
 ---
 
@@ -16,12 +23,14 @@ PoolAIssistant-Project/
 │   ├── php_deploy/          # Admin backend (poolaissistant.modprojects.co.uk)
 │   ├── poolai_deploy/       # Customer portal (poolai.modprojects.co.uk)
 │   └── database/            # SQL schema migrations
+├── brain/                   # Swanwood Spa analytics (separate project)
 └── CLAUDE.md                # This file
 ```
 
 See individual CLAUDE.md files for detailed documentation:
-- `pi-software/CLAUDE.md` - Pi software details, deployment, SSH
-- `web-portal/CLAUDE.md` - Server deployment, API endpoints
+- `pi-software/CLAUDE.md` — **primary docs** (install, deploy, fleet, fresh SD card plan)
+- `pi-software/PoolDash_v6/CLAUDE.md` — Flask app layout and known UX papercuts
+- `web-portal/CLAUDE.md` — Server deployment, API endpoints
 
 ---
 

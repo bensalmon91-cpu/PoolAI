@@ -1,6 +1,11 @@
-# PoolAIssistant Pi Software
+# PoolAIssistant Pi Software (PoolDash_v6 app)
 
-**Current Version: 6.8.8** (March 2026)
+**Current Version: 6.11.4** (2026-04-24)
+
+> This file documents the Flask app inside `PoolDash_v6/`.
+> For the higher-level install / fleet / deploy docs see the parent
+> [`pi-software/CLAUDE.md`](../CLAUDE.md) — it has the fresh SD card install plan
+> and the current live Pi inventory.
 
 ## Quick Reference
 
@@ -238,95 +243,37 @@ Protected settings in web UI require password: `PoolAI`
 
 ---
 
-## Pending Fixes (v6.8.9 TODO)
+## Recently landed (v6.11.2 — v6.11.4)
 
-### Priority 1: Critical (System Stability)
+See commits `58933ac`, `f75ce4d`, `5890b66` for details. Highlights:
 
-#### Read-Only Filesystem Errors (Issues 11 & 14)
-- **Problem**: `scripts/update_wifi.sh` writes to `/etc/NetworkManager/system-connections/` which fails on read-only Pi filesystem
-- **Cause**: Pi uses read-only root filesystem for SD card protection
-- **Fix**: Add remount functions to `update_wifi.sh`:
-  ```bash
-  remount_rw() { mount | grep -q "on / type.*ro," && mount -o remount,rw / || true; }
-  remount_ro() { mount | grep -q "on / type.*rw" && mount -o remount,ro / || true; }
-  trap remount_ro EXIT
-  remount_rw
-  ```
-- **Status**: [ ] Not started
+- **Network redesign (v6.11.2)** — auto-failover AP daemon removed, replaced by manual `ap_control.sh` toggle + `health_watchdog.sh` reboot-if-stuck. Missing `192.168.4.1/24` cleanup on AP teardown fixed. `update_wifi.sh` now upserts by SSID (no more duplicate profile accumulation). Settings page reorganized into 4 tabs. `_primary_device_ip()` picks the default-route interface for display.
+- **Installer cleanup (v6.11.3)** — fresh installs work end-to-end: `.gitattributes` forces LF on shell scripts, `setup_pi.sh` creates `poolai` user + venv + eth0 static IP on pool subnet, `install_services.sh` auto-starts UI, example env no longer ships placeholder pool IPs (logger falls back to `pooldash_settings.json`).
+- **WiFi static IP UI (v6.11.4)** — Settings → Connectivity → WiFi IP Configuration. New `update_wifi_ip.sh` helper modifies the active WiFi NM profile, same pattern as Ethernet.
+- **Read-only filesystem remount (v6.11.2)** — `update_wifi.sh` now does `remount_rw` / `remount_ro` around nmcli writes to `/etc/NetworkManager/system-connections/`. Addresses the old Issues 11 & 14.
 
-#### AP Mode Not Starting When No WiFi (Issue 15)
-- **Problem**: AP mode doesn't default to on when WiFi is not connected
-- **File**: `scripts/poolaissistant_ap_manager.sh`
-- **Fix**: Add 5-second delay at startup for interfaces to initialize (~line 453)
-- **Status**: [ ] Not started
+## Known rough edges (post-install UX, deferred backlog)
 
-### Priority 2: High (Blocking Workflows)
+Not blockers — the main flow works, these are the remaining papercuts. Each
+lives in the setup wizard (runs on first boot of a fresh clone). Would be a
+natural v6.11.5 or v6.12.0 polish pass after the fresh-install validation
+proves the standard flow works end-to-end.
 
-#### No Way to Bypass WiFi Wizard If No Networks (Issue 4)
-- **Problem**: When no networks found, user has no obvious way to continue
-- **File**: `pooldash_app/templates/setup_wizard.html` (~line 1256)
-- **Fix**: Show prominent "Continue Without WiFi" button and "Scan Again" button
-- **Status**: [ ] Not started
+| # | File | Fix |
+|---|---|---|
+| Issue 1 | `setup_wizard.html`, `main_ui.py` | Screen rotation not applied live during wizard — needs AJAX call in `selectRotation()` + `/setup/apply-rotation` endpoint |
+| Issue 2 | `setup_wizard.html` ~line 395 | WiFi list capped at max-height 250px, looks like only 4 networks — bump to 400px |
+| Issue 3 | `setup_wizard.html` ~lines 1714-1746 | Popup keyboard buttons too small for touch — increase to min-width 36px / height 48px |
+| Issue 4 | `setup_wizard.html` ~line 1256 | "No networks found" dead end — show a "Continue Without WiFi" + "Scan Again" button |
+| Issue 5 | `setup_wizard.html` ~line 1558 | Auto-focus IP input after adding a controller |
+| Issue 6 | `setup_wizard.html` ~line 1511 | Can't edit or delete a controller IP once added — change from span to input, add delete button |
+| Issue 7 | `proxy.py` lines 32, 44-45 | Proxy error responses have no "Back" button — user gets stuck |
+| Issue 8 | `setup_wizard.html` | Wizard could have an explicit Ethernet IP step (v6.11.4 UI covers this for post-install, wizard still lacks it) |
+| Issue 9 | `charts.py`, `static/js/` | Plotly CDN unreachable breaks charts — add `onerror` fallback to local `plotly-basic-2.27.0.min.js` |
+| Issue 12 | `setup_wizard.html`, `main_ui.py` | `connectWifi()` gives no "Connecting..." feedback — add loading state + `/setup/connect-wifi` |
+| Issue 13 | `system.html` ~line 605 | After unlocking protected settings, no `scrollIntoView()` — user has to scroll |
 
-#### No Back Button in IP Viewer/Proxy Errors (Issue 7)
-- **Problem**: Users get stuck when proxy errors occur
-- **File**: `pooldash_app/blueprints/proxy.py` (lines 32, 44-45)
-- **Fix**: Add back button HTML to all error responses
-- **Status**: [ ] Not started
-
-#### Plotly CDN Failures Break Charts (Issue 9)
-- **Problem**: Charts fail when CDN is unreachable
-- **Files**: `pooldash_app/blueprints/charts.py`, `pooldash_app/static/js/`
-- **Fix**: Add `onerror` fallback to local Plotly copy, download `plotly-basic-2.27.0.min.js`
-- **Status**: [ ] Not started
-
-#### No Loading Indicator for WiFi Connecting (Issue 12)
-- **Problem**: `connectWifi()` provides no feedback during connection
-- **Files**: `pooldash_app/templates/setup_wizard.html`, `pooldash_app/blueprints/main_ui.py`
-- **Fix**: Show "Connecting..." state, add `/setup/connect-wifi` endpoint
-- **Status**: [ ] Not started
-
-### Priority 3: Medium (UX Improvements)
-
-#### Screen Rotation Not Applying During Wizard (Issue 1)
-- **Files**: `setup_wizard.html`, `main_ui.py`
-- **Fix**: Add AJAX call in `selectRotation()`, add `/setup/apply-rotation` endpoint
-- **Status**: [ ] Not started
-
-#### WiFi List Shows Max 4 Networks (Issue 2)
-- **File**: `setup_wizard.html` (~line 395)
-- **Fix**: Increase `.wifi-list` max-height from 250px to 400px
-- **Status**: [ ] Not started
-
-#### Popup Keyboard Too Small (Issue 3)
-- **File**: `setup_wizard.html` (~lines 1714-1746)
-- **Fix**: Increase button sizes (min-width: 36px, height: 48px, max-width: 48px)
-- **Status**: [ ] Not started
-
-#### Auto-Focus IP Input After Adding Controller (Issue 5)
-- **File**: `setup_wizard.html` (~line 1558)
-- **Fix**: Add `.focus()` call after clearing input
-- **Status**: [ ] Not started
-
-#### No Way to Edit/Delete Controller IP in Wizard (Issue 6)
-- **File**: `setup_wizard.html` (~line 1511)
-- **Fix**: Change IP from `<span>` to `<input>`, add delete button, add JS functions
-- **Status**: [ ] Not started
-
-#### Wizard Needs IP Address Configuration Step (Issue 8)
-- **File**: `setup_wizard.html`
-- **Fix**: Add new step between WiFi and Storage for ethernet IP setup
-- **Status**: [ ] Not started
-
-#### Auto-Scan WiFi on "Change Network" Expand (Issue 10)
-- **File**: `pooldash_app/templates/settings.html` (~line 461)
-- **Fix**: Add event listener on details toggle to trigger `scanWifi()`
-- **Status**: [ ] Not started
-
-#### Protected Settings Scroll Issue (Issue 13)
-- **File**: `pooldash_app/templates/system.html` (~line 605)
-- **Fix**: Add `scrollIntoView()` call after unlocking protected settings
-- **Status**: [ ] Not started
+Items shipped in v6.11.x: Issues 10 (auto-scan WiFi on "Change Network" toggle), 11 & 14 (RO-FS remount), 15 (AP mode auto-failover — obsoleted by the manual-AP redesign).
 
 ---
 
