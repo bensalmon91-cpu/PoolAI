@@ -441,6 +441,11 @@ function generateLinkCode() {
               <label>Gateway</label>
               <input type="text" name="wifi_gateway" value="{{ wifi_ip_config.gateway }}" placeholder="10.0.30.1" class="mono" pattern="^(\d{1,3}\.){3}\d{1,3}$">
             </div>
+            <div class="form-field">
+              <label>DNS Server <span class="muted">(optional)</span></label>
+              <input type="text" name="wifi_dns" placeholder="leave blank to use gateway" class="mono" pattern="^(\d{1,3}\.){3}\d{1,3}$">
+              <p class="form-hint muted">If blank, the gateway address is used. Override with e.g. <code>1.1.1.1</code> if your router doesn't run DNS.</p>
+            </div>
           </div>
 
           <p class="form-hint status-warn">

@@ -86,16 +86,18 @@ if [[ "$MODE" == "dhcp" ]]; then
         ipv4.gateway "" \
         ipv4.dns ""
 else
-    echo "Setting $CONN to static $IP/$NETMASK gw=$GATEWAY${DNS:+ dns=$DNS}"
+    # No DNS supplied? Fall back to the gateway. With ipv4.method=manual,
+    # leaving ipv4.dns="" means NM does NOT use DHCP-discovered DNS — the
+    # Pi loses name resolution entirely (cloud admin reporting, updates).
+    # Most home/office gateways act as DNS forwarders, so the gateway is
+    # the safest blind default.
+    EFFECTIVE_DNS="${DNS:-$GATEWAY}"
+    echo "Setting $CONN to static $IP/$NETMASK gw=$GATEWAY dns=$EFFECTIVE_DNS"
     nmcli con modify "$CONN" \
         ipv4.method manual \
         ipv4.addresses "$IP/$NETMASK" \
-        ipv4.gateway "$GATEWAY"
-    if [[ -n "$DNS" ]]; then
-        nmcli con modify "$CONN" ipv4.dns "$DNS"
-    else
-        nmcli con modify "$CONN" ipv4.dns ""
-    fi
+        ipv4.gateway "$GATEWAY" \
+        ipv4.dns "$EFFECTIVE_DNS"
 fi
 
 # Apply: reactivate the connection so the new IP takes effect immediately.

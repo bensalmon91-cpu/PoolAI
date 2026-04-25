@@ -6,6 +6,7 @@ import socket
 import sqlite3
 import zipfile
 import time
+import ipaddress
 from io import BytesIO
 from datetime import datetime
 from pathlib import Path
@@ -15,7 +16,7 @@ from flask import (
     url_for, flash, send_file, Response
 )
 
-from ..utils.net import tcp_connect_ok, scan_all_subnets_for_modbus, test_modbus_connection
+from ..utils.net import tcp_connect_ok, scan_all_subnets_for_modbus, test_modbus_connection, ping_host
 
 # ---- Network info cache (avoid slow subprocess calls on every page load) ----
 _net_cache = {"ssid": "", "wlan_ip": "", "eth_ip": "", "ts": 0}
@@ -1452,6 +1453,119 @@ def update_ethernet():
     return redirect(url_for("main.settings") + "#ethernet-section")
 
 
+def _wifi_static_preflight(ip: str, netmask: str, gateway: str, dns: str) -> dict:
+    """Probe a proposed WiFi static config WITHOUT applying it.
+
+    Best-effort safety net: runs from the Pi's *current* network state,
+    so it can flag obviously-broken configs but cannot prove a config
+    will work after we move to it. Pair with _wifi_preflight_policy()
+    to decide which findings actually block the apply.
+
+    Returns a dict; each value is None or a human-readable issue string.
+    """
+    findings: dict = {
+        "same_subnet_violation": None,
+        "gateway_unreachable": None,
+        "ip_collision": None,
+        "no_dns_specified": None,
+    }
+
+    # 1. Gateway must live on the IP's subnet — unambiguously broken if not.
+    try:
+        net = ipaddress.ip_network(f"{ip}/{netmask}", strict=False)
+        if ipaddress.ip_address(gateway) not in net:
+            findings["same_subnet_violation"] = (
+                f"Gateway {gateway} is not on the same subnet as {ip}/{netmask}."
+            )
+    except ValueError as e:
+        findings["same_subnet_violation"] = f"Invalid IP/netmask: {e}"
+
+    # Snapshot our current wlan0 IPs so we don't see ourselves as a collision.
+    my_ips: set = set()
+    try:
+        out = subprocess.check_output(
+            ["ip", "-4", "-o", "addr", "show", "dev", "wlan0"],
+            text=True, timeout=2,
+        )
+        for line in out.splitlines():
+            for tok in line.split():
+                if "/" in tok and tok[:1].isdigit():
+                    my_ips.add(tok.split("/")[0])
+    except Exception:
+        pass
+
+    # 2. IP collision — somebody else already answers at this address.
+    if ip not in my_ips:
+        in_use, _ = ping_host(ip, timeout_s=1.0)
+        if in_use:
+            findings["ip_collision"] = (
+                f"{ip} is already in use by another device on the network."
+            )
+
+    # 3. Gateway reachability. False negatives possible (firewall drops ICMP,
+    # gateway only reachable from new IP's subnet) — treat as a soft signal.
+    reachable, _ = ping_host(gateway, timeout_s=2.0)
+    if not reachable:
+        findings["gateway_unreachable"] = (
+            f"Gateway {gateway} did not respond to ping. May be firewalled, or wrong."
+        )
+
+    # 4. DNS missing. With ipv4.method=manual and empty ipv4.dns, the Pi
+    # cannot resolve names — admin reporting silently breaks.
+    if not (dns or "").strip():
+        findings["no_dns_specified"] = (
+            "No DNS server specified — falls back to the gateway address."
+        )
+
+    return findings
+
+
+def _wifi_preflight_policy(findings: dict) -> tuple[list[str], list[str]]:
+    """USER CONTRIBUTION — decide which preflight findings block vs warn.
+
+    Map each finding into one of:
+      - blocking error  → apply is refused, Pi keeps current config
+      - warning         → apply proceeds, user sees a flash message
+      - ignored         → omit from both lists
+
+    Trade-offs:
+      - Strict (everything blocks): safest, but breaks legitimate setups
+        where the gateway drops ICMP, or the new IP coincides with a
+        device about to disconnect.
+      - Lenient (most things warn): user-friendly but defeats the point
+        of preflight if a wrong gateway just gets a shrug-emoji warning.
+      - Mixed: hard-fail clearly broken cases (subnet violation, IP
+        already in use), warn on ambiguous cases (ping failures, DNS
+        fallback to gateway).
+
+    findings keys (each is None or a string):
+      same_subnet_violation, ip_collision, gateway_unreachable,
+      no_dns_specified
+
+    Reason for the policy split: detection is technical and stable;
+    deciding what counts as "too risky to apply" is a judgment call
+    that depends on the network you're deploying into. Keep them apart
+    so changing one doesn't drag the other.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    # Block only on physical impossibility — gateway not on IP's subnet
+    # is arithmetic, not policy. Every other finding can have legitimate
+    # false positives in the wild (corporate firewalls drop ICMP, phones
+    # briefly hold the target IP, etc.) so we warn instead of block.
+    if findings["same_subnet_violation"]:
+        errors.append(findings["same_subnet_violation"])
+    if findings["ip_collision"]:
+        warnings.append(findings["ip_collision"])
+    if findings["gateway_unreachable"]:
+        warnings.append(findings["gateway_unreachable"])
+    # no_dns_specified intentionally ignored — the shell script falls back
+    # to the gateway, so the config works either way and a warning is noise.
+
+    return errors, warnings
+
+
 @main_bp.route("/settings/wifi/ip", methods=["POST"])
 def update_wifi_ip():
     """Set wlan0 to DHCP or a static IPv4 address.
@@ -1467,6 +1581,7 @@ def update_wifi_ip():
     ip = (request.form.get("wifi_ip") or "").strip()
     netmask = (request.form.get("wifi_netmask") or "24").strip()
     gateway = (request.form.get("wifi_gateway") or "").strip()
+    dns = (request.form.get("wifi_dns") or "").strip()
 
     if mode not in ("dhcp", "static"):
         flash("Invalid mode. Use 'dhcp' or 'static'.")
@@ -1492,10 +1607,28 @@ def update_wifi_ip():
             if octets[0] in (0, 127) or octets == [255, 255, 255, 255]:
                 flash(f"Invalid {label}: reserved address.")
                 return redirect(url_for("main.settings") + "?tab=connectivity")
+        if dns:
+            m = ip_re.match(dns)
+            if not m or any(int(o) < 0 or int(o) > 255 for o in m.groups()):
+                flash("Invalid DNS server address.")
+                return redirect(url_for("main.settings") + "?tab=connectivity")
 
-    # Build command for the shell script
+        # Reachability + collision + DNS preflight. Detection is here;
+        # the block/warn policy lives in _wifi_preflight_policy().
+        findings = _wifi_static_preflight(ip, netmask, gateway, dns)
+        errors, warnings = _wifi_preflight_policy(findings)
+        if errors:
+            for err in errors:
+                flash(f"Cannot apply static IP: {err}")
+            return redirect(url_for("main.settings") + "?tab=connectivity")
+        for warn in warnings:
+            flash(f"Warning: {warn}")
+
+    # Build command for the shell script. DNS is passed through; the
+    # script defaults to the gateway address if we send it empty, so the
+    # user is never left with ipv4.dns="" (which silently kills resolution).
     if mode == "static":
-        cmd = ["sudo", "/usr/local/bin/update_wifi_ip.sh", "static", ip, netmask, gateway]
+        cmd = ["sudo", "/usr/local/bin/update_wifi_ip.sh", "static", ip, netmask, gateway, dns]
     else:
         cmd = ["sudo", "/usr/local/bin/update_wifi_ip.sh", "dhcp"]
 
