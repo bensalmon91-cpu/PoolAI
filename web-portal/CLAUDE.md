@@ -268,6 +268,34 @@ ORDER BY last_seen DESC;
 
 ---
 
+## Uptime Monitoring (degraded — read before relying on it)
+
+**Workflow:** `.github/workflows/uptime.yml` → `.github/scripts/uptime_probe.sh`
+Runs every 5 min and probes 7 endpoints across both subdomains.
+
+**Current state (2026-04-26):** Hostinger's WAF rate-limits requests
+from GitHub Actions runner IPs and returns HTTP 429 on most/all
+endpoints. Real users in real browsers are unaffected — this is a
+GitHub-IP-only issue.
+
+To stop the resulting flood of failure emails, the probe now treats
+**429 as "alive, WAF rate-limited"** and skips the marker check for
+those responses. That keeps the workflow green but means the probe has
+lost most of its diagnostic value: it can no longer detect the
+silent-500 failure mode it was originally built to catch (PHP fatal
+returning empty body with status 500 — the exact bug that hid a broken
+admin login for weeks).
+
+**What it still catches:** connection refused, DNS failures, hard 5xx
+on the (often only one) endpoint that escapes the WAF on a given run.
+
+**Upgrade path when uptime monitoring matters:** move to an external
+service (e.g. UptimeRobot free tier). Their probe IPs are whitelisted
+by Hostinger, so they see real responses and can do strict status +
+content checks again.
+
+---
+
 ## Related Projects
 - **Pi Software**: `../pi-software/` (Flask app, has CLAUDE.md)
 - **PoolDash_v6**: `../pi-software/PoolDash_v6/` (main Pi application)
