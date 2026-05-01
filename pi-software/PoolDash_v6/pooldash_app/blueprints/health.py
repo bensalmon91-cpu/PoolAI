@@ -17,11 +17,8 @@ from ..db.connection import get_connection, check_database_health
 health_bp = Blueprint("health", __name__)
 logger = logging.getLogger(__name__)
 
-# Origins that may probe /api/ping cross-origin from an HTTPS context.
-# Browsers gate this behind Private Network Access (PNA) preflight, so we
-# only echo Allow-Origin when the request comes from one of these — never a
-# wildcard. Used by the customer portal's smart-link page (poolai_deploy/go.php)
-# to detect "is the phone on the same LAN as this Pi?".
+# HTTPS portals allowed to probe /api/ping cross-origin via Private Network
+# Access preflight. Allow-Origin is echoed only on exact match — never wildcard.
 _PROBE_ALLOWED_ORIGINS = {
     "https://poolai.modprojects.co.uk",
     "https://poolaissistant.modprojects.co.uk",
@@ -29,9 +26,16 @@ _PROBE_ALLOWED_ORIGINS = {
 
 
 def _probe_cors_headers():
-    """Return PNA + CORS headers if the Origin is a known portal, else {}."""
+    """Return PNA + CORS headers if Origin is in the allowlist, else {}.
+
+    Logs a rejection at INFO so a misconfigured portal subdomain shows up in
+    the journal instead of looking like "Pi offline" to the browser.
+    """
     origin = request.headers.get("Origin", "")
+    if not origin:
+        return {}
     if origin not in _PROBE_ALLOWED_ORIGINS:
+        logger.info("ping probe rejected: origin not in allowlist: %r", origin)
         return {}
     return {
         "Access-Control-Allow-Origin": origin,
@@ -208,15 +212,8 @@ def health_check():
 
 @health_bp.route("/api/ping", methods=["GET", "OPTIONS"])
 def ping():
-    """
-    Simple ping endpoint - minimal response for quick checks.
-
-    Doubles as the LAN-reachability probe target for the cloud portal's
-    smart-link page (https://poolai.modprojects.co.uk/go.php). Browsers
-    require both CORS and Private Network Access preflight on cross-origin
-    fetches from HTTPS to a private IP, so OPTIONS is handled here with the
-    matching headers. See _probe_cors_headers above.
-    """
+    """Simple ping endpoint. Doubles as a LAN-reachability probe target;
+    OPTIONS handled here for PNA preflight (see _probe_cors_headers)."""
     cors = _probe_cors_headers()
     if request.method == "OPTIONS":
         resp = make_response("", 204)

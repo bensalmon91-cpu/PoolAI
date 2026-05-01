@@ -1,13 +1,10 @@
 <?php
 /**
- * Read-only access to subscription/billing state for the current user.
- *
- * Phase C — backed by the `v_user_subscription_status` view (defined in
+ * Read-only projection over the `v_user_subscription_status` view (defined in
  * `database/schema_billing.sql`). The view computes `access_status` (active /
- * grace / inactive) from `user_subscriptions`, `subscription_plans`, and any
- * `subscription_override` flags on `portal_users`. We just project + compute
- * a friendly `days_remaining` for the UI. No writes happen here — Phase D
- * (Stripe Checkout) extends this class with mutating methods.
+ * grace / inactive) from `user_subscriptions`, `subscription_plans`, and the
+ * `subscription_override` flags on `portal_users`. Mutating methods live
+ * elsewhere.
  */
 
 require_once __DIR__ . '/../config/database.php';
@@ -80,10 +77,19 @@ class Subscription {
     }
 
     private static function primaryEndDate(array $row): ?string {
-        // Trialing → trial_end is the relevant deadline; otherwise current_period_end.
+        // Trialing rows MUST use trial_end. Falling through to current_period_end
+        // or override_until would silently render an unrelated date (e.g. an old
+        // comp coupon's expiry) as the trial deadline.
         $status = $row['subscription_status'] ?? null;
-        if ($status === 'trialing' && !empty($row['trial_end'])) {
-            return $row['trial_end'];
+        if ($status === 'trialing') {
+            if (!empty($row['trial_end'])) {
+                return $row['trial_end'];
+            }
+            error_log(sprintf(
+                "Subscription: trialing subscription #%s has no trial_end",
+                $row['subscription_id'] ?? '?'
+            ));
+            return null;
         }
         if (!empty($row['current_period_end'])) {
             return $row['current_period_end'];

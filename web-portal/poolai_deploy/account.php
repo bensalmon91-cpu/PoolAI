@@ -72,10 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $csrfToken = $auth->generateCSRFToken();
 $subscription = Subscription::getStatus((int)$user['id']);
 
-/**
- * Map access_status → (badge label, badge css colour, primary message).
- * Phase D will replace the disabled buttons with real Stripe Checkout links.
- */
+/** Map access_status → (badge label, css class, plan, message). */
 function sub_view(array $s): array {
     $days = $s['days_remaining'];
     $plan = $s['plan_name'] ?: 'Free trial';

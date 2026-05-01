@@ -9,11 +9,10 @@
  *     settings) and it's reachable → http://<local-ip>/.
  *   - Otherwise → cloud device detail page (login first if needed).
  *
- * Important: we deliberately do NOT use the Pi's last-heartbeat IP here. That
- * IP is reported to the cloud every 15 minutes, so it goes stale within one
- * DHCP renewal — and we saw exactly that fail in production. The local-Pi IP
- * is now strictly "something the user typed once into THEIR phone", which is
- * either correct or absent. Absent = we just go cloud, no harm done.
+ * Important: we deliberately do NOT use the Pi's last-heartbeat IP. The
+ * cloud's stored IP goes stale within one DHCP renewal cycle — too unreliable
+ * to drive routing. The local-Pi IP is strictly user-set localStorage on
+ * THEIR phone: either correct or absent. Absent = cloud, no harm.
  */
 
 require_once __DIR__ . '/config/database.php';
@@ -159,18 +158,22 @@ $fallback  = $isLoggedIn ? $cloudHref : $loginHref;
       const hint     = document.getElementById('goHint');
       const spin     = document.getElementById('goSpinner');
 
-      function gotoFallback() { window.location.replace(fallback); }
+      let fallenBack = false;
+      function gotoFallback() {
+        if (fallenBack) return;
+        fallenBack = true;
+        window.location.replace(fallback);
+      }
 
-      // Wait for pwa.js (loaded with defer) to register window.PoolAIPWA before
-      // probing. checkLocalPi() reads the user-set localStorage IP from THIS
-      // phone — it's never something the server knows about. Empty/absent =>
-      // straight to cloud, which is the safe and right default.
+      // Hard ceiling — even if pwa.js never loads or runProbe hangs in some
+      // unexpected way, the user lands on the cloud page within 5s.
+      const hardTimeout = setTimeout(gotoFallback, 5000);
+
       function waitForPwa(retries) {
         if (window.PoolAIPWA && typeof window.PoolAIPWA.checkLocalPi === 'function') {
           return runProbe();
         }
         if (retries <= 0) {
-          // pwa.js never loaded — straight to cloud.
           gotoFallback();
           return;
         }
@@ -178,36 +181,39 @@ $fallback  = $isLoggedIn ? $cloudHref : $loginHref;
       }
 
       async function runProbe() {
-        const settings = window.PoolAIPWA.getLocalPi
-          ? window.PoolAIPWA.getLocalPi()
-          : { ip: '' };
+        try {
+          const settings = window.PoolAIPWA.getLocalPi
+            ? window.PoolAIPWA.getLocalPi()
+            : { ip: '' };
 
-        if (!settings || !settings.ip) {
-          // No local Pi configured on this phone — that's the common case for
-          // a fresh scan. Cloud is the right destination.
-          sub.textContent = 'Opening cloud portal…';
-          setTimeout(gotoFallback, 400);
-          return;
-        }
+          if (!settings || !settings.ip) {
+            sub.textContent = 'Opening cloud portal…';
+            setTimeout(gotoFallback, 400);
+            return;
+          }
 
-        const result = await window.PoolAIPWA.checkLocalPi();
-        if (result && result.reachable && result.baseUrl) {
+          const result = await window.PoolAIPWA.checkLocalPi();
+          if (result && result.reachable && result.baseUrl) {
+            clearTimeout(hardTimeout);
+            spin.style.display = 'none';
+            sub.textContent = 'Found it. Opening your Pi…';
+            window.location.replace(result.baseUrl + '/');
+            return;
+          }
+
           spin.style.display = 'none';
-          sub.textContent = 'Found it. Opening your Pi…';
-          window.location.replace(result.baseUrl + '/');
-          return;
+          sub.textContent = 'Not on the pool\'s network — showing cloud view…';
+          hint.textContent = 'Tip: when you\'re on your pool\'s WiFi, ';
+          const link = document.createElement('a');
+          link.href = '/dashboard.php#localPiSettings';
+          link.textContent = 'save the Pi\'s address';
+          hint.appendChild(link);
+          hint.appendChild(document.createTextNode(' for one-tap local access.'));
+          setTimeout(gotoFallback, 1200);
+        } catch (e) {
+          console.warn('[go] probe error:', e);
+          gotoFallback();
         }
-
-        spin.style.display = 'none';
-        sub.textContent = 'Not on the pool\'s network — showing cloud view…';
-        // Build the hint with a real link (safe DOM construction, no innerHTML).
-        hint.textContent = 'Tip: when you\'re on your pool\'s WiFi, ';
-        const link = document.createElement('a');
-        link.href = '/dashboard.php#localPiSettings';
-        link.textContent = 'save the Pi\'s address';
-        hint.appendChild(link);
-        hint.appendChild(document.createTextNode(' for one-tap local access.'));
-        setTimeout(gotoFallback, 1200);
       }
 
       waitForPwa(20);

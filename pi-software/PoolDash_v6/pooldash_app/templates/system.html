@@ -126,9 +126,6 @@ document.querySelectorAll('input[name="appearance_accent_color"]').forEach(input
   </div>
 </div>
 
-{# Quick-access QR. Phone scans this and lands on the cloud smart-link page,
-   which redirects to this Pi locally if the phone is on the same LAN, or to
-   the cloud portal device page (after login) if the phone is off-network. #}
 {% if smart_link_url %}
 <div class="card">
   <h3>Quick Access QR</h3>

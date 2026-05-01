@@ -37,7 +37,9 @@ class PortalDevices {
                 d.last_seen,
                 h.software_version,
                 CASE
-                    WHEN d.last_seen > DATE_SUB(NOW(), INTERVAL 20 MINUTE) THEN 'online'
+                    -- Heartbeat fires every 15 min; one missed beat shouldn't
+                    -- flip a healthy Pi to offline. 30 min = 1 missed + slack.
+                    WHEN d.last_seen > DATE_SUB(NOW(), INTERVAL 30 MINUTE) THEN 'online'
                     WHEN d.last_seen > DATE_SUB(NOW(), INTERVAL 1 HOUR) THEN 'away'
                     ELSE 'offline'
                 END as status
@@ -72,7 +74,9 @@ class PortalDevices {
                 d.last_seen,
                 h.software_version,
                 CASE
-                    WHEN d.last_seen > DATE_SUB(NOW(), INTERVAL 20 MINUTE) THEN 'online'
+                    -- Heartbeat fires every 15 min; one missed beat shouldn't
+                    -- flip a healthy Pi to offline. 30 min = 1 missed + slack.
+                    WHEN d.last_seen > DATE_SUB(NOW(), INTERVAL 30 MINUTE) THEN 'online'
                     WHEN d.last_seen > DATE_SUB(NOW(), INTERVAL 1 HOUR) THEN 'away'
                     ELSE 'offline'
                 END as status

@@ -22,14 +22,12 @@ from ..utils.net import tcp_connect_ok, scan_all_subnets_for_modbus, test_modbus
 def _smart_link_qr(device_id: str, backend_url: str):
     """
     Build the cloud smart-link URL for this Pi and return (url, svg_markup).
+    See web-portal/poolai_deploy/go.php for the URL contract.
 
-    Encoded URL points at the customer portal's go.php, which probes for the
-    Pi's LAN IP and either redirects to http://<pi-ip>/ (same-network) or to
-    the cloud device detail page after login (off-network). See
-    web-portal/poolai_deploy/go.php.
-
-    Returns ("", "") if device_id is empty (unprovisioned Pi) or the qrcode
-    library is unavailable. Failure here should not break /system rendering.
+    Returns ("", "") if device_id is empty (unprovisioned Pi). Returns
+    (url, "") if the qrcode library is unavailable or rendering fails — the
+    /system template handles svg-empty by showing a "QR rendering unavailable"
+    hint, so failure here must not break the page.
     """
     if not device_id or not backend_url:
         return "", ""
@@ -44,7 +42,11 @@ def _smart_link_qr(device_id: str, backend_url: str):
         buf = BytesIO()
         img.save(buf)
         return url, buf.getvalue().decode("utf-8")
-    except Exception:
+    except (ImportError, ValueError, OSError, UnicodeDecodeError) as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            "smart_link_qr render failed: %s", e, exc_info=True
+        )
         return url, ""
 
 
