@@ -177,6 +177,22 @@ systemctl enable chunk_sync.timer
 systemctl start chunk_sync.timer
 echo "  -> Chunk sync: every 6 hours"
 
+# Install health reporter timer. This drives the heartbeat that updates
+# pi_devices.last_seen on the admin server. Without it, the Pi appears
+# offline in the admin panel even when it's logging Modbus data normally.
+echo "Installing health reporter timer..."
+if [ -f "$SCRIPT_DIR/systemd/poolaissistant_health.service" ] && [ -f "$SCRIPT_DIR/systemd/poolaissistant_health.timer" ]; then
+    cp "$SCRIPT_DIR/systemd/poolaissistant_health.service" "$SYSTEMD_DIR/"
+    cp "$SCRIPT_DIR/systemd/poolaissistant_health.timer" "$SYSTEMD_DIR/"
+    mkdir -p /opt/PoolAIssistant/logs 2>/dev/null || true
+    systemctl daemon-reload
+    systemctl enable poolaissistant_health.timer
+    systemctl start poolaissistant_health.timer
+    echo "  -> Health reporter: every 15 minutes (heartbeat to admin server)"
+else
+    echo "  WARNING: Health reporter unit files not found in $SCRIPT_DIR/systemd/"
+fi
+
 # Install log rotation
 echo "Installing log rotation..."
 if [ -f "$SCRIPT_DIR/poolaissistant-logrotate" ]; then
@@ -214,9 +230,10 @@ echo
 echo "=== Installation Complete ==="
 echo
 echo "Active timers:"
-systemctl list-timers --no-pager | grep -E "(update_check|watchdog|settings_backup|chunk_sync)" || echo "  (none found - check systemctl status)"
+systemctl list-timers --no-pager | grep -E "(update_check|watchdog|settings_backup|chunk_sync|poolaissistant_health)" || echo "  (none found - check systemctl status)"
 echo
 echo "To check status:"
 echo "  systemctl status update_check.timer"
 echo "  systemctl status watchdog.timer"
 echo "  systemctl status settings_backup.timer"
+echo "  systemctl status poolaissistant_health.timer"

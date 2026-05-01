@@ -1,0 +1,14 @@
+[Unit]
+Description=PoolAIssistant Health Reporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=poolai
+ExecStart=/opt/PoolAIssistant/venv/bin/python /opt/PoolAIssistant/app/scripts/health_reporter.py
+StandardOutput=append:/opt/PoolAIssistant/logs/health_reporter.log
+StandardError=append:/opt/PoolAIssistant/logs/health_reporter.log
+
+[Install]
+WantedBy=multi-user.target

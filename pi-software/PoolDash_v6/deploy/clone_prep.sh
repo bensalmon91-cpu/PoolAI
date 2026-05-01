@@ -233,35 +233,11 @@ echo
 
 echo "[4/6] Installing health reporter systemd timer..."
 
-# Create the service
-sudo tee /etc/systemd/system/poolaissistant_health.service > /dev/null <<EOF
-[Unit]
-Description=PoolAIssistant Health Reporter
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-User=$PI_USER
-ExecStart=$VENV_DIR/bin/python $APP_DIR/scripts/health_reporter.py
-StandardOutput=append:$LOGS_DIR/health_reporter.log
-StandardError=append:$LOGS_DIR/health_reporter.log
-EOF
-
-# Create the timer
-sudo tee /etc/systemd/system/poolaissistant_health.timer > /dev/null <<'EOF'
-[Unit]
-Description=Run PoolAIssistant Health Reporter every 15 minutes
-
-[Timer]
-OnBootSec=2min
-OnUnitActiveSec=15min
-AccuracySec=1min
-
-[Install]
-WantedBy=timers.target
-EOF
-
+# Canonical unit files live under scripts/systemd/. install_services.sh
+# installs them on every fresh setup; we mirror that here so a clone-prepped
+# image still has the timer in place when the user boots a fresh SD card.
+sudo cp "$APP_DIR/scripts/systemd/poolaissistant_health.service" /etc/systemd/system/
+sudo cp "$APP_DIR/scripts/systemd/poolaissistant_health.timer" /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable poolaissistant_health.timer
 echo "OK - Health reporter timer installed"
