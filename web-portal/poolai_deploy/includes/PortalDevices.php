@@ -16,7 +16,13 @@ class PortalDevices {
     }
 
     /**
-     * Get all devices linked to this user
+     * Get all devices linked to this user.
+     *
+     * Deliberately does not surface `device_health.ip_address`. The
+     * heartbeat-reported LAN IP goes stale on every DHCP renewal, so leaning
+     * on it for routing or display gives the user wrong information. If we
+     * need a "current LAN IP" later, the right path is asking the phone (the
+     * thing that's actually on the LAN), not the cloud.
      */
     public function getDevices() {
         $stmt = $this->pdo->prepare("
@@ -29,7 +35,6 @@ class PortalDevices {
                 d.device_uuid,
                 d.name as alias,
                 d.last_seen,
-                h.ip_address,
                 h.software_version,
                 CASE
                     WHEN d.last_seen > DATE_SUB(NOW(), INTERVAL 20 MINUTE) THEN 'online'
@@ -39,7 +44,7 @@ class PortalDevices {
             FROM user_devices ud
             JOIN pi_devices d ON ud.device_id = d.id
             LEFT JOIN (
-                SELECT device_id, ip_address, software_version
+                SELECT device_id, software_version
                 FROM device_health h1
                 WHERE ts = (SELECT MAX(ts) FROM device_health h2 WHERE h2.device_id = h1.device_id)
             ) h ON h.device_id = d.id
@@ -51,7 +56,8 @@ class PortalDevices {
     }
 
     /**
-     * Get a single device if user has access
+     * Get a single device if user has access. See getDevices() for the IP
+     * carve-out rationale.
      */
     public function getDevice($deviceId) {
         $stmt = $this->pdo->prepare("
@@ -64,7 +70,6 @@ class PortalDevices {
                 d.device_uuid,
                 d.name as alias,
                 d.last_seen,
-                h.ip_address,
                 h.software_version,
                 CASE
                     WHEN d.last_seen > DATE_SUB(NOW(), INTERVAL 20 MINUTE) THEN 'online'
@@ -74,7 +79,7 @@ class PortalDevices {
             FROM user_devices ud
             JOIN pi_devices d ON ud.device_id = d.id
             LEFT JOIN (
-                SELECT device_id, ip_address, software_version
+                SELECT device_id, software_version
                 FROM device_health h1
                 WHERE ts = (SELECT MAX(ts) FROM device_health h2 WHERE h2.device_id = h1.device_id)
             ) h ON h.device_id = d.id
@@ -268,7 +273,6 @@ class PortalDevices {
                 memory_used_pct,
                 cpu_temp,
                 software_version,
-                ip_address,
                 controllers_online,
                 controllers_offline,
                 controllers_json,

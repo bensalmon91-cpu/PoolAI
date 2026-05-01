@@ -5,15 +5,15 @@
  * URL: /go.php?d=<device_uuid>
  *
  * Routes a phone scan to the right place:
- *   - Phone on the same LAN as the Pi → Pi's local web UI (http://<lan-ip>).
- *   - Phone off-network               → cloud device detail page (login first).
+ *   - Phone has a known local Pi (localStorage IP set via the PWA's local Pi
+ *     settings) and it's reachable → http://<local-ip>/.
+ *   - Otherwise → cloud device detail page (login first if needed).
  *
- * Detection happens client-side via fetch(/api/ping) with a short timeout.
- * Mixed-content + Private Network Access (PNA) preflight is required for the
- * probe to succeed against http://<lan-ip>/api/ping from this HTTPS page; the
- * Pi answers OPTIONS with the right headers (see health.py). When the probe
- * fails (older browser, off-network, Pi unreachable) we fall back to the
- * cloud detail page; if not logged in we send the user to /login.php first.
+ * Important: we deliberately do NOT use the Pi's last-heartbeat IP here. That
+ * IP is reported to the cloud every 15 minutes, so it goes stale within one
+ * DHCP renewal — and we saw exactly that fail in production. The local-Pi IP
+ * is now strictly "something the user typed once into THEIR phone", which is
+ * either correct or absent. Absent = we just go cloud, no harm done.
  */
 
 require_once __DIR__ . '/config/database.php';
@@ -32,40 +32,25 @@ if ($uuid === '' || !preg_match('/^[a-f0-9-]{32,40}$/i', $uuid)) {
 
 $pdo = db();
 
-// Resolve uuid → numeric id + last-known LAN IP. Mirrors the JOIN in
-// PortalDevices::getDevice() but without the user-scoping (anon visitors
-// must still get the probe page).
+// Resolve uuid → numeric id + alias only. We deliberately don't look up the
+// last-known LAN IP — it's stale far too often to drive routing decisions.
 $stmt = $pdo->prepare("
-    SELECT
-        d.id            AS device_id,
-        d.device_uuid   AS device_uuid,
-        d.name          AS alias,
-        h.ip_address    AS lan_ip
-    FROM pi_devices d
-    LEFT JOIN (
-        SELECT device_id, ip_address
-        FROM device_health h1
-        WHERE ts = (SELECT MAX(ts) FROM device_health h2 WHERE h2.device_id = h1.device_id)
-    ) h ON h.device_id = d.id
-    WHERE d.device_uuid = ?
+    SELECT id AS device_id, name AS alias
+    FROM pi_devices
+    WHERE device_uuid = ?
     LIMIT 1
 ");
 $stmt->execute([$uuid]);
 $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$device) {
-    // Unknown UUID — bounce to dashboard (will route to login if anon).
     header('Location: /dashboard.php');
     exit;
 }
 
-$lanIp     = $device['lan_ip'] ?: '';
-$deviceId  = (int)$device['device_id'];
-$alias     = $device['alias'] ?: 'your pool';
+$deviceId = (int)$device['device_id'];
+$alias    = $device['alias'] ?: 'your pool';
 
-// Auth state for client-side branching. Don't enforce login yet — we want the
-// probe to run for anonymous scans too, then walk them through login on the
-// off-LAN branch.
 $auth = new PortalAuth();
 $isLoggedIn = $auth->isLoggedIn();
 
@@ -154,16 +139,13 @@ $fallback  = $isLoggedIn ? $cloudHref : $loginHref;
 </head>
 <body>
   <div class="go-page">
-    <div class="go-card" id="goCard">
+    <div class="go-card">
       <div class="go-spinner" id="goSpinner"></div>
-      <h1 class="go-title" id="goTitle">Connecting to <?= htmlspecialchars($alias) ?>&hellip;</h1>
+      <h1 class="go-title">Connecting to <?= htmlspecialchars($alias) ?>&hellip;</h1>
       <p class="go-sub" id="goSub">Looking for your Pi on this network.</p>
 
       <div class="go-actions">
-        <?php if ($lanIp): ?>
-          <button class="go-btn" id="goLocalBtn" type="button">Open Pi locally</button>
-        <?php endif; ?>
-        <a class="go-btn secondary" id="goCloudLink" href="<?= htmlspecialchars($fallback) ?>">View in cloud portal</a>
+        <a class="go-btn secondary" href="<?= htmlspecialchars($fallback) ?>">View in cloud portal</a>
       </div>
 
       <p class="go-hint" id="goHint"></p>
@@ -172,74 +154,57 @@ $fallback  = $isLoggedIn ? $cloudHref : $loginHref;
 
   <script>
     (function () {
-      const lanIp     = <?= json_encode($lanIp) ?>;
-      const cloudHref = <?= json_encode($cloudHref) ?>;
-      const loginHref = <?= json_encode($loginHref) ?>;
-      const fallback  = <?= json_encode($fallback) ?>;
-      const isAuthed  = <?= $isLoggedIn ? 'true' : 'false' ?>;
+      const fallback = <?= json_encode($fallback) ?>;
+      const sub      = document.getElementById('goSub');
+      const hint     = document.getElementById('goHint');
+      const spin     = document.getElementById('goSpinner');
 
-      const PROBE_TIMEOUT_MS = 2500;
+      function gotoFallback() { window.location.replace(fallback); }
 
-      const sub   = document.getElementById('goSub');
-      const hint  = document.getElementById('goHint');
-      const btn   = document.getElementById('goLocalBtn');
-      const link  = document.getElementById('goCloudLink');
-      const spin  = document.getElementById('goSpinner');
-
-      function gotoLocal() {
-        window.location.replace('http://' + lanIp + '/');
-      }
-
-      function gotoFallback() {
-        window.location.replace(fallback);
-      }
-
-      // Manual local-open. User-initiated nav can break out of mixed-content
-      // probe restrictions even when the probe itself was blocked.
-      if (btn) btn.addEventListener('click', gotoLocal);
-
-      // No known LAN IP for this device → straight to cloud/login.
-      if (!lanIp) {
-        sub.textContent = 'Opening cloud portal…';
-        setTimeout(gotoFallback, 400);
-        return;
-      }
-
-      async function probe() {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), PROBE_TIMEOUT_MS);
-        try {
-          const r = await fetch('http://' + lanIp + '/api/ping', {
-            method: 'GET',
-            mode: 'cors',
-            cache: 'no-store',
-            signal: ctrl.signal
-          });
-          clearTimeout(t);
-          return r.ok;
-        } catch (e) {
-          clearTimeout(t);
-          return false;
+      // Wait for pwa.js (loaded with defer) to register window.PoolAIPWA before
+      // probing. checkLocalPi() reads the user-set localStorage IP from THIS
+      // phone — it's never something the server knows about. Empty/absent =>
+      // straight to cloud, which is the safe and right default.
+      function waitForPwa(retries) {
+        if (window.PoolAIPWA && typeof window.PoolAIPWA.checkLocalPi === 'function') {
+          return runProbe();
         }
-      }
-
-      probe().then(ok => {
-        if (ok) {
-          spin.style.display = 'none';
-          sub.textContent = 'Found it. Opening your Pi…';
-          gotoLocal();
+        if (retries <= 0) {
+          // pwa.js never loaded — straight to cloud.
+          gotoFallback();
           return;
         }
-        // Probe failed — could be off-network, blocked by mixed content (older
-        // browser without PNA support), or the Pi is genuinely down. Either
-        // way, the cloud portal still has the latest synced data.
+        setTimeout(() => waitForPwa(retries - 1), 100);
+      }
+
+      async function runProbe() {
+        const settings = window.PoolAIPWA.getLocalPi
+          ? window.PoolAIPWA.getLocalPi()
+          : { ip: '' };
+
+        if (!settings || !settings.ip) {
+          // No local Pi configured on this phone — that's the common case for
+          // a fresh scan. Cloud is the right destination.
+          sub.textContent = 'Opening cloud portal…';
+          setTimeout(gotoFallback, 400);
+          return;
+        }
+
+        const result = await window.PoolAIPWA.checkLocalPi();
+        if (result && result.reachable && result.baseUrl) {
+          spin.style.display = 'none';
+          sub.textContent = 'Found it. Opening your Pi…';
+          window.location.replace(result.baseUrl + '/');
+          return;
+        }
+
         spin.style.display = 'none';
-        sub.textContent = isAuthed
-          ? 'Not on this network — showing cloud view…'
-          : 'Sign in to view your pool from anywhere.';
-        hint.textContent = 'Tap "Open Pi locally" if you know the Pi is on this network.';
+        sub.textContent = 'Not on the pool\'s network — showing cloud view…';
+        hint.textContent = 'Tip: when you\'re on your pool\'s WiFi, the app can store the local Pi address in Settings.';
         setTimeout(gotoFallback, 1200);
-      });
+      }
+
+      waitForPwa(20);
     })();
   </script>
 </body>

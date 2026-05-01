@@ -296,9 +296,6 @@ $csrfToken = $auth->generateCSRFToken();
                     <?php if ($device['software_version']): ?>
                         Version <?= htmlspecialchars($device['software_version']) ?> &bull;
                     <?php endif; ?>
-                    <?php if ($device['ip_address']): ?>
-                        <?= htmlspecialchars($device['ip_address']) ?> &bull;
-                    <?php endif; ?>
                     <?php if ($device['last_seen']): ?>
                         Last seen: <?= date('d M Y H:i', strtotime($device['last_seen'])) ?>
                     <?php endif; ?>
