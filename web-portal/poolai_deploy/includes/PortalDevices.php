@@ -85,6 +85,44 @@ class PortalDevices {
     }
 
     /**
+     * Latest pool chemistry readings for a device.
+     *
+     * Returns a short-keyed map (pH / Chlorine / ORP / Temp) of the most recent
+     * `*_MeasuredValue` row across all pools attached to the device. Pi-side
+     * naming comes from `tools/modbus_logger.py::_build_aliases` — the metric
+     * column on the Pi is `<Label>_MeasuredValue` (e.g. `pH_MeasuredValue`),
+     * and we strip the suffix here so the consumer (device.php data cards)
+     * doesn't have to know about it. Multi-pool devices currently collapse to
+     * the most recent reading; per-pool display is a future enhancement.
+     */
+    public function getLatestReadings($deviceId) {
+        $stmt = $this->pdo->prepare("
+            SELECT pool, metric, value, unit, ts, received_at
+            FROM device_readings_latest
+            WHERE device_id = ?
+              AND metric LIKE '%\\_MeasuredValue'
+            ORDER BY received_at DESC
+        ");
+        $stmt->execute([$deviceId]);
+
+        $out = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $key = preg_replace('/_MeasuredValue$/', '', $row['metric']);
+            // First (most recent) row wins. Later pools/duplicates skipped.
+            if (!isset($out[$key])) {
+                $out[$key] = [
+                    'value'       => $row['value'] === null ? null : (float)$row['value'],
+                    'unit'        => $row['unit'],
+                    'pool'        => $row['pool'],
+                    'ts'          => $row['ts'],
+                    'received_at' => $row['received_at'],
+                ];
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Link a device using link code
      */
     public function linkDevice($linkCode) {

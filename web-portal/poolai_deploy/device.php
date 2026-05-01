@@ -23,8 +23,40 @@ if (!$device) {
 
 // Fetch real data
 $health = $devicesManager->getDeviceHealth($device['device_id']);
+$readings = $devicesManager->getLatestReadings($device['device_id']);
 $suggestions = $devicesManager->getAISuggestions($device['device_id'], 5);
 $responses = $devicesManager->getAIResponses($device['device_id'], 5);
+
+/** Color-class helper for pool chemistry thresholds (CLAUDE.md). */
+function chem_class(string $metric, ?float $v): string {
+    if ($v === null) return '';
+    switch ($metric) {
+        case 'pH':
+            if ($v < 7.0 || $v > 7.8) return 'danger';
+            if ($v < 7.2 || $v > 7.6) return 'warning';
+            return 'success';
+        case 'Chlorine':
+            if ($v < 0.5 || $v > 4.0) return 'danger';
+            if ($v < 1.0 || $v > 3.0) return 'warning';
+            return 'success';
+        case 'ORP':
+            if ($v < 600 || $v > 800) return 'danger';
+            if ($v < 650 || $v > 750) return 'warning';
+            return 'success';
+        default:
+            return '';
+    }
+}
+
+/** "X min ago" relative-time, returns null if no timestamp. */
+function ago_label(?string $ts): ?string {
+    if (!$ts) return null;
+    $secs = max(0, time() - strtotime($ts));
+    if ($secs < 60) return 'just now';
+    if ($secs < 3600) return floor($secs / 60) . 'm ago';
+    if ($secs < 86400) return floor($secs / 3600) . 'h ago';
+    return floor($secs / 86400) . 'd ago';
+}
 
 $csrfToken = $auth->generateCSRFToken();
 ?>
@@ -276,6 +308,51 @@ $csrfToken = $auth->generateCSRFToken();
                 <?= ucfirst(htmlspecialchars($device['status'])) ?>
             </div>
         </div>
+
+        <!-- Pool Chemistry Cards (latest from device_readings_latest) -->
+        <h3 class="section-title">Pool Chemistry</h3>
+        <?php
+            $chem = [
+                ['key' => 'pH',       'label' => 'pH',       'unit' => '',    'fmt' => '%.2f'],
+                ['key' => 'Chlorine', 'label' => 'Chlorine', 'unit' => 'ppm', 'fmt' => '%.2f'],
+                ['key' => 'ORP',      'label' => 'ORP',      'unit' => 'mV',  'fmt' => '%.0f'],
+                ['key' => 'Temp',     'label' => 'Temp',     'unit' => '°C',  'fmt' => '%.1f'],
+            ];
+            $latestTs = null;
+            foreach ($chem as $c) {
+                $r = $readings[$c['key']] ?? null;
+                if ($r && (!$latestTs || strcmp($r['received_at'], $latestTs) > 0)) {
+                    $latestTs = $r['received_at'];
+                }
+            }
+        ?>
+        <div class="data-grid">
+            <?php foreach ($chem as $c):
+                $r   = $readings[$c['key']] ?? null;
+                $val = $r['value'] ?? null;
+                $cls = chem_class($c['key'], $val);
+                $unit = $r['unit'] ?: $c['unit'];
+            ?>
+            <div class="data-card">
+                <div class="data-card-label"><?= htmlspecialchars($c['label']) ?></div>
+                <div class="data-card-value <?= $cls ?>">
+                    <?= $val === null ? '—' : sprintf($c['fmt'], $val) ?>
+                    <?php if ($val !== null && $unit !== ''): ?>
+                        <span class="data-card-unit"><?= htmlspecialchars($unit) ?></span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php if ($latestTs): ?>
+            <p class="device-meta" style="margin-top:-1rem; margin-bottom:2rem;">
+                Last reading <?= htmlspecialchars(ago_label($latestTs)) ?>
+            </p>
+        <?php else: ?>
+            <p class="device-meta" style="margin-top:-1rem; margin-bottom:2rem;">
+                Waiting for first chemistry snapshot from this Pi.
+            </p>
+        <?php endif; ?>
 
         <?php if ($health): ?>
         <!-- System Health Cards -->

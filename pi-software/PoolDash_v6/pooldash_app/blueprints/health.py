@@ -11,11 +11,35 @@ import sqlite3
 import logging
 from datetime import datetime
 from pathlib import Path
-from flask import Blueprint, jsonify, current_app
+from flask import Blueprint, jsonify, current_app, request, make_response
 from ..db.connection import get_connection, check_database_health
 
 health_bp = Blueprint("health", __name__)
 logger = logging.getLogger(__name__)
+
+# Origins that may probe /api/ping cross-origin from an HTTPS context.
+# Browsers gate this behind Private Network Access (PNA) preflight, so we
+# only echo Allow-Origin when the request comes from one of these — never a
+# wildcard. Used by the customer portal's smart-link page (poolai_deploy/go.php)
+# to detect "is the phone on the same LAN as this Pi?".
+_PROBE_ALLOWED_ORIGINS = {
+    "https://poolai.modprojects.co.uk",
+    "https://poolaissistant.modprojects.co.uk",
+}
+
+
+def _probe_cors_headers():
+    """Return PNA + CORS headers if the Origin is a known portal, else {}."""
+    origin = request.headers.get("Origin", "")
+    if origin not in _PROBE_ALLOWED_ORIGINS:
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Private-Network": "true",
+        "Access-Control-Max-Age": "86400",
+        "Vary": "Origin",
+    }
 
 DATA_DIR = Path("/opt/PoolAIssistant/data")
 APP_DIR = Path("/opt/PoolAIssistant/app")
@@ -182,7 +206,25 @@ def health_check():
     })
 
 
-@health_bp.route("/api/ping")
+@health_bp.route("/api/ping", methods=["GET", "OPTIONS"])
 def ping():
-    """Simple ping endpoint - minimal response for quick checks."""
-    return jsonify({"ok": True, "ts": datetime.utcnow().isoformat() + "Z"})
+    """
+    Simple ping endpoint - minimal response for quick checks.
+
+    Doubles as the LAN-reachability probe target for the cloud portal's
+    smart-link page (https://poolai.modprojects.co.uk/go.php). Browsers
+    require both CORS and Private Network Access preflight on cross-origin
+    fetches from HTTPS to a private IP, so OPTIONS is handled here with the
+    matching headers. See _probe_cors_headers above.
+    """
+    cors = _probe_cors_headers()
+    if request.method == "OPTIONS":
+        resp = make_response("", 204)
+        for k, v in cors.items():
+            resp.headers[k] = v
+        return resp
+
+    resp = jsonify({"ok": True, "ts": datetime.utcnow().isoformat() + "Z"})
+    for k, v in cors.items():
+        resp.headers[k] = v
+    return resp

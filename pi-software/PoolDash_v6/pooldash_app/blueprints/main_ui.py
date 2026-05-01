@@ -18,6 +18,36 @@ from flask import (
 
 from ..utils.net import tcp_connect_ok, scan_all_subnets_for_modbus, test_modbus_connection, ping_host
 
+
+def _smart_link_qr(device_id: str, backend_url: str):
+    """
+    Build the cloud smart-link URL for this Pi and return (url, svg_markup).
+
+    Encoded URL points at the customer portal's go.php, which probes for the
+    Pi's LAN IP and either redirects to http://<pi-ip>/ (same-network) or to
+    the cloud device detail page after login (off-network). See
+    web-portal/poolai_deploy/go.php.
+
+    Returns ("", "") if device_id is empty (unprovisioned Pi) or the qrcode
+    library is unavailable. Failure here should not break /system rendering.
+    """
+    if not device_id or not backend_url:
+        return "", ""
+    base = backend_url.rstrip("/").replace(
+        "poolaissistant.modprojects.co.uk", "poolai.modprojects.co.uk"
+    )
+    url = f"{base}/go.php?d={device_id}"
+    try:
+        import qrcode
+        import qrcode.image.svg as qrsvg
+        img = qrcode.make(url, image_factory=qrsvg.SvgPathImage, box_size=10, border=2)
+        buf = BytesIO()
+        img.save(buf)
+        return url, buf.getvalue().decode("utf-8")
+    except Exception:
+        return url, ""
+
+
 # ---- Network info cache (avoid slow subprocess calls on every page load) ----
 _net_cache = {"ssid": "", "wlan_ip": "", "eth_ip": "", "ts": 0}
 _net_cache_ttl = 10  # Cache for 10 seconds (short enough that a dropped WiFi is visible on next page load)
@@ -3650,6 +3680,13 @@ def system_page():
     # Get storage info
     storage_info = _get_storage_info()
 
+    # Smart-link QR — phone scans this to land on Pi locally (same LAN) or on
+    # the cloud portal device detail page (off-network).
+    smart_link_url, smart_link_svg = _smart_link_qr(
+        data.get("device_id", ""),
+        current_app.config.get("BACKEND_URL", ""),
+    )
+
     return render_template(
         "system.html",
         active_tab="Settings",
@@ -3657,6 +3694,8 @@ def system_page():
         update_status=update_status,
         storage_info=storage_info,
         screen_rotation=data.get("screen_rotation", 0),
+        smart_link_url=smart_link_url,
+        smart_link_svg=smart_link_svg,
         # Protected settings
         device_id=data.get("device_id", ""),
         device_alias=data.get("device_alias", ""),

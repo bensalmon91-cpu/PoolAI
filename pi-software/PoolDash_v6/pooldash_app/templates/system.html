@@ -126,6 +126,30 @@ document.querySelectorAll('input[name="appearance_accent_color"]').forEach(input
   </div>
 </div>
 
+{# Quick-access QR. Phone scans this and lands on the cloud smart-link page,
+   which redirects to this Pi locally if the phone is on the same LAN, or to
+   the cloud portal device page (after login) if the phone is off-network. #}
+{% if smart_link_url %}
+<div class="card">
+  <h3>Quick Access QR</h3>
+  <p class="form-hint">
+    Scan with a phone camera. On the same WiFi → opens this Pi directly.
+    On mobile data or a different network → opens the cloud portal.
+  </p>
+  {% if smart_link_svg %}
+  <div class="qr-wrap" style="background:#fff; padding:0.75rem; border-radius:6px; display:inline-block; margin:0.5rem 0;">
+    {{ smart_link_svg|safe }}
+  </div>
+  {% else %}
+  <p class="form-hint status-warn">QR rendering unavailable — install <code>qrcode</code> Python package.</p>
+  {% endif %}
+  <div class="system-info-row">
+    <span class="muted">Smart link:</span>
+    <code style="word-break:break-all; font-size:0.75rem;">{{ smart_link_url }}</code>
+  </div>
+</div>
+{% endif %}
+
 <script>
 (function() {
   fetch('/settings/update_timer_status')

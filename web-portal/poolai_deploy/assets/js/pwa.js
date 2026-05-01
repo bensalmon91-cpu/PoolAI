@@ -112,6 +112,7 @@
     console.log('[PWA] Install prompt available');
     e.preventDefault();
     deferredPrompt = e;
+    window.dispatchEvent(new CustomEvent('pwa-installable'));
 
     // Check if should show banner
     if (shouldShowInstallBanner()) {
@@ -444,6 +445,10 @@
     // Install
     install: installPWA,
     isInstalled: isInstalledPWA,
+    // True once Chromium has fired beforeinstallprompt and we've stashed the
+    // event. Use to gate "Install on this phone" UI on pages that don't want
+    // the floating banner (e.g. qr.php).
+    isInstallable: () => deferredPrompt !== null,
     isCapable: isPWACapable,
     showInstallBanner,
     dismissInstallBanner,

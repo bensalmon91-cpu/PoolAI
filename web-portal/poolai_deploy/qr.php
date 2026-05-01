@@ -149,13 +149,57 @@
       color: var(--text-muted);
       font-size: 0.875rem;
     }
+
+    .install-here {
+      display: none;
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      background: var(--gray-50);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+    }
+
+    .install-here.visible { display: block; }
+
+    .install-here-title {
+      font-size: 0.9375rem;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+
+    .install-here-sub {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .install-here-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--border-radius);
+      font-size: 0.9375rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .install-here-btn:hover { background: var(--primary-hover); }
   </style>
+  <script src="/assets/js/pwa.js" defer></script>
 </head>
 <body>
   <div class="qr-page">
     <div class="qr-container">
       <h1 class="qr-title">Install PoolAIssistant</h1>
       <p class="qr-subtitle">Scan the QR code with your phone to install</p>
+
+      <div class="install-here" id="installHere">
+        <div class="install-here-title">Already on the phone you want to install on?</div>
+        <div class="install-here-sub">Skip the scan and install directly.</div>
+        <button class="install-here-btn" id="installHereBtn" type="button">Install on this phone</button>
+      </div>
 
       <div class="qr-code" id="qrCode">
         <!-- QR code will be generated here -->
@@ -294,6 +338,38 @@
         link.click();
       });
     }
+
+    // Show "Install on this phone" panel when the browser fires
+    // beforeinstallprompt. Hide if already installed (running standalone) or
+    // if the prompt never fires within a short window (iOS Safari, desktop).
+    (function setupInstallHere() {
+      const panel = document.getElementById('installHere');
+      const btn = document.getElementById('installHereBtn');
+      if (!panel || !btn) return;
+
+      function reveal() {
+        if (window.PoolAIPWA && window.PoolAIPWA.isInstalled()) return;
+        panel.classList.add('visible');
+      }
+
+      // Already firable when this script ran (rare race, but cheap to check).
+      if (window.PoolAIPWA && window.PoolAIPWA.isInstallable()) {
+        reveal();
+      }
+
+      // Future fires.
+      window.addEventListener('pwa-installable', reveal);
+
+      btn.addEventListener('click', async () => {
+        if (!window.PoolAIPWA || !window.PoolAIPWA.isInstallable()) {
+          // Fallback for browsers that never expose the prompt.
+          alert('Tap your browser menu and choose "Add to Home Screen".');
+          return;
+        }
+        const ok = await window.PoolAIPWA.install();
+        if (ok) panel.classList.remove('visible');
+      });
+    })();
 
     // Print QR code
     function printQR() {
