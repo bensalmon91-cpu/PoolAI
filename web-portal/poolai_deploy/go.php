@@ -200,7 +200,13 @@ $fallback  = $isLoggedIn ? $cloudHref : $loginHref;
 
         spin.style.display = 'none';
         sub.textContent = 'Not on the pool\'s network — showing cloud view…';
-        hint.textContent = 'Tip: when you\'re on your pool\'s WiFi, the app can store the local Pi address in Settings.';
+        // Build the hint with a real link (safe DOM construction, no innerHTML).
+        hint.textContent = 'Tip: when you\'re on your pool\'s WiFi, ';
+        const link = document.createElement('a');
+        link.href = '/dashboard.php#localPiSettings';
+        link.textContent = 'save the Pi\'s address';
+        hint.appendChild(link);
+        hint.appendChild(document.createTextNode(' for one-tap local access.'));
         setTimeout(gotoFallback, 1200);
       }
 

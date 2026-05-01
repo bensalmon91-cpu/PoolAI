@@ -92,6 +92,18 @@ $csrfToken = $auth->generateCSRFToken();
 
     <!-- Stylesheets -->
     <link rel="stylesheet" href="assets/css/portal.css">
+    <style>
+        /* Brief attention-pulse on the Local Pi panel when arrived via
+           the #localPiSettings anchor (e.g. from go.php's hint). */
+        @keyframes localPiPulse {
+            0%   { box-shadow: 0 0 0 0 rgba(0, 102, 204, 0.45); }
+            70%  { box-shadow: 0 0 0 14px rgba(0, 102, 204, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 102, 204, 0); }
+        }
+        .local-pi-settings.pulse {
+            animation: localPiPulse 1.6s ease-out;
+        }
+    </style>
 
     <!-- PWA Script -->
     <script src="/assets/js/pwa.js" defer></script>
@@ -330,6 +342,19 @@ $csrfToken = $auth->generateCSRFToken();
                 document.getElementById('localPiIp').value = settings.ip;
             }
             document.getElementById('localPiPort').value = settings.port;
+
+            // Pulse the panel + focus the IP input when arrived via #localPiSettings
+            // anchor (e.g. from go.php's "save the Pi's address" hint). Browser does
+            // the scroll itself; we just draw the eye and prep the form for input.
+            if (window.location.hash === '#localPiSettings') {
+                const panel = document.getElementById('localPiSettings');
+                const ipInput = document.getElementById('localPiIp');
+                if (panel) {
+                    panel.classList.add('pulse');
+                    setTimeout(() => panel.classList.remove('pulse'), 2000);
+                }
+                if (ipInput && !ipInput.value) ipInput.focus();
+            }
         });
 
         function saveLocalPiSettings() {
