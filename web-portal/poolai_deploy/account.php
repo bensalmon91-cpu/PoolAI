@@ -71,32 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $csrfToken = $auth->generateCSRFToken();
 $subscription = Subscription::getStatus((int)$user['id']);
-
-/** Map access_status → (badge label, css class, plan, message). */
-function sub_view(array $s): array {
-    $days = $s['days_remaining'];
-    $plan = $s['plan_name'] ?: 'Free trial';
-
-    switch ($s['access_status']) {
-        case 'active':
-            if ($s['status'] === 'trialing') {
-                return ['Trial', 'success', $plan, $days !== null ? "Trial ends in $days days" : 'Trial active'];
-            }
-            if ($s['override'] === 'comp') {
-                return ['Comped', 'success', $plan, 'Complimentary access'];
-            }
-            $when = $s['current_period_end'] ? date('d M Y', strtotime($s['current_period_end'])) : null;
-            return ['Active', 'success', $plan, $when ? "Renews $when" : 'Subscription active'];
-        case 'grace':
-            return ['Past due', 'warning', $plan, $days !== null ? "Grace period — $days days remaining" : 'Payment overdue — please update billing'];
-        case 'inactive':
-            return ['Inactive', 'danger', $plan, 'No active subscription'];
-        case 'no_subscription':
-        default:
-            return ['No plan', '', 'No subscription', 'Start a free trial to access cloud features'];
-    }
-}
-[$subBadge, $subBadgeCls, $subPlan, $subMsg] = sub_view($subscription);
+$subView = Subscription::viewModel($subscription);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -246,14 +221,14 @@ function sub_view(array $s): array {
         <div class="sub-card">
             <div class="sub-header">
                 <h3>Subscription</h3>
-                <span class="sub-badge <?= htmlspecialchars($subBadgeCls) ?>"><?= htmlspecialchars($subBadge) ?></span>
+                <span class="sub-badge <?= htmlspecialchars($subView['badgeCls']) ?>"><?= htmlspecialchars($subView['badge']) ?></span>
             </div>
-            <div class="sub-plan"><?= htmlspecialchars($subPlan) ?></div>
-            <div class="sub-msg"><?= htmlspecialchars($subMsg) ?></div>
+            <div class="sub-plan"><?= htmlspecialchars($subView['plan']) ?></div>
+            <div class="sub-msg"><?= htmlspecialchars($subView['msg']) ?></div>
             <div class="sub-actions">
                 <button type="button" class="btn btn-primary" disabled
                         title="Coming soon — Stripe checkout is in the next release">
-                    <?= $subscription['access_status'] === 'no_subscription' ? 'Subscribe' : 'Manage Subscription' ?>
+                    <?= $subscription['access_status'] === AccessStatus::NoSubscription->value ? 'Subscribe' : 'Manage Subscription' ?>
                 </button>
                 <button type="button" class="btn" disabled
                         title="Coming soon — coupon redemption ships with billing">

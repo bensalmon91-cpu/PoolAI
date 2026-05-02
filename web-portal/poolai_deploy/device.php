@@ -316,10 +316,14 @@ $csrfToken = $auth->generateCSRFToken();
                 ['key' => 'Temp',     'label' => 'Temp',     'unit' => '°C',  'fmt' => '%.1f'],
             ];
             $latestTs = null;
+            $latestEpoch = 0;
             foreach ($chem as $c) {
                 $r = $readings[$c['key']] ?? null;
-                if ($r && (!$latestTs || strcmp($r['received_at'], $latestTs) > 0)) {
-                    $latestTs = $r['received_at'];
+                if (!$r || empty($r['received_at'])) continue;
+                $epoch = strtotime($r['received_at']);
+                if ($epoch !== false && $epoch > $latestEpoch) {
+                    $latestEpoch = $epoch;
+                    $latestTs    = $r['received_at'];
                 }
             }
         ?>

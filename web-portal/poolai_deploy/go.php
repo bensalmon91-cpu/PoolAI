@@ -13,6 +13,12 @@
  * cloud's stored IP goes stale within one DHCP renewal cycle — too unreliable
  * to drive routing. The local-Pi IP is strictly user-set localStorage on
  * THEIR phone: either correct or absent. Absent = cloud, no harm.
+ *
+ * Auth model: this page is intentionally reachable unauthenticated. UUIDs are
+ * 122-bit and unguessable; the device alias rendered in the title/heading is
+ * already public (it's printed on the QR sticker scanners are reading). The
+ * cloud detail page that off-LAN visitors are redirected to DOES require
+ * login — that's where the real data lives.
  */
 
 require_once __DIR__ . '/config/database.php';
@@ -22,8 +28,11 @@ session_start();
 
 $uuid = trim((string)($_GET['d'] ?? ''));
 
-// Soft validation — UUIDs are 36 chars with dashes, but be lenient about case.
-if ($uuid === '' || !preg_match('/^[a-f0-9-]{32,40}$/i', $uuid)) {
+// Canonical UUID: 8-4-4-4-12 lowercase hex with dashes. Pi-side `device_id`
+// is generated via `uuid.uuid4()` in persist.py, so this is the only shape
+// we ever issue. Reject anything else at the edge — pre-empts garbage and
+// the trivial "all dashes" matches a looser pattern would accept.
+if ($uuid === '' || !preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i', $uuid)) {
     http_response_code(400);
     header('Location: /dashboard.php');
     exit;

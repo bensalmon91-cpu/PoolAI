@@ -186,6 +186,14 @@
     }
 
     .install-here-btn:hover { background: var(--primary-hover); }
+
+    .install-here-msg {
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      min-height: 1em;
+    }
+    .install-here-msg.visible { color: var(--text-color); }
   </style>
   <script src="/assets/js/pwa.js" defer></script>
 </head>
@@ -199,6 +207,7 @@
         <div class="install-here-title">Already on the phone you want to install on?</div>
         <div class="install-here-sub">Skip the scan and install directly.</div>
         <button class="install-here-btn" id="installHereBtn" type="button">Install on this phone</button>
+        <div class="install-here-msg" id="installHereMsg" role="status" aria-live="polite"></div>
       </div>
 
       <div class="qr-code" id="qrCode">
@@ -344,30 +353,45 @@
     // if the prompt never fires within a short window (iOS Safari, desktop).
     (function setupInstallHere() {
       const panel = document.getElementById('installHere');
-      const btn = document.getElementById('installHereBtn');
-      if (!panel || !btn) return;
+      const btn   = document.getElementById('installHereBtn');
+      const msg   = document.getElementById('installHereMsg');
+      if (!panel || !btn || !msg) return;
 
       function reveal() {
         if (window.PoolAIPWA && window.PoolAIPWA.isInstalled()) return;
         panel.classList.add('visible');
       }
 
-      // Already firable when this script ran (rare race, but cheap to check).
-      if (window.PoolAIPWA && window.PoolAIPWA.isInstallable()) {
-        reveal();
+      function showMsg(text) {
+        msg.textContent = text;
+        msg.classList.add('visible');
       }
 
-      // Future fires.
+      // Best-effort platform sniffing for the no-prompt fallback only — used
+      // to pick the right install instructions, never to gate functionality.
+      function platformHint() {
+        const ua = navigator.userAgent || '';
+        const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+        if (isIOS) return 'Tap the Share icon in Safari, then choose "Add to Home Screen".';
+        if (/Android/.test(ua))  return 'Open your browser menu and choose "Install app" or "Add to Home Screen".';
+        return 'Look for an install icon in your address bar, or use your browser menu.';
+      }
+
+      // Already firable when this script ran (rare race, but cheap to check).
+      if (window.PoolAIPWA && window.PoolAIPWA.isInstallable()) reveal();
       window.addEventListener('pwa-installable', reveal);
 
       btn.addEventListener('click', async () => {
         if (!window.PoolAIPWA || !window.PoolAIPWA.isInstallable()) {
-          // Fallback for browsers that never expose the prompt.
-          alert('Tap your browser menu and choose "Add to Home Screen".');
+          showMsg(platformHint());
           return;
         }
         const ok = await window.PoolAIPWA.install();
-        if (ok) panel.classList.remove('visible');
+        if (ok) {
+          panel.classList.remove('visible');
+        } else {
+          showMsg('Install was dismissed. ' + platformHint());
+        }
       });
     })();
 

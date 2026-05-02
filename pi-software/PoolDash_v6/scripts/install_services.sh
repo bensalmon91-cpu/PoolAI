@@ -7,6 +7,11 @@ set -e
 SCRIPT_DIR="/opt/PoolAIssistant/app/scripts"
 SYSTEMD_DIR="/etc/systemd/system"
 
+# Names of components skipped because their unit/script wasn't on disk. Surfaced
+# in the post-install summary so a non-interactive deploy run notices the gap
+# (which previously only emitted a stdout "WARNING:" line — easy to miss).
+SKIPPED_COMPONENTS=()
+
 echo "=== PoolAIssistant Service Installer ==="
 echo
 
@@ -92,7 +97,8 @@ if [ -f "$SCRIPT_DIR/systemd/poolaissistant_health_watchdog.service" ]; then
         systemctl start poolaissistant_health_watchdog.service 2>/dev/null || true
     echo "  -> Health watchdog: reboots Pi if network is stuck for >10 min"
 else
-    echo "  WARNING: Health watchdog service file not found!"
+    echo "  WARNING: Health watchdog service file not found!" >&2
+    SKIPPED_COMPONENTS+=("health watchdog")
 fi
 
 # Install first-boot AP oneshot (runs once when FIRST_BOOT marker exists)
@@ -119,7 +125,8 @@ if [ -f "$SCRIPT_DIR/systemd/poolaissistant_ports.service" ]; then
     "$SCRIPT_DIR/ensure_ports.sh" || true
     echo "  -> Ports: ensures port 80 is accessible for web UI"
 else
-    echo "  WARNING: Ports service file not found!"
+    echo "  WARNING: Ports service file not found!" >&2
+    SKIPPED_COMPONENTS+=("port configuration")
 fi
 
 # Install USB storage service
@@ -190,7 +197,8 @@ if [ -f "$SCRIPT_DIR/systemd/poolaissistant_health.service" ] && [ -f "$SCRIPT_D
     systemctl start poolaissistant_health.timer
     echo "  -> Health reporter: every 15 minutes (heartbeat to admin server)"
 else
-    echo "  WARNING: Health reporter unit files not found in $SCRIPT_DIR/systemd/"
+    echo "  WARNING: Health reporter unit files not found in $SCRIPT_DIR/systemd/" >&2
+    SKIPPED_COMPONENTS+=("health reporter timer")
 fi
 
 # Install log rotation
@@ -229,6 +237,15 @@ fi
 echo
 echo "=== Installation Complete ==="
 echo
+
+if [ "${#SKIPPED_COMPONENTS[@]}" -gt 0 ]; then
+    echo "WARNING: ${#SKIPPED_COMPONENTS[@]} component(s) skipped due to missing files:" >&2
+    for c in "${SKIPPED_COMPONENTS[@]}"; do
+        echo "  - $c" >&2
+    done
+    echo >&2
+fi
+
 echo "Active timers:"
 systemctl list-timers --no-pager | grep -E "(update_check|watchdog|settings_backup|chunk_sync|poolaissistant_health)" || echo "  (none found - check systemctl status)"
 echo
