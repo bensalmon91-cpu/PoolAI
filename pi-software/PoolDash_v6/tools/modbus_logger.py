@@ -498,6 +498,10 @@ LAST_GOOD_CACHE: Dict[Tuple[str, str], Tuple[float, datetime]] = {}
 # Maximum age for cached values (seconds) - don't use stale data older than this
 CACHE_MAX_AGE_SECONDS = 300  # 5 minutes
 
+# How long a controller must have been offline before its open alarms are
+# auto-closed by db_close_alarms_for_offline_controllers (the per-cycle sweep).
+STALE_ALARM_THRESHOLD_MIN = 30
+
 
 def cache_value(host: str, label: str, value: float) -> None:
     """Cache a good reading value for potential use during connection failures."""
@@ -1066,14 +1070,16 @@ def db_init(con: sqlite3.Connection) -> None:
     con.execute("CREATE INDEX IF NOT EXISTS idx_alarm_active ON alarm_events(host, ended_ts);")
     con.execute("CREATE INDEX IF NOT EXISTS idx_alarm_started ON alarm_events(started_ts);")
 
-    # Idempotent migration: closed_reason distinguishes how an alarm row was
-    # ended. NULL = bit observed OFF (normal). 'controller_offline' = sweep
-    # closed it after the source controller was unreachable >= threshold.
-    # 'logger_restart' = startup-clear wiped it on a logger boot.
-    try:
+    # closed_reason distinguishes how an alarm row was ended:
+    #   NULL                 = bit observed OFF (normal close)
+    #   'controller_offline' = sweep closed it after the source controller was
+    #                          unreachable past the stale threshold
+    #   'logger_restart'     = startup-clear wiped it on logger boot
+    # PRAGMA-then-ALTER instead of try/except OperationalError so genuine DB
+    # errors (locked, disk full, missing table) are not silently swallowed.
+    cols = {row[1] for row in con.execute("PRAGMA table_info(alarm_events)")}
+    if "closed_reason" not in cols:
         con.execute("ALTER TABLE alarm_events ADD COLUMN closed_reason TEXT;")
-    except sqlite3.OperationalError:
-        pass
 
     # Controller health tracking table
     con.execute("""
@@ -1162,6 +1168,13 @@ def db_close_alarms_for_offline_controllers(
     # Close any open alarm rows whose source controller has been offline
     # >= threshold_minutes. Without this, alarms whose falling edge happened
     # during a connection outage stay open forever.
+    #
+    # Threshold is measured from last_success_ts (frozen the moment the
+    # controller went offline) rather than last_failure_ts. The latter is
+    # bumped on every failed poll, so for a continuously-offline controller
+    # it would track "now" within the backoff window (<=60s) and never trip.
+    # Idempotent: WHERE ended_ts IS NULL means re-running on subsequent cycles
+    # is a no-op once stale rows are closed.
     ts = utc_now_iso()
     cur = con.execute(
         """
@@ -1171,29 +1184,19 @@ def db_close_alarms_for_offline_controllers(
            AND host IN (
                SELECT host FROM controller_health
                 WHERE status = 'offline'
-                  AND last_failure_ts IS NOT NULL
-                  AND (julianday(?) - julianday(last_failure_ts)) * 24.0 * 60.0 >= ?
+                  AND last_success_ts IS NOT NULL
+                  AND (julianday(?) - julianday(last_success_ts)) * 24.0 * 60.0 >= ?
            )
         """,
         (ts, ts, threshold_minutes),
     )
     n = cur.rowcount
-    if n > 0:
-        per_host = con.execute(
-            """
-            SELECT host, COUNT(*) AS n
-              FROM alarm_events
-             WHERE ended_ts = ? AND closed_reason = 'controller_offline'
-             GROUP BY host
-            """,
-            (ts,),
-        ).fetchall()
-        for host, count in per_host:
-            logging.warning(
-                "Auto-closed %d stale alarm(s) on %s (controller offline >= %d min)",
-                count, host, threshold_minutes,
-            )
     con.commit()
+    if n > 0:
+        logging.warning(
+            "Auto-closed %d stale alarm row(s) (controller offline >= %d min)",
+            n, threshold_minutes,
+        )
     return n
 
 
@@ -1701,6 +1704,15 @@ def main_bayrol_loop(
             # Update alarm state
             last_alarm_states[alarm_key] = new_alarm_state
 
+        # Auto-close any alarms whose source controller has been offline past
+        # the threshold. Catches falling edges missed during an outage.
+        try:
+            db_close_alarms_for_offline_controllers(
+                con, threshold_minutes=STALE_ALARM_THRESHOLD_MIN
+            )
+        except Exception as e:
+            logging.warning("auto-close sweep failed: %s", e)
+
         # Notify systemd watchdog
         notify_watchdog()
 
@@ -1978,12 +1990,14 @@ def main() -> int:
                 except Exception as e:
                     logging.debug("[%s %s] failed to update health: %s", pool_name, host, e)
 
-        # Auto-close any alarms whose source controller has been offline >= 30 min.
-        # Catches the case where a falling edge was missed during an outage.
+        # Auto-close any alarms whose source controller has been offline past
+        # the threshold. Catches falling edges missed during an outage.
         try:
-            db_close_alarms_for_offline_controllers(con, threshold_minutes=30)
+            db_close_alarms_for_offline_controllers(
+                con, threshold_minutes=STALE_ALARM_THRESHOLD_MIN
+            )
         except Exception as e:
-            logging.debug("auto-close sweep failed: %s", e)
+            logging.warning("auto-close sweep failed: %s", e)
 
         # Notify systemd watchdog that we're still alive
         notify_watchdog()

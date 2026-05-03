@@ -1,0 +1,9 @@
+# Dev-only dependencies for the unit-test suite under tools/tests/.
+# Pi devices do NOT install these — runtime deps live in requirements.txt.
+#
+# Setup (run from pi-software/PoolDash_v6/):
+#   pip install -r requirements.txt -r requirements-dev.txt
+#
+# Run tests:
+#   pytest tools/tests/
+pytest>=8.0.0
