@@ -1066,6 +1066,15 @@ def db_init(con: sqlite3.Connection) -> None:
     con.execute("CREATE INDEX IF NOT EXISTS idx_alarm_active ON alarm_events(host, ended_ts);")
     con.execute("CREATE INDEX IF NOT EXISTS idx_alarm_started ON alarm_events(started_ts);")
 
+    # Idempotent migration: closed_reason distinguishes how an alarm row was
+    # ended. NULL = bit observed OFF (normal). 'controller_offline' = sweep
+    # closed it after the source controller was unreachable >= threshold.
+    # 'logger_restart' = startup-clear wiped it on a logger boot.
+    try:
+        con.execute("ALTER TABLE alarm_events ADD COLUMN closed_reason TEXT;")
+    except sqlite3.OperationalError:
+        pass
+
     # Controller health tracking table
     con.execute("""
     CREATE TABLE IF NOT EXISTS controller_health (
@@ -1127,6 +1136,65 @@ def db_close_alarm(con: sqlite3.Connection, ended_ts: str, pool: str, host: str,
           LIMIT 1
      )
     """, (ended_ts, host, pool, source_label, bit_name))
+
+
+def close_alarms_at_startup(con: sqlite3.Connection) -> int:
+    # Close every open alarm row at logger boot. The first poll cycle
+    # re-detects any still-active conditions as fresh events (bitfield and
+    # BAYROL first-observation logic treats prev=None as a transition from 0).
+    # Matches the operator expectation that 'reboot clears alarms'.
+    ts = utc_now_iso()
+    n = con.execute(
+        "UPDATE alarm_events SET ended_ts = ?, closed_reason = 'logger_restart' "
+        "WHERE ended_ts IS NULL",
+        (ts,),
+    ).rowcount
+    con.commit()
+    if n:
+        logging.info("Closed %d open alarm row(s) at logger startup", n)
+    return n
+
+
+def db_close_alarms_for_offline_controllers(
+    con: sqlite3.Connection,
+    threshold_minutes: int = 30,
+) -> int:
+    # Close any open alarm rows whose source controller has been offline
+    # >= threshold_minutes. Without this, alarms whose falling edge happened
+    # during a connection outage stay open forever.
+    ts = utc_now_iso()
+    cur = con.execute(
+        """
+        UPDATE alarm_events
+           SET ended_ts = ?, closed_reason = 'controller_offline'
+         WHERE ended_ts IS NULL
+           AND host IN (
+               SELECT host FROM controller_health
+                WHERE status = 'offline'
+                  AND last_failure_ts IS NOT NULL
+                  AND (julianday(?) - julianday(last_failure_ts)) * 24.0 * 60.0 >= ?
+           )
+        """,
+        (ts, ts, threshold_minutes),
+    )
+    n = cur.rowcount
+    if n > 0:
+        per_host = con.execute(
+            """
+            SELECT host, COUNT(*) AS n
+              FROM alarm_events
+             WHERE ended_ts = ? AND closed_reason = 'controller_offline'
+             GROUP BY host
+            """,
+            (ts,),
+        ).fetchall()
+        for host, count in per_host:
+            logging.warning(
+                "Auto-closed %d stale alarm(s) on %s (controller offline >= %d min)",
+                count, host, threshold_minutes,
+            )
+    con.commit()
+    return n
 
 
 def db_update_controller_health(con: sqlite3.Connection, health: ControllerHealth) -> None:
@@ -1497,8 +1565,15 @@ def poll_bayrol_controller(
 
                 # Track state change
                 if prev_state is None:
-                    # First observation - just record state
+                    # First observation: log currently-active alarms as fresh
+                    # events. Startup-clear means the DB has no pre-reboot rows
+                    # to rehydrate from, so first-poll truth is ground truth.
                     new_alarm_state[alarm_key] = is_active
+                    if is_active:
+                        source_label = "BAYROL_Alarm"
+                        bit_name = alarm_key
+                        db_open_alarm(con, ts, pool_name, host, system_name, serial_number, source_label, bit_name)
+                        logging.warning("[%s %s] BAYROL alarm ON: %s (first observation)", pool_name, host, alarm_key)
                 elif is_active != prev_state:
                     # State changed
                     new_alarm_state[alarm_key] = is_active
@@ -1688,6 +1763,10 @@ def main() -> int:
     logging.info("Connection settings: timeout=%.1fs, retries=%d, ping_check=%s, backoff=%s",
                  MODBUS_TIMEOUT, MODBUS_RETRIES, PING_CHECK_ENABLED, BACKOFF_ENABLED)
 
+    # Stale-alarm policy: clear all open rows on every boot. First poll cycle
+    # re-detects active conditions as fresh events.
+    close_alarms_at_startup(con)
+
     rehydrated_bitfields, rehydrated_bayrol = rehydrate_alarm_state(con)
 
     # BAYROL profile uses a different polling architecture
@@ -1831,9 +1910,10 @@ def main() -> int:
                             prev = last_bitfield_value.get(key)
 
                             if prev is None:
-                                # First observation: store only (don’t backfill events)
-                                last_bitfield_value[key] = ival
-                                continue
+                                # Startup-clear wipes pre-reboot rows, so first
+                                # observation must surface still-active alarm
+                                # bits as fresh 0->1 events. Treat baseline as 0.
+                                prev = 0
 
                             if ival == prev:
                                 continue
@@ -1897,6 +1977,13 @@ def main() -> int:
                     con.commit()
                 except Exception as e:
                     logging.debug("[%s %s] failed to update health: %s", pool_name, host, e)
+
+        # Auto-close any alarms whose source controller has been offline >= 30 min.
+        # Catches the case where a falling edge was missed during an outage.
+        try:
+            db_close_alarms_for_offline_controllers(con, threshold_minutes=30)
+        except Exception as e:
+            logging.debug("auto-close sweep failed: %s", e)
 
         # Notify systemd watchdog that we're still alive
         notify_watchdog()
