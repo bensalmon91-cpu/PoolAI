@@ -1,6 +1,6 @@
 # PoolAIssistant Pi Software (PoolDash_v6 app)
 
-**Current Version: 6.11.4** (2026-04-24)
+**Current Version: 6.11.10** (released 2026-05-03)
 
 > This file documents the Flask app inside `PoolDash_v6/`.
 > For the higher-level install / fleet / deploy docs see the parent
@@ -243,14 +243,19 @@ Protected settings in web UI require password: `PoolAI`
 
 ---
 
-## Recently landed (v6.11.2 — v6.11.4)
+## Recently landed (v6.11.2 — v6.11.10)
 
-See commits `58933ac`, `f75ce4d`, `5890b66` for details. Highlights:
+Highlights of every shipped version since v6.11.2. Use `git log --oneline` for the full trail.
 
-- **Network redesign (v6.11.2)** — auto-failover AP daemon removed, replaced by manual `ap_control.sh` toggle + `health_watchdog.sh` reboot-if-stuck. Missing `192.168.4.1/24` cleanup on AP teardown fixed. `update_wifi.sh` now upserts by SSID (no more duplicate profile accumulation). Settings page reorganized into 4 tabs. `_primary_device_ip()` picks the default-route interface for display.
-- **Installer cleanup (v6.11.3)** — fresh installs work end-to-end: `.gitattributes` forces LF on shell scripts, `setup_pi.sh` creates `poolai` user + venv + eth0 static IP on pool subnet, `install_services.sh` auto-starts UI, example env no longer ships placeholder pool IPs (logger falls back to `pooldash_settings.json`).
-- **WiFi static IP UI (v6.11.4)** — Settings → Connectivity → WiFi IP Configuration. New `update_wifi_ip.sh` helper modifies the active WiFi NM profile, same pattern as Ethernet.
-- **Read-only filesystem remount (v6.11.2)** — `update_wifi.sh` now does `remount_rw` / `remount_ro` around nmcli writes to `/etc/NetworkManager/system-connections/`. Addresses the old Issues 11 & 14.
+- **Network redesign (v6.11.2)** — auto-failover AP daemon removed, replaced by manual `ap_control.sh` toggle + `health_watchdog.sh` reboot-if-stuck. Missing `192.168.4.1/24` cleanup on AP teardown fixed. `update_wifi.sh` now upserts by SSID. Settings page reorganized into 4 tabs. `_primary_device_ip()` picks the default-route interface.
+- **Installer cleanup (v6.11.3)** — fresh installs work end-to-end: `.gitattributes` forces LF on shell scripts, `setup_pi.sh` creates `poolai` user + venv + eth0 static IP on pool subnet, `install_services.sh` auto-starts UI, example env no longer ships placeholder pool IPs.
+- **WiFi static IP UI (v6.11.4)** — Settings → Connectivity → WiFi IP Configuration. New `update_wifi_ip.sh` helper modifies the active WiFi NM profile.
+- **Read-only filesystem remount (v6.11.2)** — `update_wifi.sh` does `remount_rw` / `remount_ro` around nmcli writes to `/etc/NetworkManager/system-connections/`.
+- **WiFi static-IP preflight + DNS fallback (v6.11.5)** — closes the v6.11.4 footgun where `ipv4.dns=""` silently killed name resolution under `ipv4.method=manual`. `_wifi_static_preflight()` does same-subnet math + IP collision + gateway-ping checks; `update_wifi_ip.sh` defaults `ipv4.dns` to gateway when empty. Validation policy: block only on physical impossibility (same-subnet violation), warn on collision/ping-fail, ignore DNS-empty.
+- **Smart-link QR + PWA install + cloud chemistry + subscription card (v6.11.6)** — go.php-based smart links open the customer portal at `poolai.modprojects.co.uk` from a QR scan. PWA install button on the install page. Cloud-side chemistry display for offline Pis. Subscription status card on the settings page.
+- **v6.11.7–v6.11.8** — review-pass cleanups of v6.11.6 work; deferred polish items.
+- **Stale alarm cleanup, attempt 1 (v6.11.9)** — adds idempotent `closed_reason TEXT` column to `alarm_events`, `close_alarms_at_startup()` (closes every open row on logger boot), and `db_close_alarms_for_offline_controllers()` (per-cycle sweep that closes rows whose source controller has been offline ≥ 30 min). BAYROL + bitfield first-observation paths now treat `prev=None` as a transition from 0 so still-active alarms surface as fresh events after startup-clear. **Note:** the offline-sweep was dead code in this release — see v6.11.10.
+- **Alarm cleanup fix + first unit-test infra (v6.11.10)** — fixes the v6.11.9 sweep: SQL now uses `last_success_ts` (frozen at offline-onset) instead of `last_failure_ts` (advances every poll, threshold never tripped). BAYROL polling loop now also calls the sweep. Migration uses `PRAGMA table_info()` instead of broad `OperationalError` swallow. Sweep failures log at WARNING. Adds `requirements-dev.txt` + `tools/tests/test_alarm_lifecycle.py` (6 tests, in-memory SQLite, sub-second runtime). First unit-test infrastructure in this codebase.
 
 ## Known rough edges (post-install UX, deferred backlog)
 

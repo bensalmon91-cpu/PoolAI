@@ -1,13 +1,14 @@
 # PoolAIssistant Project - Cloud Integration Roadmap
 
-**Last Updated:** 2026-04-24 · **Pi software current:** v6.11.4
+**Last Updated:** 2026-05-03 · **Pi software current:** v6.11.10
 
 This master document tracks the PoolAIssistant ecosystem including the Pi software, web portal, and cloud integration features.
 
 ## Current state snapshot
 
-- **Pi software:** v6.11.4 (network redesign + installer cleanup + WiFi static IP UI shipped)
-- **Active Pis:** Swanwood (production) @ `10.0.30.5` (WiFi static), tvcctv (second unit) @ `10.0.30.131`
+- **Pi software (released):** v6.11.10 (alarm-lifecycle hardening + first unit-test infra). Earlier shipped versions: v6.11.5 (WiFi static-IP preflight + DNS fallback), v6.11.6 (smart-link QR + PWA install + cloud chemistry + subscription card), v6.11.7–8 (review polish), v6.11.9 (alarm cleanup — superseded by v6.11.10 which fixes a dead-code sweep).
+- **Active Pis:** Swanwood (production) @ `10.0.30.247` (WiFi DHCP per 2026-04-26 recovery), tvcctv (second unit) @ `10.0.30.131`. Both will land on v6.11.10 at the next 03:00 update cron.
+- **Web portal:** legacy `poolaissistant.*/portal/*` retired 2026-05-03 (10 PHP files now 301-redirect to `poolai.*`). Customer portal at `poolai.modprojects.co.uk` is the canonical forward direction.
 - **Next milestone:** fresh SD card install — validates the v6.11.3 installer cleanup end-to-end on a clean Pi. Plan logged in `pi-software/CLAUDE.md` under "Fresh SD Card Install Plan".
 - **Open backlog:** 2 items — hardcoded `poolai:12345678` default password (security), SSH/sudo TTY docs. See `.claude/projects/.../memory/project_installer_improvements.md`.
 
