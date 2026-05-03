@@ -30,7 +30,9 @@ PoolAIssistant-Project/
 See individual CLAUDE.md files for detailed documentation:
 - `pi-software/CLAUDE.md` — **primary docs** (install, deploy, fleet, fresh SD card plan)
 - `pi-software/PoolDash_v6/CLAUDE.md` — Flask app layout and known UX papercuts
-- `web-portal/CLAUDE.md` — Server deployment, API endpoints
+- `web-portal/CLAUDE.md` — Server deployment, API endpoints, **domain split map** (which code lives on `poolaissistant.*` vs `poolai.*`)
+
+**Domain split TL;DR:** `poolaissistant.modprojects.co.uk` = admin backend & all API (Pi-facing). `poolai.modprojects.co.uk` = customer-facing portal (browser-facing, makes API calls back to `poolaissistant.*`). FTP lands in `poolai.*` only — admin-domain deploys hop via a server-side `copy()`. Full table + known quirks (incl. the duplicate `php_deploy/portal/` legacy app) in `web-portal/CLAUDE.md`.
 
 ---
 

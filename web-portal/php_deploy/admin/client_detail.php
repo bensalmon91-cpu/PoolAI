@@ -447,7 +447,7 @@ function formatBytes($bytes) {
                         <?php endif; ?>
                     </div>
                 </div>
-                <a href="../portal/device.php?id=<?= $device['device_id'] ?>" class="btn btn-sm btn-secondary" target="_blank">
+                <a href="https://poolai.modprojects.co.uk/device.php?id=<?= $device['device_id'] ?>" class="btn btn-sm btn-secondary" target="_blank">
                     View Data
                 </a>
             </div>

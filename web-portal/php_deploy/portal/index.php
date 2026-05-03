@@ -1,16 +1,7 @@
 <?php
-/**
- * PoolAIssistant Portal - Index
- * Redirects to dashboard if logged in, otherwise to login
- */
-
-require_once __DIR__ . '/includes/PortalAuth.php';
-
-$auth = new PortalAuth();
-
-if ($auth->isLoggedIn()) {
-    header('Location: dashboard.php');
-} else {
-    header('Location: login.php');
-}
+// Retired 2026-05-03. Customer portal lives at poolai.modprojects.co.uk now.
+// See web-portal/CLAUDE.md → "Known architectural quirks" for context.
+$qs = $_SERVER['QUERY_STRING'] ?? '';
+$dest = 'https://poolai.modprojects.co.uk/' . ($qs !== '' ? '?' . $qs : '');
+header('Location: ' . $dest, true, 301);
 exit;

@@ -13,25 +13,12 @@ This is the server-side component that handles device provisioning, software upd
   User: u931726538.mbs
   Pass: Henley2026!
 
-  WARNING: FTP is chrooted to customer portal directory, NOT public_html!
-  FTP root maps to: /home/u931726538/domains/poolai.modprojects.co.uk/
+  NOTE: FTP is chrooted to poolai.modprojects.co.uk; admin-domain deploys hop via PHP installer.
+  See "Domain split" below for the full picture.
 
-=== ACTUAL SERVER PATHS (IMPORTANT!) ===
-  Admin backend (poolaissistant.modprojects.co.uk):
-    /home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant/
-
-  Customer portal (poolai.modprojects.co.uk):
-    /home/u931726538/domains/poolai.modprojects.co.uk/
-
-  NOTE: There is also /home/u931726538/public_html/poolaissistant/ but this
-        is NOT served by poolaissistant.modprojects.co.uk - don't use it!
-
-=== ADMIN BACKEND ===
-URL: https://poolaissistant.modprojects.co.uk
-Admin Panel: https://poolaissistant.modprojects.co.uk/admin/
-
-=== CUSTOMER PORTAL ===
-URL: https://poolai.modprojects.co.uk
+=== URLS ===
+Admin backend: https://poolaissistant.modprojects.co.uk  (admin panel: /admin/)
+Customer portal: https://poolai.modprojects.co.uk
 
 === SHARED DATABASE (MySQL) ===
 Host: localhost
@@ -43,24 +30,63 @@ Bootstrap Secret (for device provisioning):
   e1d6eeeb68c011b8c40d8d3386018137be53342a1af7c4d9
 ```
 
-### Server Paths
+### Domain split — definitive map
 
-**Admin Backend (poolaissistant.modprojects.co.uk):**
-```
-API:      /api/                    # Device API endpoints
-Config:   /config/                 # database.php, config.php
-Admin:    /admin/                  # Admin dashboard
-Updates:  /data/updates/           # Software update packages (.tar.gz)
-```
+Two subdomains, very different roles. Many files share names across the two deploy trees, so don't trust filenames alone — check which `*_deploy/` directory you're editing.
 
-**Customer Portal (poolai.modprojects.co.uk):**
-```
-/                    # Root - redirects to login or dashboard
-/login.php           # Login page
-/dashboard.php       # Device list
-/device.php?id=X     # Device detail view
-/account.php         # Account settings
-```
+**`poolaissistant.modprojects.co.uk` — admin backend & all API**
+
+Every machine-to-machine call goes here. Pis never make requests to `poolai.*`.
+
+| Code dir (`web-portal/php_deploy/…`) | Live URL | Role |
+|---|---|---|
+| `api/` | `/api/*` | Device API (provision, heartbeat, snapshot, updates), Admin API, Portal API (`/api/portal/*`) |
+| `admin/` | `/admin/*` | Admin dashboard (clients, devices, AI, software_updates) |
+| `staff/` | `/staff/*` | Staff interface |
+| `config/`, `includes/` | `/config/*`, `/includes/*` | Shared PHP libs |
+| `portal/` | `/portal/*` | **Retired 2026-05-03** — files now 301-redirect to `poolai.*` (see Known quirks) |
+| `scripts/` | `/scripts/*` | Server-side cron scripts |
+| `database/` | not web-served | SQL migrations |
+| (data tree) | `/data/updates/*.tar.gz` | Software update tarballs |
+
+Server path: `/home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant/`
+Email FROM: `noreply@poolaissistant.*`, `alerts@poolaissistant.*`
+**FTP cannot reach this directly** — the FTP chroot lands on the customer-portal domain. Deploys hop via `_deploy_bundle.php` (see `deploy.manifest.json`) or via the cross-chroot `copy()` trick in software-update publishes.
+
+**`poolai.modprojects.co.uk` — customer-facing portal**
+
+Storefront. Mostly static pages + thin JS that makes API calls back to `poolaissistant.*/api/portal/`.
+
+| Code dir (`web-portal/poolai_deploy/…`) | Live URL | Role |
+|---|---|---|
+| (root) | `/` | login, register, dashboard, device.php, account, qr.php, go.php (smart-link), install.php, offline.php (PWA) |
+
+Server path: `/home/u931726538/domains/poolai.modprojects.co.uk/`
+Email FROM: `noreply@poolai.*`
+**FTP root** — this is where `u931726538.mbs` lands. Every deploy starts here.
+
+### Who calls whom
+
+- **Pi → admin domain only.** `persist.py:82` `backend_url`, `update_check.py:44` `UPDATE_SERVER_URL`. Pi DNS-preflights `poolaissistant.*` specifically.
+- **Pi → customer domain for *display only*.** `main_ui.py:33-37` rewrites `poolaissistant.*` → `poolai.*` for QR codes / install hints. The Pi never makes HTTP requests to `poolai.*`.
+- **Customer browser → admin domain.** `poolai_deploy/config/portal.php:31` defines `PORTAL_API_URL = 'https://poolaissistant.*/api/portal'`. The customer portal's data calls cross subdomains; CORS is configured on the Pi probe endpoint (`health.py:23-24`) and on the admin API.
+- **Software update package flow.** Tarball uploaded to `poolai.*` via FTP, then a server-side `copy()` crosses the chroot boundary into `poolaissistant.*/data/updates/`.
+
+### Rules of thumb
+
+- *"Where does this PHP file deploy?"* — API endpoint or admin page? `php_deploy/`. Customer-facing chrome? `poolai_deploy/`.
+- *"Which URL goes in a Pi config?"* — Always `poolaissistant.*`. Never `poolai.*` (only exception is the QR-code rewrite, which is for human eyes, not HTTP).
+- *"Where does FTP land?"* — Always `poolai.*`. Server-side `copy()` is the bridge.
+
+### Known architectural quirks
+
+1. **Legacy customer portal at `poolaissistant.*/portal/*` was retired 2026-05-03.**
+   Each `php_deploy/portal/*.php` now contains a 6-line stub that 301-redirects to the equivalent path on `poolai.*` (preserving query strings for verify/reset tokens). `php_deploy/includes/PortalAuth.php` and `PortalDevices.php` are kept — they're still consumed by `php_deploy/api/portal/readings.php`.
+   The deploy-manifest glob (`deploy.manifest.json:17`) is unchanged so the stubs ship and overwrite the live files. Once redirect logs show the legacy URL is dead, drop the glob and let server-side cleanup remove the directory.
+
+2. **`PORTAL_BASE_URL` still differs between `php_deploy/config/portal.php` and `poolai_deploy/config/portal.php`** (`…/portal` vs root). Now mostly cosmetic — the admin-side PortalAuth no longer fires emails since the pages that called it are redirect stubs. But if anything in `api/portal/*` ever sends mail using the admin-side config, the embedded link will 301-bounce to `poolai.*`. Worth normalising on the next pass.
+
+3. **Shadow path that doesn't serve.** `/home/u931726538/public_html/poolaissistant/` exists on disk but is NOT served by `poolaissistant.modprojects.co.uk`. The live path is `/home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant/`. Don't FTP into the wrong one.
 
 ---
 
@@ -83,102 +109,41 @@ GET /data/updates/update-v6.4.0.tar.gz
 Direct download of update package
 ```
 
-### Data Sync (from Pi)
+### Heartbeat (from Pi, every minute)
 ```
-POST /api/sync.php
+POST /api/heartbeat.php
 Headers: Authorization: Bearer <api_key>
-Body: { "readings": [...], "alarms": [...] }
+Body: { device telemetry, network metrics, AI sync payload }
+```
+
+### Snapshot (from Pi, every 6 minutes — bulk readings + alarms)
+```
+POST /api/device/snapshot.php
+Headers: Authorization: Bearer <api_key>
+Body: { "readings": [...], "alarms": [...], "health": {...} }
 ```
 
 ---
 
 ## Database Tables
 
-### software_updates
-```sql
-CREATE TABLE software_updates (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  version VARCHAR(20) NOT NULL,
-  filename VARCHAR(255) NOT NULL,
-  file_size INT NOT NULL,
-  checksum VARCHAR(64) NOT NULL,
-  description TEXT,
-  is_active TINYINT(1) DEFAULT 1,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+Canonical schema lives in `php_deploy/database/*.sql` migrations. Don't trust DDL inlined into docs — it goes stale fast. Notable tables (names matter, columns evolve):
 
-### devices
-```sql
-CREATE TABLE devices (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  device_id VARCHAR(64) UNIQUE NOT NULL,
-  api_key_hash VARCHAR(64) NOT NULL,
-  hostname VARCHAR(255),
-  model VARCHAR(100),
-  software_version VARCHAR(20),
-  last_seen TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+- `pi_devices` — registered Pi devices (the table the API joins to via API key)
+- `device_health` — heartbeat telemetry rows
+- `device_readings_latest`, `device_readings_history` — chemistry readings from Pi snapshots
+- `device_alarms`, `alarm_events` — alarm state
+- `device_commands` — admin-requested commands queued for the next heartbeat (e.g. "upload now")
+- `software_updates` — published update tarballs (queried by `/api/updates/check.php`)
+- `portal_users`, `user_devices` — customer accounts and device-link mappings
+- `subscription_plans`, `user_subscriptions`, `payment_history`, `coupons`, `coupon_redemptions` — billing
+- `ai_suggestions`, `ai_responses`, etc. — Claude-driven analysis history
 
 ---
 
 ## Deploying Software Updates
 
-### IMPORTANT: FTP Limitations
-The FTP account is chrooted to the customer portal directory, NOT the admin backend.
-Direct FTP upload to poolaissistant paths will FAIL. Use PHP installer scripts instead.
-
-### From Windows (PoolDash_v6 directory)
-```powershell
-# 1. Create update package
-tar -czvf ../update-v6.4.0.tar.gz --exclude="__pycache__" --exclude="*.pyc" --exclude="instance" --exclude=".git" --exclude="*.sqlite3" --exclude="docs" .
-
-# 2. Get checksum and size
-certutil -hashfile ../update-v6.4.0.tar.gz SHA256
-(Get-Item ../update-v6.4.0.tar.gz).Length
-
-# 3. Upload to FTP root (customer portal) - this is where FTP has access
-curl --ftp-ssl -k -T ../update-v6.4.0.tar.gz -u "u931726538.mbs:Henley2026!" "ftp://ftp.modprojects.co.uk/"
-
-# 4. Create installer script to copy to correct location (see below)
-# 5. Upload and run installer via customer portal URL
-```
-
-### Installer Script Template (deploy_update.php)
-Upload this to FTP root, then access via https://poolai.modprojects.co.uk/deploy_update.php
-```php
-<?php
-// Copy update file from FTP root to correct poolaissistant location
-$src = __DIR__ . '/update-v6.4.0.tar.gz';
-$dest_dir = '/home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant/data/updates/';
-$dest = $dest_dir . 'update-v6.4.0.tar.gz';
-
-if (!is_dir($dest_dir)) mkdir($dest_dir, 0755, true);
-
-if (copy($src, $dest)) {
-    echo "SUCCESS: Copied to $dest\n";
-    echo "Size: " . filesize($dest) . " bytes\n";
-
-    // Add to database
-    require_once '/home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant/config/database.php';
-    $pdo = db();
-    $stmt = $pdo->prepare("INSERT INTO software_updates
-        (version, filename, file_size, checksum, description, is_active, created_at)
-        VALUES (?, ?, ?, ?, ?, 1, NOW())
-        ON DUPLICATE KEY UPDATE file_size=?, checksum=?, description=?, is_active=1");
-    $stmt->execute(['6.4.0', 'update-v6.4.0.tar.gz', filesize($dest), 'CHECKSUM', 'Description',
-                    filesize($dest), 'CHECKSUM', 'Description']);
-    echo "Database updated\n";
-
-    // Clean up
-    unlink($src);
-    unlink(__FILE__);
-} else {
-    echo "FAILED\n";
-}
-```
+The canonical playbook lives in [`pi-software/CLAUDE.md`](../pi-software/CLAUDE.md#software-update-process) — package + checksum + FTP-to-FTP-root + cross-chroot deploy script. The deploy script (`deploy_update.php`) self-verifies the SHA256, upserts the `software_updates` row, deactivates older versions, and self-deletes. Most recent successful publish: v6.11.9 on 2026-05-03.
 
 ---
 
@@ -187,38 +152,24 @@ if (copy($src, $dest)) {
 ```
 web-portal/
 ├── CLAUDE.md              # This file
-├── php_deploy/            # Admin backend (poolaissistant.modprojects.co.uk)
-│   ├── api/               # Device API endpoints
-│   │   ├── provision.php  # Device registration
-│   │   ├── heartbeat.php  # Device heartbeat & AI sync
-│   │   └── updates/       # Software update endpoints
-│   ├── config/
-│   │   ├── config.php     # Constants (bootstrap_secret)
-│   │   └── database.php   # PDO connection
-│   ├── includes/
-│   │   ├── auth.php       # API key validation
-│   │   └── api_helpers.php
-│   └── admin/             # Admin dashboard
-│       ├── ai_dashboard.php
-│       ├── ai_questions.php
-│       ├── ai_responses.php
-│       ├── ai_suggestions.php
-│       └── ai_analytics.php
-├── poolai_deploy/         # Customer portal (poolai.modprojects.co.uk)
-│   ├── index.php          # Smart redirect (login/dashboard)
-│   ├── login.php
-│   ├── dashboard.php
-│   ├── device.php         # Device detail with health/AI data
-│   ├── account.php
-│   ├── config/
-│   │   ├── portal.php     # Portal settings
-│   │   └── database.php   # Shared DB connection
-│   ├── includes/
-│   │   ├── PortalAuth.php
-│   │   └── PortalDevices.php
-│   └── assets/css/portal.css
-└── backend/               # LEGACY: Node.js/Postgres version
+├── deploy.manifest.json   # Declarative deploy manifest (consumed by deploy.py)
+├── php_deploy/            # → poolaissistant.modprojects.co.uk
+│   ├── api/               #     Device API + Admin API + /api/portal/*
+│   ├── admin/             #     Admin dashboard (clients, devices, AI, updates)
+│   ├── staff/             #     Staff/timeclock interface
+│   ├── config/            #     database.php, config.php (admin-domain)
+│   ├── includes/          #     PortalAuth, PortalDevices (consumed by api/portal/*)
+│   ├── portal/            #     RETIRED — 301-redirect stubs to poolai.* (kept until cleanup)
+│   ├── scripts/           #     Server-side cron scripts
+│   └── database/          #     SQL migrations
+├── poolai_deploy/         # → poolai.modprojects.co.uk
+│   ├── (root pages)       #     login, register, dashboard, device, account, qr, go, install, offline (PWA)
+│   ├── config/, includes/ #     Shared portal libs (Subscription, PortalAuth, PortalDevices)
+│   └── assets/            #     Static CSS/JS
+└── backend/               # LEGACY: Node.js/Postgres version (not deployed)
 ```
+
+See "Domain split" above for which URL each subtree maps to.
 
 ---
 
@@ -226,7 +177,7 @@ web-portal/
 
 ### Check if device is provisioned
 ```sql
-SELECT * FROM devices WHERE device_id = 'pi-xxxx-xxxx';
+SELECT * FROM pi_devices WHERE device_id = 'pi-xxxx-xxxx';
 ```
 
 ### View available updates
@@ -243,8 +194,8 @@ UPDATE software_updates SET is_active = 0 WHERE version = '6.3.0';
 
 ### View device activity
 ```sql
-SELECT device_id, hostname, software_version, last_seen
-FROM devices
+SELECT device_id, name, software_version, last_seen
+FROM pi_devices
 ORDER BY last_seen DESC;
 ```
 
@@ -252,19 +203,11 @@ ORDER BY last_seen DESC;
 
 ## Important Notes
 
-1. **SERVER PATHS ARE CONFUSING** - There are multiple poolaissistant directories:
-   - CORRECT: `/home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant/`
-   - WRONG: `/home/u931726538/public_html/poolaissistant/` (exists but NOT served!)
-   Always use PHP installer scripts from poolai to deploy to the correct location.
+(For server paths and FTP chroot details, see "Domain split" above — those are no longer duplicated here.)
 
-2. **FTP is limited** - The FTP user is chrooted to the customer portal, not admin backend.
-   Use installer scripts uploaded to poolai.modprojects.co.uk to copy files to poolaissistant.
-
-3. **Bootstrap secret is hardcoded** on both server and Pi (persist.py DEFAULTS)
-
-4. **Auto-update runs at 3 AM** on Pi devices via systemd timer
-
-5. **Version comparison is semantic** - 6.4.0 > 6.3.0 > 6.2.5
+- **Bootstrap secret is hardcoded** on both server and Pi (`pi-software/PoolDash_v6/pooldash_app/persist.py` DEFAULTS).
+- **Auto-update runs at 3 AM** on Pi devices via `update_check.timer`. Pis can also be updated manually via Settings → Check for Updates, or `sudo python3 /opt/PoolAIssistant/app/scripts/update_check.py --apply`.
+- **Version comparison is semantic** — 6.4.0 > 6.3.0 > 6.2.5. The Pi only applies updates where server version > current version.
 
 ---
 

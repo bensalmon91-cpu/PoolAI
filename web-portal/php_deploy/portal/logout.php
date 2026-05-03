@@ -1,12 +1,6 @@
 <?php
-/**
- * PoolAIssistant Portal - Logout
- */
-
-require_once __DIR__ . '/includes/PortalAuth.php';
-
-$auth = new PortalAuth();
-$auth->logout();
-
-header('Location: login.php');
+// Retired 2026-05-03. Customer portal lives at poolai.modprojects.co.uk now.
+$qs = $_SERVER['QUERY_STRING'] ?? '';
+$dest = 'https://poolai.modprojects.co.uk/logout.php' . ($qs !== '' ? '?' . $qs : '');
+header('Location: ' . $dest, true, 301);
 exit;
