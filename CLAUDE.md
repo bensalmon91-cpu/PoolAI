@@ -37,26 +37,13 @@ See individual CLAUDE.md files for detailed documentation:
 
 ---
 
-## Quick Reference - Credentials
+## Quick Reference - Endpoints & Credential Map
+
+**Live secrets are no longer stored here.** They live in `PoolAIssistant-Project/.env`
+(gitignored, single source of truth — see `scripts/consolidate_env.py`). This
+section is now a *map* of which key in `.env` corresponds to which service.
 
 ```
-=== PI SSH ACCESS ===
-  Username: poolai
-  Password: 12345678
-  Sudo: NOPASSWD configured
-
-=== FTP (Customer Portal) ===
-  Host: ftp.modprojects.co.uk
-  User: u931726538.mbs
-  Pass: Henley2026!
-  NOTE: FTP is chrooted to poolai.modprojects.co.uk, NOT poolaissistant!
-
-=== DATABASE (Shared MySQL) ===
-  Host: localhost
-  Name: u931726538_PoolAIssistant
-  User: u931726538_mbs_modproject
-  Pass: PoolAI2026!
-
 === ADMIN BACKEND ===
   URL: https://poolaissistant.modprojects.co.uk
   Admin: https://poolaissistant.modprojects.co.uk/admin/
@@ -64,9 +51,33 @@ See individual CLAUDE.md files for detailed documentation:
 === CUSTOMER PORTAL ===
   URL: https://poolai.modprojects.co.uk
 
-=== BOOTSTRAP SECRET ===
-  e1d6eeeb68c011b8c40d8d3386018137be53342a1af7c4d9
+=== FTP (Customer Portal — for code deploy) ===
+  Host: SFTP_HOST          User: u931726538.mbs       Pass: SFTP_PASSWORD
+  NOTE: FTP is chrooted to poolai.modprojects.co.uk, NOT poolaissistant!
+  (Brain uses a different FTP account — u931726538.piaccess — for /data/chunks/)
+
+=== DATABASE (Shared MySQL on Hostinger) ===
+  Host: DB_HOST            Name: DB_NAME
+  User: DB_USER            Pass: DB_PASS
+
+=== PI SSH ACCESS ===
+  Username: poolai
+  Password: (hardcoded default — see backlog: rotate per-Pi, currently 12345678)
+  Sudo: NOPASSWD configured
+
+=== BOOTSTRAP SECRET (device provisioning) ===
+  Value: BOOTSTRAP_SECRET   (used by web-portal admin and ai-assistant/php)
 ```
+
+**⚠️ History note:** Earlier commits of this file contained these secrets in
+plaintext. Removing them here does not remove them from git history. If true
+rotation is desired:
+1. Rotate the FTP password, DB password, and BOOTSTRAP_SECRET on the server.
+2. Update `PoolAIssistant-Project/.env` and the deploy-folder mirrors.
+3. Optionally `git filter-repo` to scrub history (separate decision).
+
+The Pi SSH default password is a separate, longer-running backlog item
+(per the "Open backlog" section above) — not in scope for this consolidation.
 
 ---
 
