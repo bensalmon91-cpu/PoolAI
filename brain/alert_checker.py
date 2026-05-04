@@ -123,7 +123,7 @@ class AlertChecker:
                 "plausible_range": f"normal: {threshold_alert['range']}",
                 "reason": (
                     f"{pool} {sensor} reading {latest_val:.2f} is flat over the "
-                    f"last {len(values)} readings (spread {spread:.3f} ≤ "
+                    f"last {len(values)} readings (spread {spread:.3f} <= "
                     f"threshold {spread_threshold}) and outside the normal range "
                     f"{threshold_alert['range']}. Probable stuck/dead probe."
                 ),

@@ -104,26 +104,18 @@ risk lurks in:
 **Fix:** anything that looks like environment-specific data should come from
 `.env` (preferably the consolidated root `.env` once that lands).
 
-### B4. Data-quality sanity checks before alerts
+### B4. Data-quality sanity checks before alerts ✅ DONE (2026-05-04)
 
-**Problem:** the Mar 12 alert run flagged Vitality pH at **2.67** as
-CRITICAL. A live pH of 2.67 is hazardous and should have triggered immediate
-human attention, but the *most likely explanation* is a failed pH probe
-(stuck reading), not a real chemistry event. Right now alerts treat both
-identically.
+**Implementation:**
+- Module-level `IMPLAUSIBLE_BANDS` in `alert_checker.py`: pH 5–9, Temp 0–60°C, ORP 0–1500 mV. Anything outside is a `fault_type=implausible_value` sensor fault.
+- Module-level `STUCK_SPREAD` thresholds (pH 0.05, Temp 0.1°C, ORP 5 mV). If all 100 recent readings sit within that spread *and* the latest is outside the normal range, it's a `fault_type=stuck_at_unusual` sensor fault.
+- New `classify_sensor_fault()` runs *before* the chemistry-threshold check. When triggered, the per-sensor chemistry alert is suppressed for that probe — the fault subsumes it (the chemistry threshold is meaningless on a faulty reading).
+- New top-level `sensor_faults` array in `analysis/latest_alerts.json`, parallel to `alerts` and `trends`. Sensor faults force overall status to CRITICAL (chemistry status is unknown for those probes).
+- `update_claude_md.py` (B6) renders sensor faults as a dedicated section *before* the active-alerts table, with a clear "instrumentation issue, not chemistry" disclaimer.
 
-**Fix:** before alerting, run cheap sanity checks:
-- pH should be 5.0–9.0 in any operating pool — outside that band, flag as
-  *probable sensor fault* not *chemistry critical*.
-- Temperature should be 0–60°C — outside, *probable sensor fault*.
-- ORP should be 0–1500 mV — same.
-- A reading that is **constant for >2 hours** at unusual values → probable
-  stuck sensor.
-- A reading that **suddenly jumps >50%** in <5 min and stays there →
-  probable sensor swap or cable fault.
+**Verified on the post-Mar-12 dataset:** 8 chemistry alerts → 1 chemistry alert (Spa Temp 18.2°C, plausible heating failure) + 7 sensor faults (Vitality pH 2.67 implausible; Main/Plunge/Spa/Vitality temperature/ORP/pH stuck-at-unusual). The "battery acid" false alarm is resolved.
 
-The investigator would then surface "Vitality pH probe likely failed" rather
-than "POOL IS BATTERY ACID."
+**Deferred:** "sudden 50% jump in <5 min" detection. Tuning-heavy and would false-positive on legitimate dosing events (which routinely produce step changes when a relay kicks). Re-evaluate if specific failure modes appear that B4's current checks miss.
 
 ### B5. Replace silent FTP failures
 
