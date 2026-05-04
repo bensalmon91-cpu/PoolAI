@@ -1,39 +1,40 @@
 """
 PoolAIssistant Brain - Database Sync Tool
-Downloads chunk files from the server and assembles them into a local SQLite database.
+Downloads chunk files from the FTP server and assembles them into a local SQLite database.
+
+Multi-device aware: auto-discovers device IDs as subdirectories under /data/chunks/
+on the FTP server and syncs each into data/chunks/{device_id}/ locally.
 
 Features:
-- Downloads chunks via HTTP API (primary) or FTP (fallback)
-- Incremental merging: only new chunks are merged, not rebuilt from scratch
-- Tracks both downloaded AND merged chunks separately
-- Cleans up decompressed .db files after merge (keeps .gz for backup)
+- FTP-based chunk discovery and download (one transport, no auth-key drift)
+- Per-device tracking in sync_state.json (devices.{id}.downloaded_chunks / merged_chunks)
+- Incremental merging into a single output DB (rows are tagged by `host` column)
+- Auto-migrates legacy flat sync_state.json + flat chunk layout to per-device subdirs
 
 Usage:
     python db_sync.py              # Normal incremental sync
     python db_sync.py --rebuild    # Force full rebuild from all chunks
-    python db_sync.py --cleanup    # Delete chunks from server
+    python db_sync.py --cleanup    # Delete all chunks from server (every device)
     python db_sync.py --status     # Show sync status
+    python db_sync.py --devices    # Discover devices on server and exit
 """
 
 import os
 import sys
 import json
 import gzip
+import re
 import sqlite3
 import logging
-import tempfile
 import shutil
-import requests
 from datetime import datetime
 from pathlib import Path
-from ftplib import FTP
+from ftplib import FTP, error_perm
 
 from dotenv import load_dotenv
 
-# Load environment
 load_dotenv()
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -45,12 +46,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+SERVER_CHUNKS_ROOT = '/data/chunks'  # FTP path, parent of per-device subdirs
+
+
 class ChunkSyncer:
-    """Downloads and assembles chunk files from the server."""
+    """Downloads and assembles chunk files from the FTP server, multi-device aware."""
 
     def __init__(self):
-        self.api_url = os.getenv('API_URL', 'https://poolaissistant.modprojects.co.uk')
-        self.api_key = os.getenv('API_KEY', '')
         self.ftp_config = {
             'host': os.getenv('SFTP_HOST', 'ftp.modprojects.co.uk'),
             'port': int(os.getenv('SFTP_PORT', 21)),
@@ -63,170 +65,190 @@ class ChunkSyncer:
         self.delete_after_download = os.getenv('DELETE_AFTER_DOWNLOAD', 'true').lower() == 'true'
         self.cleanup_after_merge = os.getenv('CLEANUP_AFTER_MERGE', 'true').lower() == 'true'
 
-        # Create directories
+        # Optional allowlist: DEVICE_IDS=2,5 restricts which device dirs to sync.
+        # If unset, every numeric subdirectory under SERVER_CHUNKS_ROOT is synced.
+        allowlist = os.getenv('DEVICE_IDS', '').strip()
+        self.device_allowlist = (
+            [d.strip() for d in allowlist.split(',') if d.strip()] if allowlist else None
+        )
+
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir.mkdir(parents=True, exist_ok=True)
 
+        self._migrate_legacy_layout()
+
+    # ------------------------------------------------------------------
+    # Legacy migration (one-shot, idempotent)
+    # ------------------------------------------------------------------
+    def _migrate_legacy_layout(self):
+        """Move pre-multi-device flat chunks into data/chunks/2/ (historical device)."""
+        flat_chunks = list(self.chunks_dir.glob('*.db.gz')) + list(self.chunks_dir.glob('*.db'))
+        if not flat_chunks:
+            return
+
+        legacy_device = '2'
+        target_dir = self.chunks_dir / legacy_device
+        target_dir.mkdir(parents=True, exist_ok=True)
+        moved = 0
+        for src in flat_chunks:
+            dst = target_dir / src.name
+            if dst.exists():
+                src.unlink()  # already migrated, drop the duplicate
+            else:
+                src.rename(dst)
+            moved += 1
+        if moved:
+            logger.info(f"Migrated {moved} legacy flat chunk(s) to {target_dir}")
+
+    # ------------------------------------------------------------------
+    # State (per-device)
+    # ------------------------------------------------------------------
     def load_state(self) -> dict:
-        """Load sync state from file."""
-        if self.state_file.exists():
-            with open(self.state_file) as f:
-                return json.load(f)
-        return {
-            'downloaded_chunks': [],  # Chunks downloaded from server
-            'merged_chunks': [],      # Chunks already merged into output DB
-            'last_sync': None,
-            'last_merge': None,
-            'output_row_count': 0
-        }
+        """Load sync state, auto-migrating legacy flat schema to per-device."""
+        if not self.state_file.exists():
+            return {
+                'devices': {},
+                'last_sync': None,
+                'last_merge': None,
+                'output_row_count': 0,
+            }
+        with open(self.state_file) as f:
+            state = json.load(f)
+
+        # Migrate legacy flat schema to per-device under id "2".
+        if 'downloaded_chunks' in state or 'merged_chunks' in state:
+            legacy_device = '2'
+            state.setdefault('devices', {})
+            state['devices'].setdefault(legacy_device, {
+                'downloaded_chunks': [],
+                'merged_chunks': [],
+            })
+            dev = state['devices'][legacy_device]
+            dev['downloaded_chunks'] = sorted(set(
+                dev['downloaded_chunks'] + state.pop('downloaded_chunks', [])
+            ))
+            dev['merged_chunks'] = sorted(set(
+                dev['merged_chunks'] + state.pop('merged_chunks', [])
+            ))
+            logger.info(f"Migrated legacy state to devices.{legacy_device}")
+
+        state.setdefault('devices', {})
+        return state
 
     def save_state(self, state: dict):
-        """Save sync state to file."""
         with open(self.state_file, 'w') as f:
             json.dump(state, f, indent=2)
 
-    def fetch_chunk_list(self) -> list:
-        """Fetch list of available chunks from API, falling back to FTP if API fails."""
-        # Try API first
+    @staticmethod
+    def _device_state(state: dict, device_id: str) -> dict:
+        return state['devices'].setdefault(device_id, {
+            'downloaded_chunks': [],
+            'merged_chunks': [],
+        })
+
+    # ------------------------------------------------------------------
+    # FTP helpers
+    # ------------------------------------------------------------------
+    def _connect_ftp(self) -> FTP:
+        ftp = FTP()
+        ftp.connect(self.ftp_config['host'], self.ftp_config['port'], timeout=60)
+        ftp.login(self.ftp_config['user'], self.ftp_config['password'])
+        return ftp
+
+    def discover_devices(self) -> list:
+        """List numeric device-ID subdirectories under SERVER_CHUNKS_ROOT on FTP."""
         try:
-            response = requests.get(
-                f"{self.api_url}/api/list_chunks.php",
-                headers={'X-API-Key': self.api_key},
-                timeout=30
-            )
-            data = response.json()
-            if data.get('ok'):
-                logger.info(f"Found {data['chunk_count']} chunks for {data['device_name']}")
-                return data['chunks']
-            else:
-                logger.warning(f"API error: {data.get('error')}, falling back to FTP")
-        except Exception as e:
-            logger.warning(f"API failed: {e}, falling back to FTP")
-
-        # Fallback: list chunks directly via FTP
-        return self._fetch_chunk_list_ftp()
-
-    def _fetch_chunk_list_ftp(self) -> list:
-        """Fetch chunk list directly from FTP server."""
-        try:
-            ftp = FTP()
-            ftp.connect(self.ftp_config['host'], self.ftp_config['port'], timeout=60)
-            ftp.login(self.ftp_config['user'], self.ftp_config['password'])
-
-            # Navigate to chunks directory
-            ftp.cwd('/data/chunks/2')
-
-            # Get all chunk files
-            files = [f for f in ftp.nlst() if f.endswith('.db.gz')]
+            ftp = self._connect_ftp()
+            ftp.cwd(SERVER_CHUNKS_ROOT)
+            entries = []
+            ftp.retrlines('LIST', entries.append)
             ftp.quit()
-
-            if not files:
-                logger.info("No chunks found on FTP server")
-                return []
-
-            # Build chunk info from filenames
-            chunks = []
-            for filename in files:
-                chunks.append({
-                    'chunk_filename': filename,
-                    'ftp_path': f'/data/chunks/2/{filename}',
-                    'period_start': filename.split('_to_')[0] if '_to_' in filename else 'unknown',
-                    'period_end': filename.split('_to_')[1].split('_')[0] if '_to_' in filename else 'unknown'
-                })
-
-            logger.info(f"Found {len(chunks)} chunks via FTP")
-            return chunks
-
         except Exception as e:
-            logger.error(f"FTP chunk list failed: {e}")
+            logger.error(f"Could not list {SERVER_CHUNKS_ROOT} on FTP: {e}")
             return []
 
+        device_ids = []
+        for line in entries:
+            # Standard UNIX listing: "drwxr-xr-x ... <name>"
+            if not line.startswith('d'):
+                continue
+            name = line.split()[-1]
+            if name in ('.', '..'):
+                continue
+            if not re.fullmatch(r'\d+', name):
+                continue  # only numeric device IDs are real devices
+            device_ids.append(name)
+
+        if self.device_allowlist:
+            allowed = set(self.device_allowlist)
+            device_ids = [d for d in device_ids if d in allowed]
+            logger.info(f"DEVICE_IDS allowlist active; syncing only: {sorted(device_ids)}")
+        else:
+            logger.info(f"Discovered devices on server: {sorted(device_ids)}")
+        return sorted(device_ids)
+
+    def fetch_chunks_for_device(self, device_id: str) -> list:
+        """List .db.gz chunks under /data/chunks/{device_id}/, tagged with device_id."""
+        path = f"{SERVER_CHUNKS_ROOT}/{device_id}"
+        try:
+            ftp = self._connect_ftp()
+            ftp.cwd(path)
+            files = [f for f in ftp.nlst() if f.endswith('.db.gz')]
+            ftp.quit()
+        except Exception as e:
+            logger.error(f"FTP list failed for device {device_id}: {e}")
+            return []
+
+        chunks = []
+        for filename in files:
+            period_start = filename.split('_to_')[0] if '_to_' in filename else 'unknown'
+            period_end = (
+                filename.split('_to_')[1].split('_')[0] if '_to_' in filename else 'unknown'
+            )
+            chunks.append({
+                'device_id': device_id,
+                'chunk_filename': filename,
+                'ftp_path': f"{path}/{filename}",
+                'period_start': period_start,
+                'period_end': period_end,
+            })
+        if chunks:
+            logger.info(f"  Device {device_id}: found {len(chunks)} chunk(s) on server")
+        return chunks
+
+    # ------------------------------------------------------------------
+    # Download
+    # ------------------------------------------------------------------
     def download_chunk(self, chunk: dict) -> Path:
-        """Download a chunk file via HTTP API (primary) or FTP (fallback)."""
+        """Download a chunk via FTP into data/chunks/{device_id}/ and optionally delete it."""
+        device_id = chunk['device_id']
         filename = chunk['chunk_filename']
-        local_path = self.chunks_dir / filename
+        device_dir = self.chunks_dir / device_id
+        device_dir.mkdir(parents=True, exist_ok=True)
+        local_path = device_dir / filename
+        ftp_path = chunk['ftp_path']
 
         if local_path.exists():
-            logger.info(f"  Chunk already exists locally: {filename}")
+            logger.info(f"  Already local (device {device_id}): {filename}")
+            if self.delete_after_download:
+                self._delete_from_ftp(ftp_path, filename)
             return local_path
 
-        # Try HTTP API download first (if download_url available)
-        if chunk.get('download_url'):
-            result = self._download_chunk_http(chunk, local_path)
-            if result:
-                return result
-
-        # Fallback to FTP
-        return self._download_chunk_ftp(chunk, local_path)
-
-    def _download_chunk_http(self, chunk: dict, local_path: Path) -> Path:
-        """Download chunk via HTTP API."""
-        filename = chunk['chunk_filename']
-        download_url = chunk.get('download_url', '')
-
-        if not download_url:
-            return None
-
         try:
-            url = f"{self.api_url}{download_url}"
-            response = requests.get(
-                url,
-                headers={'X-API-Key': self.api_key},
-                timeout=300,
-                stream=True
-            )
-
-            if response.status_code != 200:
-                logger.warning(f"  HTTP download failed ({response.status_code}): {filename}")
-                return None
-
-            # Save to file
-            with open(local_path, 'wb') as f:
-                for chunk_data in response.iter_content(chunk_size=65536):
-                    f.write(chunk_data)
-
-            size_mb = local_path.stat().st_size / 1024 / 1024
-            logger.info(f"  Downloaded (HTTP): {filename} ({size_mb:.1f}MB)")
-            return local_path
-
-        except Exception as e:
-            logger.warning(f"  HTTP download failed for {filename}: {e}")
-            if local_path.exists():
-                local_path.unlink()
-            return None
-
-    def _download_chunk_ftp(self, chunk: dict, local_path: Path) -> Path:
-        """Download chunk via FTP (fallback method)."""
-        filename = chunk['chunk_filename']
-        ftp_path = chunk.get('ftp_path', '')
-
-        if not ftp_path:
-            logger.error(f"  No FTP path for {filename}")
-            return None
-
-        try:
-            ftp = FTP()
-            ftp.connect(self.ftp_config['host'], self.ftp_config['port'], timeout=60)
-            ftp.login(self.ftp_config['user'], self.ftp_config['password'])
-
-            # Download file
+            ftp = self._connect_ftp()
             with open(local_path, 'wb') as f:
                 ftp.retrbinary(f'RETR {ftp_path}', f.write)
-
             size_mb = local_path.stat().st_size / 1024 / 1024
-            logger.info(f"  Downloaded (FTP): {filename} ({size_mb:.1f}MB)")
+            logger.info(f"  Downloaded (device {device_id}): {filename} ({size_mb:.1f}MB)")
 
-            # Delete from server after successful download
             if self.delete_after_download:
                 try:
                     ftp.delete(ftp_path)
                     logger.info(f"  Deleted from server: {filename}")
                 except Exception as e:
                     logger.warning(f"  Failed to delete from server: {filename} - {e}")
-
             ftp.quit()
             return local_path
-
         except Exception as e:
             logger.error(f"  FTP download failed for {filename}: {e}")
             if local_path.exists():
@@ -234,11 +256,8 @@ class ChunkSyncer:
             return None
 
     def _delete_from_ftp(self, ftp_path: str, filename: str):
-        """Delete a file from the FTP server."""
         try:
-            ftp = FTP()
-            ftp.connect(self.ftp_config['host'], self.ftp_config['port'], timeout=60)
-            ftp.login(self.ftp_config['user'], self.ftp_config['password'])
+            ftp = self._connect_ftp()
             ftp.delete(ftp_path)
             ftp.quit()
             logger.info(f"  Deleted from server: {filename}")
@@ -246,99 +265,54 @@ class ChunkSyncer:
             logger.warning(f"  Failed to delete from server: {filename} - {e}")
 
     def cleanup_server(self):
-        """Delete all chunks from the server to free up space (FTP method)."""
+        """Delete all chunks from every device on the server (FTP only)."""
         logger.info("=" * 50)
-        logger.info("Cleaning up chunks from server")
+        logger.info("Cleaning up chunks from server (all devices)")
         logger.info("=" * 50)
+
+        devices = self.discover_devices()
+        if not devices:
+            logger.info("No devices discovered on server")
+            return
 
         try:
-            ftp = FTP()
-            ftp.connect(self.ftp_config['host'], self.ftp_config['port'], timeout=60)
-            ftp.login(self.ftp_config['user'], self.ftp_config['password'])
+            ftp = self._connect_ftp()
+        except Exception as e:
+            logger.error(f"FTP connection failed: {e}")
+            return
 
-            # Navigate to chunks directory (device ID 2)
-            ftp.cwd('/data/chunks/2')
-
-            # Get all chunk files
+        total_deleted = 0
+        total_seen = 0
+        for device_id in devices:
+            try:
+                ftp.cwd(f"{SERVER_CHUNKS_ROOT}/{device_id}")
+            except error_perm as e:
+                logger.warning(f"  Cannot cd to device {device_id}: {e}")
+                continue
             files = [f for f in ftp.nlst() if f.endswith('.db.gz')]
-
+            total_seen += len(files)
             if not files:
-                logger.info("No chunks on server")
-                ftp.quit()
-                return
-
-            logger.info(f"Found {len(files)} chunks to delete from server")
-
-            deleted = 0
+                logger.info(f"  Device {device_id}: no chunks")
+                continue
+            logger.info(f"  Device {device_id}: deleting {len(files)} chunk(s)")
             for filename in sorted(files):
                 try:
                     ftp.delete(filename)
-                    logger.info(f"  Deleted: {filename}")
-                    deleted += 1
+                    total_deleted += 1
                 except Exception as e:
-                    logger.warning(f"  Failed to delete {filename}: {e}")
+                    logger.warning(f"    failed to delete {filename}: {e}")
+        ftp.quit()
+        logger.info(f"Cleanup complete: {total_deleted}/{total_seen} chunks deleted across {len(devices)} device(s)")
 
-            ftp.quit()
-            logger.info(f"Cleanup complete: {deleted}/{len(files)} chunks deleted")
-
-        except Exception as e:
-            logger.error(f"FTP connection failed: {e}")
-
-    def cleanup_server_api(self, chunk_filenames: list):
-        """Delete merged chunks from server via API to free up space."""
-        if not chunk_filenames:
-            return
-
-        # Convert .db names to .db.gz for server
-        gz_filenames = []
-        for name in chunk_filenames:
-            if name.endswith('.db'):
-                gz_filenames.append(name + '.gz')
-            elif name.endswith('.db.gz'):
-                gz_filenames.append(name)
-
-        if not gz_filenames:
-            return
-
-        logger.info(f"Requesting server cleanup for {len(gz_filenames)} chunks...")
-
-        try:
-            response = requests.post(
-                f"{self.api_url}/api/delete_chunks.php",
-                headers={
-                    'X-API-Key': self.api_key,
-                    'Content-Type': 'application/json'
-                },
-                json={'chunks': gz_filenames},
-                timeout=60
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('ok'):
-                    logger.info(f"  Server cleanup: {data.get('files_deleted', 0)} files, "
-                              f"{data.get('records_deleted', 0)} records deleted")
-                    if data.get('errors'):
-                        for err in data['errors']:
-                            logger.warning(f"  Server cleanup error: {err}")
-                else:
-                    logger.warning(f"  Server cleanup failed: {data.get('error', 'Unknown')}")
-            else:
-                logger.warning(f"  Server cleanup request failed: HTTP {response.status_code}")
-
-        except Exception as e:
-            logger.warning(f"  Server cleanup failed: {e}")
-
+    # ------------------------------------------------------------------
+    # Decompress / merge
+    # ------------------------------------------------------------------
     def decompress_chunk(self, chunk_path: Path) -> Path:
-        """Decompress a gzipped chunk file."""
         if not chunk_path or not chunk_path.exists():
             return None
-
-        output_path = chunk_path.with_suffix('')  # Remove .gz
-
+        output_path = chunk_path.with_suffix('')  # strip .gz
         if output_path.exists():
             return output_path
-
         try:
             with gzip.open(chunk_path, 'rb') as f_in:
                 with open(output_path, 'wb') as f_out:
@@ -350,7 +324,6 @@ class ChunkSyncer:
             return None
 
     def is_valid_sqlite(self, db_path: Path) -> bool:
-        """Check if a file is a valid SQLite database."""
         try:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
@@ -369,14 +342,11 @@ class ChunkSyncer:
 
         already_merged = already_merged or set()
 
-        # Filter to valid SQLite databases only
         valid_dbs = []
         for db_path in chunk_dbs:
-            # Skip test data from 2020 (before real system started)
             if '2020-01-' in db_path.name or '2020-02-' in db_path.name:
                 logger.info(f"  Skipping test data: {db_path.name}")
                 continue
-            # Skip already merged chunks
             if db_path.name in already_merged:
                 continue
             if self.is_valid_sqlite(db_path):
@@ -386,22 +356,18 @@ class ChunkSyncer:
 
         if not valid_dbs:
             logger.info("No new chunks to merge")
-            # Return current row count if output exists
             if output_db.exists():
                 try:
                     conn = sqlite3.connect(output_db)
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT COUNT(*) FROM readings")
-                    count = cursor.fetchone()[0]
+                    count = conn.execute("SELECT COUNT(*) FROM readings").fetchone()[0]
                     conn.close()
                     return [], count
-                except:
+                except Exception:
                     pass
             return [], 0
 
         logger.info(f"  Found {len(valid_dbs)} new chunks to merge")
 
-        # If output doesn't exist, create from first chunk
         if not output_db.exists():
             logger.info(f"  Creating new database from: {valid_dbs[0].name}")
             shutil.copy(valid_dbs[0], output_db)
@@ -414,19 +380,14 @@ class ChunkSyncer:
 
         conn = sqlite3.connect(output_db)
         cursor = conn.cursor()
-
-        # Get table names from output db
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [row[0] for row in cursor.fetchall()]
 
-        # Merge chunks one at a time (avoiding attachment limit issues)
         for db_path in chunks_to_merge:
             try:
                 cursor.execute("ATTACH DATABASE ? AS src", (str(db_path),))
-
                 for table in tables:
                     cursor.execute(f"INSERT OR IGNORE INTO main.{table} SELECT * FROM src.{table}")
-
                 conn.commit()
                 cursor.execute("DETACH DATABASE src")
                 merged_chunks.append(db_path.name)
@@ -435,76 +396,95 @@ class ChunkSyncer:
                 logger.error(f"  Failed to merge {db_path.name}: {e}")
                 try:
                     cursor.execute("DETACH DATABASE src")
-                except:
+                except Exception:
                     pass
 
         conn.commit()
-
-        # Get final stats
-        cursor.execute("SELECT COUNT(*) FROM readings")
-        count = cursor.fetchone()[0]
+        count = cursor.execute("SELECT COUNT(*) FROM readings").fetchone()[0]
         conn.close()
 
         size_mb = output_db.stat().st_size / 1024 / 1024
         logger.info(f"Merged database: {count:,} rows, {size_mb:.1f}MB")
         return merged_chunks, count
 
-    def sync(self, force_rebuild: bool = False):
-        """Main sync process with incremental merge support."""
+    # ------------------------------------------------------------------
+    # Sync orchestration
+    # ------------------------------------------------------------------
+    def sync(self, force_rebuild: bool = False) -> bool:
         logger.info("=" * 50)
         logger.info("PoolAIssistant Brain - Database Sync Starting")
         logger.info("=" * 50)
 
-        # Load state
         state = self.load_state()
-        downloaded = set(state.get('downloaded_chunks', []))
-        merged = set(state.get('merged_chunks', []))
 
-        if force_rebuild:
-            logger.info("REBUILD MODE: Will rebuild database from all chunks")
-            merged = set()  # Clear merged tracking to force re-merge
+        # Discover server-side devices, plus any local-only device dirs we already have
+        devices = set(self.discover_devices())
+        for sub in self.chunks_dir.iterdir() if self.chunks_dir.exists() else []:
+            if sub.is_dir() and re.fullmatch(r'\d+', sub.name):
+                if not self.device_allowlist or sub.name in self.device_allowlist:
+                    devices.add(sub.name)
+        if not devices:
+            logger.error("No devices found (server discovery returned nothing and no local device dirs)")
+            return False
 
-        # Fetch chunk list from server
-        chunks = self.fetch_chunk_list()
+        # Per-device download phase
+        any_new_downloads = False
+        any_chunks_seen = False
+        for device_id in sorted(devices):
+            dev_state = self._device_state(state, device_id)
+            downloaded = set(dev_state['downloaded_chunks'])
 
-        if chunks:
-            # Download new chunks
+            chunks = self.fetch_chunks_for_device(device_id)
+            if not chunks:
+                # Device dir might be empty server-side but still have local chunks
+                continue
+            any_chunks_seen = True
+
             new_chunks = [c for c in chunks if c['chunk_filename'] not in downloaded]
-
             if not new_chunks:
-                logger.info("All chunks already downloaded")
+                logger.info(f"  Device {device_id}: all {len(chunks)} chunk(s) already downloaded")
             else:
-                logger.info(f"Downloading {len(new_chunks)} new chunks...")
+                logger.info(f"  Device {device_id}: downloading {len(new_chunks)} new chunk(s)")
                 for chunk in new_chunks:
-                    logger.info(f"  [{chunk['period_start']} to {chunk['period_end']}]")
-                    path = self.download_chunk(chunk)
-                    if path:
+                    logger.info(f"    [{chunk['period_start']} -> {chunk['period_end']}]")
+                    if self.download_chunk(chunk):
                         downloaded.add(chunk['chunk_filename'])
-        else:
-            # Check local chunks
-            local_gz = list(self.chunks_dir.glob('*.db.gz'))
-            if local_gz:
-                logger.info(f"No server chunks, using {len(local_gz)} local chunks")
-            else:
-                logger.error("No chunks available")
-                return False
+                        any_new_downloads = True
+            dev_state['downloaded_chunks'] = sorted(downloaded)
 
-        # Decompress chunks that need it
+        if not any_chunks_seen and not any(
+            (self.chunks_dir / d).glob('*.db.gz') for d in devices
+        ):
+            logger.error("No chunks available on server or locally")
+            self._finalize_state(state, force_rebuild)
+            return False
+
+        # Decompress phase (per device)
         logger.info("Decompressing chunks...")
-        chunk_dbs = []
-        for gz_file in sorted(self.chunks_dir.glob('*.db.gz')):
-            db_path = self.decompress_chunk(gz_file)
-            if db_path:
-                chunk_dbs.append(db_path)
+        all_chunk_dbs = []
+        for device_id in sorted(devices):
+            device_dir = self.chunks_dir / device_id
+            if not device_dir.exists():
+                continue
+            for gz_file in sorted(device_dir.glob('*.db.gz')):
+                db_path = self.decompress_chunk(gz_file)
+                if db_path:
+                    all_chunk_dbs.append((device_id, db_path))
 
-        # Count how many need merging
-        unmerged = [db for db in chunk_dbs if db.name not in merged]
+        # Merge phase: union of merged-sets across devices
+        merged_union = set()
+        for dev_state in state['devices'].values():
+            merged_union.update(dev_state.get('merged_chunks', []))
+        if force_rebuild:
+            logger.info("REBUILD MODE: forcing re-merge of all chunks")
+            merged_union = set()
+
+        unmerged = [db for _, db in all_chunk_dbs if db.name not in merged_union]
         if unmerged:
-            logger.info(f"Found {len(unmerged)} unmerged chunks (of {len(chunk_dbs)} total)")
+            logger.info(f"Found {len(unmerged)} unmerged chunks (of {len(all_chunk_dbs)} total)")
         else:
-            logger.info(f"All {len(chunk_dbs)} chunks already merged")
+            logger.info(f"All {len(all_chunk_dbs)} chunks already merged")
 
-        # Merge into output database (incrementally)
         output_db = self.output_dir / 'pool_readings.db'
 
         if force_rebuild and output_db.exists():
@@ -512,7 +492,6 @@ class ChunkSyncer:
             try:
                 output_db.unlink()
             except PermissionError:
-                # File is locked - rename it instead
                 backup_path = output_db.with_suffix('.db.old')
                 logger.warning(f"Database locked, renaming to {backup_path.name}")
                 try:
@@ -524,89 +503,91 @@ class ChunkSyncer:
                     logger.error("Close any applications using pool_readings.db and try again")
                     return False
 
-        if chunk_dbs:
+        if all_chunk_dbs:
+            chunk_db_paths = [db for _, db in all_chunk_dbs]
             newly_merged, row_count = self.merge_chunks(
-                chunk_dbs, output_db,
-                already_merged=merged if not force_rebuild else set()
+                chunk_db_paths, output_db,
+                already_merged=merged_union if not force_rebuild else set(),
             )
+            newly_merged_set = set(newly_merged)
 
-            # Update merged tracking
-            merged.update(newly_merged)
+            # Distribute newly_merged back into per-device state
+            for device_id, db_path in all_chunk_dbs:
+                if db_path.name in newly_merged_set:
+                    dev_state = self._device_state(state, device_id)
+                    dev_state['merged_chunks'] = sorted(
+                        set(dev_state['merged_chunks']) | {db_path.name}
+                    )
 
-            # Cleanup decompressed .db files (keep .gz for backup)
-            if self.cleanup_after_merge and newly_merged:
+            # Cleanup decompressed .db files
+            if self.cleanup_after_merge and newly_merged_set:
                 logger.info("Cleaning up decompressed chunk files...")
-                for db_path in chunk_dbs:
-                    if db_path.name in merged and db_path.exists():
+                for _, db_path in all_chunk_dbs:
+                    if db_path.name in newly_merged_set and db_path.exists():
                         db_path.unlink()
                         logger.info(f"  Removed: {db_path.name}")
 
-                # Also delete from server to free up space
-                self.cleanup_server_api(newly_merged)
-
+            state['output_row_count'] = row_count
             logger.info(f"Output: {output_db}")
 
-            # Update state
-            state['merged_chunks'] = list(merged)
-            state['output_row_count'] = row_count
-
-        # Save state
-        state['downloaded_chunks'] = list(downloaded)
-        state['last_sync'] = datetime.now().isoformat()
-        if unmerged or force_rebuild:
-            state['last_merge'] = datetime.now().isoformat()
-        self.save_state(state)
+        self._finalize_state(state, force_rebuild)
 
         logger.info("=" * 50)
-        logger.info("Sync complete!")
+        if not any_new_downloads and not any_chunks_seen:
+            logger.warning("Sync completed but no chunks were found on server. "
+                           "Check Pi upload status — is the chunker still running?")
+        else:
+            logger.info("Sync complete!")
         logger.info("=" * 50)
         return True
 
+    def _finalize_state(self, state: dict, force_rebuild: bool):
+        state['last_sync'] = datetime.now().isoformat()
+        if force_rebuild:
+            state['last_merge'] = datetime.now().isoformat()
+        self.save_state(state)
+
+    # ------------------------------------------------------------------
+    # Status display
+    # ------------------------------------------------------------------
     def show_status(self):
-        """Display sync status."""
         state = self.load_state()
         output_db = self.output_dir / 'pool_readings.db'
 
         print("=" * 50)
         print("PoolAIssistant Brain - Sync Status")
         print("=" * 50)
-        print(f"Last sync: {state.get('last_sync', 'Never')}")
+        print(f"Last sync:  {state.get('last_sync', 'Never')}")
         print(f"Last merge: {state.get('last_merge', 'Never')}")
         print()
 
-        downloaded = state.get('downloaded_chunks', [])
-        merged = state.get('merged_chunks', [])
-        print(f"Downloaded chunks: {len(downloaded)}")
-        print(f"Merged chunks: {len(merged)}")
-
-        local_gz = list(self.chunks_dir.glob('*.db.gz'))
-        local_db = list(self.chunks_dir.glob('*.db'))
-        print(f"Local .gz files: {len(local_gz)}")
-        print(f"Local .db files: {len(local_db)}")
+        devices = sorted(state.get('devices', {}).keys())
+        if not devices:
+            print("No device state recorded yet.")
+        else:
+            print(f"Devices in state: {devices}")
+            for device_id in devices:
+                dev = state['devices'][device_id]
+                local_dir = self.chunks_dir / device_id
+                local_gz = list(local_dir.glob('*.db.gz')) if local_dir.exists() else []
+                local_db = list(local_dir.glob('*.db')) if local_dir.exists() else []
+                print(f"  Device {device_id}:")
+                print(f"    downloaded: {len(dev.get('downloaded_chunks', []))}  "
+                      f"merged: {len(dev.get('merged_chunks', []))}")
+                print(f"    local .gz:  {len(local_gz)}  local .db: {len(local_db)}")
 
         if output_db.exists():
             size_mb = output_db.stat().st_size / 1024 / 1024
             print(f"\nOutput database: {output_db}")
             print(f"Size: {size_mb:.1f} MB")
-            print(f"Rows: {state.get('output_row_count', 'Unknown'):,}")
+            row_count = state.get('output_row_count', 0)
+            print(f"Rows: {row_count:,}" if isinstance(row_count, int) else f"Rows: {row_count}")
         else:
             print("\nOutput database: Not created yet")
-
-        # Show unmerged chunks
-        merged_set = set(merged)
-        unmerged = [gz.stem for gz in local_gz if gz.stem not in merged_set]
-        if unmerged:
-            print(f"\nUnmerged chunks ({len(unmerged)}):")
-            for name in sorted(unmerged)[:10]:
-                print(f"  - {name}")
-            if len(unmerged) > 10:
-                print(f"  ... and {len(unmerged) - 10} more")
-
         print("=" * 50)
 
 
 def run_alert_check():
-    """Run alert checker after sync."""
     try:
         from alert_checker import AlertChecker
         logger.info("")
@@ -621,21 +602,19 @@ def run_alert_check():
 def main():
     syncer = ChunkSyncer()
 
-    # Check for --status flag (no API key needed)
     if '--status' in sys.argv:
         syncer.show_status()
         sys.exit(0)
 
-    if not syncer.api_key:
-        logger.error("API_KEY not configured in .env file")
-        sys.exit(1)
+    if '--devices' in sys.argv:
+        devices = syncer.discover_devices()
+        print(f"Devices on server: {sorted(devices)}")
+        sys.exit(0)
 
-    # Check for --cleanup flag
     if '--cleanup' in sys.argv:
         syncer.cleanup_server()
         sys.exit(0)
 
-    # Check for --rebuild flag
     force_rebuild = '--rebuild' in sys.argv
     if force_rebuild:
         logger.info("Rebuild mode enabled - will recreate database from scratch")
@@ -643,7 +622,6 @@ def main():
     success = syncer.sync(force_rebuild=force_rebuild)
 
     if success:
-        # Run alert check after successful sync
         alert_status = run_alert_check()
         logger.info(f"Alert status: {alert_status}")
 

@@ -42,13 +42,20 @@ The baseline system tracks pump output (Yout) vs measured result:
 - **Red flags**: High output with no result = empty tank, blocked line, pump failure
 - **Manual dosing detection**: Sensor varies but pump inactive
 
-## Current Known Issues (as of Feb 26, 2026)
-1. **Main Pool**: pH CRITICAL at 7.95 (normal 7.0-7.8), Temp at 24.1C (below 25C floor)
-2. **Spa Pool**: Chlorine dosing STILL FAILED - 0.04 mg/L for 16+ days
-3. **Spa Pool**: Temperature IMPROVED to 24.8C (was 10C) - heating partially restored
-4. **Vitality Pool**: ORP elevated at 868 mV (above 850 ceiling), temp rising trend
-5. **Multiple Pumps**: HIGH_OUTPUT_NO_RESULT flags - check chemical tank levels
-6. **Main Pool**: Data gap persists (ends Feb 2 for historical, Feb 15 for recent)
+## Current Known Issues (as of May 3, 2026 sync — data through 2026-03-12)
+
+**⚠️ Pipeline staleness:** Pi stopped uploading after 2026-03-12. Latest reading is 7 weeks old. See IMPROVEMENTS.md section "Headline problem" for action plan.
+
+Snapshot of pool state on 2026-03-12 (the day the data ends):
+
+1. **Vitality pH: 2.67** (CRITICAL) — almost certainly a failed pH probe (stuck reading); pH 2.67 in real water would be hazardous and is implausible without massive acid event. Calibrate the probe before treating as a chemistry incident.
+2. **Vitality Temp: 14.3°C** (CRITICAL) — heating failure (target 30–37°C).
+3. **Spa Temp: 18.2°C** (CRITICAL) — heating failing further (was 24.8°C in late Feb, dropping over time).
+4. **Spa ORP: 606 mV** (CRITICAL) — disinfection drop (target 650–900).
+5. **Main Temp: 15.1°C** (CRITICAL) — heating failure (target 24–32°C).
+6. **Plunge Temp: 22.3°C** (CRITICAL) — pool labelled "cold" but reading hot (target 8–18°C). Possible sensor/label swap with Spa during a Pi reflash.
+7. **Trend lines over 16–22 days** show coordinated multi-pool degradation, suggesting a systemic cause (Pi reconfig, sensor miscalibration after firmware update) rather than independent equipment failures.
+8. **Two device IDs** observed in chunks: `2` (data Jan 28 – Feb 24) and `5` (data Feb 20 – Mar 12). The `host` column distinguishes the four physical controllers (192.168.200.11–14).
 
 ## Common Commands
 ```bash
