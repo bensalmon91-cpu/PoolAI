@@ -79,6 +79,28 @@ def render_section(data: dict) -> str:
         lines.append(f"_Pipeline freshness OK — latest reading {age_str} old._")
         lines.append('')
 
+    # Sensor faults (B4) — rendered before chemistry alerts so they're seen first
+    sensor_faults = data.get('sensor_faults') or []
+    if sensor_faults:
+        lines.append(f"### 🛠 Sensor faults ({len(sensor_faults)})")
+        lines.append('')
+        lines.append(
+            "_These probes look broken. Treat as instrumentation issues, "
+            "not chemistry events. Chemistry status for these specific "
+            "pool/sensor pairs is **unknown** until the probe is fixed._"
+        )
+        lines.append('')
+        lines.append('| Pool | Sensor | Reading | Fault Type | Range |')
+        lines.append('|------|--------|---------|------------|-------|')
+        for f in sensor_faults:
+            ftype = f.get('fault_type', '?').replace('_', ' ')
+            lines.append(
+                f"| {f.get('pool', '?')} | {f.get('sensor', '?')} | "
+                f"{f.get('current_value', '?')} | {ftype} | "
+                f"{f.get('plausible_range', '?')} |"
+            )
+        lines.append('')
+
     # Per-sensor alerts
     alerts = data.get('alerts') or []
     if alerts:
