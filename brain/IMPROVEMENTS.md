@@ -167,18 +167,21 @@ new root `.env`; replace the CLAUDE.md section with a pointer.
 desired, rotate the credentials *and* either accept the historical leak in
 git or scrub history with `git filter-repo`. Decide separately.)
 
-### C3. Heartbeat-derived "is the Pi healthy" for brain to consume
+### C3. Heartbeat-derived "is the Pi healthy" for brain to consume ✅ CODE DONE, DEPLOY-CONSTRAINED (2026-05-04)
 
-`web-portal/php_deploy/api/heartbeat.php` writes Pi-side health into
-`device_health`. Right now brain has no awareness of this. A 30-line addition
-that reads the latest heartbeat per device and surfaces:
-- last successful upload timestamp
-- pending chunks count
-- Pi disk / memory / temp pressure
+**Implementation:**
+- New `brain/pi_health.py` reads the latest `device_health` row per active Pi (LEFT JOIN, so Pis that have never heartbeated also surface). Returns one entry per Pi with `heartbeat_age_hours`, `upload_age_hours`, `pending_chunks`, `failed_uploads`, `is_offline`. DB failure is non-fatal — returns `{"error": "..."}` so a transient blip doesn't sink the alert pipeline.
+- `alert_checker.py` calls `check_pi_health()` after staleness/sensor checks. Adds `pi_health` to `analysis/latest_alerts.json`. Any offline Pi escalates overall status to CRITICAL with a `[PI_OFFLINE]` log line; backlogged-but-alive Pis log `[PI_BACKLOG]` (warning, no escalation).
+- `update_claude_md.py` renders a Pi health table in the auto-section *before* sensor faults — if the upstream is dark, downstream alerts describe state the Pi knew at last heartbeat, not now.
+- New env var: `HEARTBEAT_OFFLINE_HOURS` (default 2h) — Pi without a heartbeat for that long counts as offline.
 
-…would let brain's staleness alarm (B1) distinguish "Pi is dead" from
-"Pi is alive but chunker is stuck" from "everything is fine, just no new
-data because nothing changed" — the three cases need different responses.
+**Deploy constraint (matters):**
+- Hostinger MySQL is bound to `localhost` and only accepts connections from inside the Hostinger box. **`pi_health.fetch_pi_health()` therefore returns `{"error": ...}` when called from the brain machine** (or anywhere outside Hostinger). The error path is graceful — the rest of the alert run continues — but until there's a way around this the pi_health field will be `{"error": "DB connection failed: ..."}`.
+- **The right architectural fix** is a small new endpoint on the admin backend (`/api/pi_health.php`) that returns the same JSON shape, authenticated with a B2 consumer key (`read_health` permission). brain then HTTP-fetches over HTTPS instead of going DB-direct. Implementation sketch:
+  - PHP endpoint that queries the same SQL `pi_health.py` runs and returns JSON
+  - `pi_health.py` gets a sibling `fetch_pi_health_via_api()` that hits the endpoint with `CONSUMER_KEY`
+  - Pick whichever path has credentials (DB if reachable, else API) — or just always go API once that lands
+- Until the endpoint lands, the code is dormant on this machine but useful as-is for any future server-side run of brain.
 
 ---
 

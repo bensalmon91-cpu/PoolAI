@@ -79,6 +79,47 @@ def render_section(data: dict) -> str:
         lines.append(f"_Pipeline freshness OK — latest reading {age_str} old._")
         lines.append('')
 
+    # Pi health (C3) — renders before sensor/chemistry sections because if the
+    # source Pi is offline, downstream alerts describe stale state, not live.
+    pi_health = data.get('pi_health') or {}
+    if 'error' in pi_health:
+        lines.append(f"### 🛰 Pi health")
+        lines.append('')
+        lines.append(f"_DB unavailable when this report ran: `{pi_health['error']}`._")
+        lines.append('')
+    elif pi_health.get('pis'):
+        pis = pi_health['pis']
+        offline = [p for p in pis if p.get('is_offline')]
+        backlogged = [p for p in pis if not p.get('is_offline') and (p.get('pending_chunks') or 0) > 0]
+        lines.append(f"### 🛰 Pi health ({len(pis)} active)")
+        lines.append('')
+        if offline:
+            lines.append(f"**🔴 Offline:** {len(offline)} of {len(pis)} Pi(s) haven't heartbeated within threshold.")
+            lines.append('')
+        if backlogged:
+            lines.append(f"**⚠️ Backlogged:** {len(backlogged)} Pi(s) heartbeating but with chunks pending.")
+            lines.append('')
+        lines.append('| Device | Status | Last heartbeat | Last upload | Pending chunks | sw |')
+        lines.append('|--------|--------|---------------|-------------|----------------|----|')
+        for p in pis:
+            if p.get('is_offline'):
+                status = '🔴 offline'
+            elif (p.get('pending_chunks') or 0) > 0:
+                status = '⚠️ backlogged'
+            else:
+                status = '✓ ok'
+            hb_age = p.get('heartbeat_age_hours')
+            up_age = p.get('upload_age_hours')
+            lines.append(
+                f"| {p.get('device_name', '?')} (id={p.get('device_id', '?')}) "
+                f"| {status} "
+                f"| {_fmt_age(hb_age) if hb_age is not None else 'never'} "
+                f"| {_fmt_age(up_age) if up_age is not None else 'never'} "
+                f"| {p.get('pending_chunks', '?')} "
+                f"| {p.get('software_version', '?')} |"
+            )
+        lines.append('')
+
     # Sensor faults (B4) — rendered before chemistry alerts so they're seen first
     sensor_faults = data.get('sensor_faults') or []
     if sensor_faults:

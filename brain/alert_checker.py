@@ -225,6 +225,21 @@ class AlertChecker:
         info["is_stale"] = age_h > threshold_h
         return info
 
+    def check_pi_health(self):
+        """C3: read latest heartbeat per Pi from MySQL.
+
+        Returns the same shape pi_health.fetch_pi_health() returns:
+          {"pis": [...]}  on success, or  {"error": "..."}  on DB failure.
+        DB failures are intentionally non-fatal — a transient blip shouldn't
+        sink the whole alert run. Caller decides whether to escalate.
+        """
+        try:
+            from pi_health import fetch_pi_health
+            return fetch_pi_health()
+        except Exception as e:
+            logger.warning(f"pi_health module failed to load: {e}")
+            return {"error": f"import failed: {e}"}
+
     def check_trends(self):
         """Check for concerning trends (like Spa pH declining)."""
         conn = sqlite3.connect(self.db_path)
@@ -314,9 +329,40 @@ class AlertChecker:
             for t in trends:
                 logger.info(f"  {t['pool']} {t['sensor']}: {t['direction']} for {t['days']} days (change: {t['total_change']:+.3f})")
 
+        # Pi heartbeat awareness (C3) — separates "Pi offline" from "data stale"
+        pi_health = self.check_pi_health()
+        offline_pis = []
+        if "error" in pi_health:
+            logger.warning(f"Pi health unavailable: {pi_health['error']}")
+        else:
+            for pi in pi_health.get("pis", []):
+                if pi["is_offline"]:
+                    offline_pis.append(pi)
+                    age_str = (
+                        f"{pi['heartbeat_age_hours']:.1f}h"
+                        if pi["heartbeat_age_hours"] is not None
+                        else "never"
+                    )
+                    logger.warning(
+                        f"[PI_OFFLINE] {pi['device_name']} (id={pi['device_id']}): "
+                        f"last heartbeat {age_str} ago "
+                        f"(threshold {pi['offline_threshold_hours']}h)"
+                    )
+                else:
+                    pending = pi.get("pending_chunks") or 0
+                    upload_age = pi["upload_age_hours"]
+                    if pending > 0:
+                        logger.warning(
+                            f"[PI_BACKLOG] {pi['device_name']}: "
+                            f"{pending} chunks pending, last upload "
+                            f"{upload_age:.1f}h ago" if upload_age is not None else
+                            f"[PI_BACKLOG] {pi['device_name']}: {pending} chunks pending, never uploaded"
+                        )
+
         # Status logic:
         #   - sensor faults force CRITICAL (chemistry status is unknown for those probes)
         #   - staleness forces CRITICAL (data is too old to trust)
+        #   - any offline Pi forces CRITICAL (the source has gone dark)
         #   - else use the worst chemistry alert level
         sensor_alert_status = (
             "CRITICAL" if any(a["level"] == "CRITICAL" for a in alerts)
@@ -324,13 +370,19 @@ class AlertChecker:
         )
         overall_status = (
             "CRITICAL"
-            if (staleness["is_stale"] or sensor_faults or sensor_alert_status == "CRITICAL")
+            if (
+                staleness["is_stale"]
+                or sensor_faults
+                or offline_pis
+                or sensor_alert_status == "CRITICAL"
+            )
             else sensor_alert_status
         )
 
         results = {
             "check_time": datetime.now().isoformat(),
             "staleness": staleness,
+            "pi_health": pi_health,
             "sensor_faults": sensor_faults,
             "alerts": alerts,
             "trends": trends,
