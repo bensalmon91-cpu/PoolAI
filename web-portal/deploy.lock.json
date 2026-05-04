@@ -1,6 +1,6 @@
 {
   "admin-backend": {
-    "deployed_at": "2026-05-03T08:13:52Z",
+    "deployed_at": "2026-05-04T19:57:08Z",
     "files": {
       "admin/_run_migration_network.php": "edc60731dc9add0a2ae68797f3be3491a13d518c7174ac0c680fadc7cb33498b",
       "admin/ai_analytics.php": "977d46376701bd2f957a6de9291589ec6d79da526626fce2370eb5a4fa448334",
@@ -42,7 +42,7 @@
       "api/clear_device_issues.php": "cfab0de9cfca1d304ce3759119f3e7ea5d09ef4b9d5fb69441f1a8d2cbc07a80",
       "api/command_complete.php": "56d6a5383a5ab2c11cb80f91f959b76fb23aae624390aadd87adee0bf4b3dfc0",
       "api/delete_device.php": "93918d79ce3810aef897c3421c17eb80d9c85e1c7aaca03f7012b899d8ba772d",
-      "api/device/snapshot.php": "8780476176b3fda6b96fb0b146cb5f7216ff16c6c011f08cfa432876e1889450",
+      "api/device/snapshot.php": "c64cd2a7d9883675691f839a81ae33c3a42494389e1e583fa8d9435e03817525",
       "api/device_alias.php": "1eb4b551427022c0c91f2a1c44cf36cee97732ec9b414b51add1e5ef3e9df4b8",
       "api/heartbeat.php": "c1d914a03661be367942786606f9d9c5b2d586ea6119cce3edde9c80f5bd0cd0",
       "api/portal/link-code.php": "d97ad20c3fe1761dcf5fb6ed7b33837db1ebed9cb53bf5540c36657203f3c383",
@@ -57,7 +57,7 @@
       "config/portal.php": "0c66ec4d3c98029f817f4dbe905f55a721c7d46e923b31a1789657d9ce9cf7fd",
       "includes/AdminClients.php": "25c7654a1b9657df1ab3577829d791801ce61ef54263d149b2531acd793c6896",
       "includes/AdminDevices.php": "32a4017af3827dceb08e27456839965e8b23e967953919ce2f7d95a0177b7e88",
-      "includes/api_helpers.php": "caa0559f88b9277740ffaba992a98ac90e870d84121ec31419a52e247ba2a93b",
+      "includes/api_helpers.php": "302a4eed31d9c6e6fd5b279c3e20c9ddffa61f1764fc88192275c495b575535a",
       "includes/auth.php": "71d4d2fbf71b9ffa6fa52cc4844ee29b9592bc9fd8905db89888af04bfb362b1",
       "includes/claude_api.php": "ee4f94385645ee3fb7f676ca78d1979cc5b95f6be614eaa9dce1d6c538d48264",
       "includes/PortalAuth.php": "8d38ca5b52b09f6f4c96017c3691fbcb1722fc25deefa754efd94c91861664ef",
@@ -86,6 +86,7 @@
       "scripts/check_device_health.php": "fe027d9eb05f783a940d19a24e996f4567dc06e1c7dd8049995c6ab2293602ad",
       "database/migration_alias.sql": "d23c0d9532afaad28e0e58b58f393fb7c6bfcde55969c727fdb449a4e0fd4f82",
       "database/schema_ai.sql": "af3fb51fd6616fcde4415cafc25c76e2ce27591c34534bd03113828101462cb6",
+      "database/schema_alarm_closures.sql": "3e79032868016ae2b8a9945f2098fb7b3735b1f3172b89e92d3d5fcd72307a8f",
       "database/schema_bootstrap_codes.sql": "d0e0f10570e884106a2be7622e7341a2384cbffab97b24835bf397a2615ae14c",
       "database/schema_health.sql": "bb9b7dfd3a0055f3bd20fdd35660f9e00a172b76762a149a2f9e25f86c5b7038",
       "database/schema_health_v2.sql": "dc71b3593af581422c6f785a07850432fe7bb4d57b0b7c316b1be0a51a60b9e4",
