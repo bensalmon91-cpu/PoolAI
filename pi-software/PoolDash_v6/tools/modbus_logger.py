@@ -1568,15 +1568,21 @@ def poll_bayrol_controller(
 
                 # Track state change
                 if prev_state is None:
-                    # First observation: log currently-active alarms as fresh
-                    # events. Startup-clear means the DB has no pre-reboot rows
-                    # to rehydrate from, so first-poll truth is ground truth.
+                    # First observation since logger boot: log currently-active
+                    # alarms as fresh events. Startup-clear wiped any pre-reboot
+                    # rows so first-poll truth is ground truth.
+                    #
+                    # Note: tiered polling (get_bayrol_alarms_to_check) means
+                    # warning/info alarms first surface at cycle 10 / 30, not
+                    # cycle 1. That's still "first observation since boot" — the
+                    # key has not been in last_alarm_state until now. The DB is
+                    # consistent because startup-clear ran at cycle 0.
                     new_alarm_state[alarm_key] = is_active
                     if is_active:
                         source_label = "BAYROL_Alarm"
                         bit_name = alarm_key
                         db_open_alarm(con, ts, pool_name, host, system_name, serial_number, source_label, bit_name)
-                        logging.warning("[%s %s] BAYROL alarm ON: %s (first observation)", pool_name, host, alarm_key)
+                        logging.warning("[%s %s] BAYROL alarm ON: %s (first observation since boot)", pool_name, host, alarm_key)
                 elif is_active != prev_state:
                     # State changed
                     new_alarm_state[alarm_key] = is_active
@@ -1925,6 +1931,15 @@ def main() -> int:
                                 # Startup-clear wipes pre-reboot rows, so first
                                 # observation must surface still-active alarm
                                 # bits as fresh 0->1 events. Treat baseline as 0.
+                                #
+                                # Contract: this assumes no new keys appear
+                                # mid-session. Today that holds — config changes
+                                # require a logger restart, so last_bitfield_value
+                                # is only seeded once at startup. If config
+                                # hot-reload is ever added, this branch will fire
+                                # phantom 0->N events for whatever bits are
+                                # already on at the new controller. Guard with a
+                                # poll-cycle check at that point.
                                 prev = 0
 
                             if ival == prev:
