@@ -4,6 +4,9 @@
 .env
 .env.*
 *.env.local
+# .env.example files are templates and SHOULD be committed
+!.env.example
+!**/.env.example
 credentials.json
 secrets.json
 *.pem
@@ -106,7 +109,8 @@ brain/output/
 brain/data/
 brain/analysis/
 brain/__pycache__/
-brain/.env
+# brain/.env removed — root .env is now canonical (consolidated 2026-05-04).
+# .env in any location is already covered by the global rule above.
 
 # Backup directories (use external backup solution)
 backups/
