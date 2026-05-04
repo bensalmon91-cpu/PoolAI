@@ -570,7 +570,22 @@ def execute_command(settings, command):
     """Execute a command from the backend."""
     command_id = command.get('id')
     command_type = command.get('command_type')
-    payload = command.get('payload')
+    raw_payload = command.get('payload')
+
+    # The server stores command payloads as JSON-encoded TEXT and the
+    # heartbeat response forwards them through unchanged. Without this
+    # parse, every apply_settings command was failing with "No settings
+    # in payload" because isinstance(payload, dict) is False on a str.
+    # Bug present from when apply_settings was first added (2026-04-19).
+    payload = raw_payload
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload) if payload else {}
+        except (ValueError, TypeError) as e:
+            log(f"Bad JSON payload for command {command_id}: {e}", "WARNING")
+            payload = {}
+    elif payload is None:
+        payload = {}
 
     log(f"Executing command {command_id}: {command_type}")
 

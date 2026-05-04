@@ -698,47 +698,60 @@ def apply_update(archive_path):
         except Exception as e:
             print(f"  Warning: Could not check/run provisioning: {e}")
 
-        # Ensure update_check timer is installed (self-healing)
-        print("Ensuring update timer is installed...")
+        # Reconcile systemd timers — self-heal any *.timer file shipped in
+        # scripts/ that isn't yet enabled on this Pi. Catches the "Pi was
+        # provisioned before this timer existed in install_services.sh"
+        # failure mode that left Swanwood without chunk_sync.timer for
+        # 22 days post-reflash on 2026-04-12.
+        print("Reconciling systemd timers (self-heal any missing units)...")
         try:
-            timer_installed = subprocess.run(
-                ["systemctl", "is-enabled", "update_check.timer"],
-                capture_output=True, text=True
-            ).returncode == 0
-
-            if not timer_installed:
-                # Copy service and timer files to systemd
-                service_src = APP_DIR / "scripts" / "update_check.service"
-                timer_src = APP_DIR / "scripts" / "update_check.timer"
-
-                if service_src.exists() and timer_src.exists():
+            scripts_dir = APP_DIR / "scripts"
+            newly_installed = []
+            already_present = []
+            missing_files = []
+            for timer_src in sorted(scripts_dir.glob("*.timer")):
+                timer_name = timer_src.name
+                # Already enabled?
+                already = subprocess.run(
+                    ["systemctl", "is-enabled", timer_name],
+                    capture_output=True, text=True
+                ).returncode == 0
+                if already:
+                    already_present.append(timer_name)
+                    continue
+                # Need both .timer and matching .service to install.
+                service_name = timer_name[:-6] + ".service"
+                service_src = scripts_dir / service_name
+                if not service_src.exists():
+                    missing_files.append(f"{timer_name} (no matching {service_name})")
+                    continue
+                # Install both, daemon-reload, enable, start.
+                for src in (service_src, timer_src):
                     subprocess.run(
-                        ["sudo", "cp", str(service_src), "/etc/systemd/system/"],
+                        ["sudo", "cp", str(src), "/etc/systemd/system/"],
                         capture_output=True, text=True, timeout=30
                     )
-                    subprocess.run(
-                        ["sudo", "cp", str(timer_src), "/etc/systemd/system/"],
-                        capture_output=True, text=True, timeout=30
-                    )
-                    subprocess.run(
-                        ["sudo", "systemctl", "daemon-reload"],
-                        capture_output=True, text=True, timeout=30
-                    )
-                    subprocess.run(
-                        ["sudo", "systemctl", "enable", "update_check.timer"],
-                        capture_output=True, text=True, timeout=30
-                    )
-                    subprocess.run(
-                        ["sudo", "systemctl", "start", "update_check.timer"],
-                        capture_output=True, text=True, timeout=30
-                    )
-                    print("  Update timer installed and enabled")
-                else:
-                    print("  Warning: update timer files not found")
-            else:
-                print("  Update timer already installed")
+                subprocess.run(
+                    ["sudo", "systemctl", "daemon-reload"],
+                    capture_output=True, text=True, timeout=30
+                )
+                subprocess.run(
+                    ["sudo", "systemctl", "enable", timer_name],
+                    capture_output=True, text=True, timeout=30
+                )
+                subprocess.run(
+                    ["sudo", "systemctl", "start", timer_name],
+                    capture_output=True, text=True, timeout=30
+                )
+                newly_installed.append(timer_name)
+            if newly_installed:
+                print(f"  Self-healed (newly installed): {', '.join(newly_installed)}")
+            if already_present:
+                print(f"  Already installed: {', '.join(already_present)}")
+            if missing_files:
+                print(f"  Skipped (missing source): {', '.join(missing_files)}")
         except Exception as e:
-            print(f"  Warning: Could not install update timer: {e}")
+            print(f"  Warning: timer reconciliation failed: {e}")
 
         # Self-heal the SSH guard unit. Older Pis shipped with a unit that had
         # After=network.target + DefaultDependencies=no, which left SSH unable

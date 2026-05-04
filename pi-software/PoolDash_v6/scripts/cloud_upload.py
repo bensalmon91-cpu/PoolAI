@@ -295,6 +295,60 @@ def get_active_alarms(db_path: Path) -> Dict[str, Any]:
     return alarms
 
 
+def get_recent_alarm_closures(db_path: Path, since_minutes: int = 10, limit: int = 50) -> List[Dict]:
+    """Return alarm rows that ended in the last N minutes, with closed_reason.
+
+    Lets the server distinguish between alarms that cleared because the bit
+    was observed OFF (closed_reason NULL) vs. ones force-closed by the
+    v6.11.10 sweep paths ('logger_restart' or 'controller_offline'). Brain
+    already has this via chunks; this is for the customer-portal admin and
+    the AI suggestion stream which only see the cloud DB.
+
+    Bounded by `limit` so a Pi catching up after a long outage doesn't
+    push a runaway payload. Backwards-compatible: returns [] if the
+    closed_reason column doesn't exist (Pi predates the v6.11.9 migration).
+    """
+    if not db_path.exists():
+        return []
+    out: List[Dict] = []
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=10)
+        conn.row_factory = sqlite3.Row
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(alarm_events)")}
+        if "closed_reason" not in cols:
+            conn.close()
+            return []
+        # SQLite datetime arithmetic against ISO-8601 timestamps via
+        # julianday() — same idiom modbus_logger.py uses for the offline
+        # sweep, so behavior is consistent.
+        rows = conn.execute(
+            """
+            SELECT pool, host, source_label, bit_name, started_ts, ended_ts, closed_reason
+            FROM alarm_events
+            WHERE ended_ts IS NOT NULL
+              AND (julianday('now') - julianday(ended_ts)) * 24.0 * 60.0 <= ?
+            ORDER BY ended_ts DESC LIMIT ?
+            """,
+            (since_minutes, limit),
+        ).fetchall()
+        for row in rows:
+            out.append({
+                "pool": row["pool"] or "",
+                "host": row["host"] or "",
+                "source": row["bit_name"] or row["source_label"] or "Unknown",
+                "started_ts": row["started_ts"],
+                "ended_ts": row["ended_ts"],
+                "closed_reason": row["closed_reason"],  # may be NULL
+            })
+        conn.close()
+    except sqlite3.OperationalError:
+        # Table missing on a freshly-provisioned Pi before first poll.
+        pass
+    except Exception as e:
+        print(f"Error reading recent alarm closures: {e}")
+    return out
+
+
 def get_controller_status(db_path: Path) -> List[Dict]:
     """Get controller online/offline status based on recent readings."""
     if not db_path.exists():
@@ -375,6 +429,10 @@ def build_snapshot(cursor_rowid: int) -> tuple[Dict[str, Any], int]:
     health = collect_health_data()
     controllers = get_controller_status(DB_PATH)
     alarms = get_active_alarms(DB_PATH)
+    # 10-minute window covers the standard 6-min upload interval plus
+    # one missed cycle; the server-side UNIQUE constraint on
+    # device_alarm_closures dedupes if a closure appears twice.
+    alarms["recently_closed"] = get_recent_alarm_closures(DB_PATH, since_minutes=10)
 
     # Count online/offline controllers
     controllers_online = sum(1 for c in controllers if c.get("online"))

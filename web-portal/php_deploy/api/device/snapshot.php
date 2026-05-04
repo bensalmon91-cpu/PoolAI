@@ -164,6 +164,45 @@ try {
     }
 
     // =========================================================================
+    // RECORD ALARM CLOSURES (v6.11.12+)
+    // =========================================================================
+    // The Pi sends alarms.recently_closed (last 10 min) with each snapshot.
+    // Wrapped in its own try/catch so a missing table (e.g. before the
+    // migration runs) or other persistence error doesn't 500 the whole
+    // snapshot endpoint and break heartbeats.
+    if (!empty($alarms['recently_closed']) && is_array($alarms['recently_closed'])) {
+        try {
+            $stmtClose = $pdo->prepare("
+                INSERT IGNORE INTO device_alarm_closures
+                    (device_id, pool, host, alarm_source, started_ts, ended_ts, closed_reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ");
+            // INSERT IGNORE + UNIQUE key dedupes if the Pi resends a closure
+            // across overlapping windows (e.g. 6-min upload, 10-min lookback).
+            // closed_reason from Pi: NULL (bit observed OFF, normal),
+            // 'controller_offline' (sweep), 'logger_restart' (startup-clear).
+            // Map NULL to 'observed_off' so the server column is never null.
+            foreach ($alarms['recently_closed'] as $closure) {
+                if (!is_array($closure)) continue;
+                $endedTs = $closure['ended_ts'] ?? null;
+                $source = $closure['source'] ?? null;
+                if (!$endedTs || !$source) continue;  // skip malformed entries
+                $stmtClose->execute([
+                    $deviceId,
+                    $closure['pool'] ?? '',
+                    $closure['host'] ?? '',
+                    $source,
+                    $closure['started_ts'] ?? null,
+                    $endedTs,
+                    $closure['closed_reason'] ?: 'observed_off',
+                ]);
+            }
+        } catch (Exception $e) {
+            error_log("snapshot.php closures-insert failed (non-fatal): " . $e->getMessage());
+        }
+    }
+
+    // =========================================================================
     // UPDATE DEVICE HEALTH
     // =========================================================================
 
