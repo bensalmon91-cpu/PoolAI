@@ -74,21 +74,25 @@ investigator) cheerfully kept running on stale data.
 Verified against the post-Mar-12 dataset on 2026-05-04: warning fires
 ("1268.8h old, 52.9 days"), staleness.json written, exit code 1.
 
-### B2. Replace Pi-key auth with a proper consumer key
+### B2. Replace Pi-key auth with a proper consumer key ✅ ARCHITECTURALLY DONE (2026-05-04)
 
 **Problem:** `brain/.env` historically held an `API_KEY` that was a row from
 the `pi_devices` table. That was wrong — brain isn't a Pi. The key got
 deactivated/rotated, every API call went 401, and the FTP fallback masked it.
 
-**Fix today (this commit):** the API codepath has been removed from
-`db_sync.py`. FTP is sole source of truth. `API_KEY` is no longer required
-in `.env`.
+**Fix earlier (B2-immediate):** the API codepath has been removed from
+`db_sync.py`. FTP is sole source of truth. `API_KEY` is no longer required.
 
-**Future fix (B2-future):** if we ever want HTTP-based chunk listing back
-(useful if FTP becomes unreliable or we move to S3-style storage), introduce
-a separate `consumer_keys` table on the server, generate a brain-specific
-key, and have the auth middleware accept either. Don't reuse `pi_devices`
-as the trust store.
+**Fix now (B2-server-model, 2026-05-04):**
+- New `consumer_keys` table — see `web-portal/database/schema_consumer_keys.sql`. Distinct from `pi_devices` (different trust model, different rotation cadence, different blast radius if leaked). Permissions stored as a JSON array per key (`read_chunks`, `read_health`, etc.).
+- New `authenticateConsumerKey($pdo, $required_permission)` helper in `web-portal/php_deploy/includes/api_helpers.php` — drop-in for any endpoint that should accept consumer keys. Sends 401 (missing/bad key) or 403 (key valid but lacks permission) and exits on failure; returns `{id, name, permissions}` on success. Touches `last_used_at` for audit.
+- `getApiKeyHeader()` extracted as a small helper so endpoints can reuse the X-API-Key/Bearer parsing.
+
+**What's deferred (deliberate):**
+- The actual edit of `list_chunks.php` / `chunks_status.php` / `download_chunks.php` is a manual step because those files **are not in this repo** — they live only on the server, copied between domains via the one-shot `brain/deploy/install_chunks_api.php`. The full deploy guide (with SQL, key registration, file pull, and curl smoke test) is in `web-portal/database/README_consumer_keys.md`.
+- Re-adding the HTTP path to `brain/db_sync.py`. The FTP path works fine; if HTTPS becomes preferable later, the `CONSUMER_KEY` env var is documented in `.env.example` as the future opt-in switch. Implementation sketch is in the README.
+
+**Why this split:** delivering the durable artifacts (table, helper, docs) gets the trust model right immediately. The remaining steps require pulling on-server PHP files into version control first — a hygiene fix that's worth doing once, properly, rather than reconstructing from the installer script.
 
 ### B3. Convert hardcoded data assumptions to env-driven config ✅ DONE (2026-05-04)
 
