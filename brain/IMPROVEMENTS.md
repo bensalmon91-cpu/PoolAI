@@ -133,12 +133,20 @@ which mostly works because `sync()` now warns when "no chunks available."
 There are still a couple of silent paths in `_delete_from_ftp` and the
 download path; auditing those is cheap follow-up work.
 
-### B6. Auto-update brain/CLAUDE.md known-issues from the latest_alerts.json
+### B6. Auto-update brain/CLAUDE.md known-issues from the latest_alerts.json ✅ DONE (2026-05-04)
 
-The current "Current Known Issues (as of Feb 26)" section in `brain/CLAUDE.md`
-is hand-written and decays. Generate it from `output/analysis/latest_alerts.json`
-on every sync, with a clear `Generated:` timestamp. Saves a manual step in
-the Session End Checklist.
+**Implementation:**
+- New `brain/update_claude_md.py` regenerates a marker-wrapped section
+  (`<!-- AUTO:CURRENT_KNOWN_ISSUES START/END -->`) from
+  `output/analysis/latest_alerts.json`. Idempotent: only writes when content
+  changed. First run replaces a legacy "## Current Known Issues" heading.
+- Wired into `db_sync.py main()` after the alert check, so every sync run
+  refreshes CLAUDE.md without manual ritual. Failures here are non-fatal.
+- Auto-section is *facts only* (alerts table + trends + staleness banner).
+  Narrative interpretation lives in `knowledge/investigation_context.md`,
+  which is not auto-managed (different decay rate).
+- Session End Checklist updated: hand-edits between markers will be
+  overwritten; analytical commentary belongs elsewhere.
 
 ---
 

@@ -693,6 +693,16 @@ def main():
     alert_status = run_alert_check() if success else 'SKIPPED'
     logger.info(f"Alert status: {alert_status}")
 
+    # B6: refresh the auto-managed block of brain/CLAUDE.md from the alerts JSON
+    # we just wrote. Failures here are non-fatal — the sync itself succeeded.
+    if success:
+        try:
+            from update_claude_md import update as _update_claude_md
+            if _update_claude_md(verbose=False):
+                logger.info("CLAUDE.md known-issues block refreshed")
+        except Exception as e:
+            logger.warning(f"could not refresh CLAUDE.md: {e}")
+
     # Exit non-zero on sync failure OR pipeline staleness, so cron/wrapper can alarm.
     is_stale = bool(syncer._staleness and syncer._staleness.get('is_stale'))
     sys.exit(0 if (success and not is_stale) else 1)
