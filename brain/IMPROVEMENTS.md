@@ -90,19 +90,15 @@ a separate `consumer_keys` table on the server, generate a brain-specific
 key, and have the auth middleware accept either. Don't reuse `pi_devices`
 as the trust store.
 
-### B3. Convert hardcoded data assumptions to env-driven config
+### B3. Convert hardcoded data assumptions to env-driven config ✅ DONE (2026-05-04)
 
-**Problem:** the chunker's path was hardcoded to `/data/chunks/2`. Same
-risk lurks in:
-- `'2020-01-' in db_path.name` — a hardcoded "skip test data" rule.
-- `pool_readings.db` filename and the implicit `readings` table name in
-  `merge_chunks` and `_check_staleness` (B1).
-- The 4 IP-addressed controllers (`192.168.200.11..14`) are referenced by
-  IP rather than by friendly name in the merged DB. (Probably fine, but
-  worth flagging.)
+**Implementation:**
+- New `SKIP_DATE_PREFIXES` env var (default `2020-01-,2020-02-`) replaces the hardcoded date-string check in `merge_chunks()`. Defaults preserve existing behaviour; set empty to merge everything (e.g. for a fresh deployment with no test data).
+- `STALENESS_HOURS` (already added in B1) and `DEVICE_IDS` (added in the multi-device refactor) are documented in `.env.example` for discoverability.
 
-**Fix:** anything that looks like environment-specific data should come from
-`.env` (preferably the consolidated root `.env` once that lands).
+**Deliberately not parameterised:**
+- The output DB filename `pool_readings.db` and table name `readings` — these are project conventions, not environment-specific. Making knobs nobody turns is its own maintenance cost.
+- The 4 controller IPs (`192.168.200.11..14`) — they're stored as the `host` column of each row, never referenced in code. Already env-agnostic.
 
 ### B4. Data-quality sanity checks before alerts ✅ DONE (2026-05-04)
 
@@ -117,13 +113,16 @@ risk lurks in:
 
 **Deferred:** "sudden 50% jump in <5 min" detection. Tuning-heavy and would false-positive on legitimate dosing events (which routinely produce step changes when a relay kicks). Re-evaluate if specific failure modes appear that B4's current checks miss.
 
-### B5. Replace silent FTP failures
+### B5. Replace silent FTP failures ✅ DONE (2026-05-04)
 
-**Problem:** the original `db_sync.py` had `try/except` blocks that returned
-empty lists on failure. The new code logs errors but still returns empty —
-which mostly works because `sync()` now warns when "no chunks available."
-There are still a couple of silent paths in `_delete_from_ftp` and the
-download path; auditing those is cheap follow-up work.
+**Implementation:**
+- Added `_ftp_delete_failures` and `_ftp_download_failures` counters on `ChunkSyncer`, reset at the start of each `sync()` call.
+- `download_chunk()` increments on inline-delete failures (the chunk downloaded but couldn't be deleted from the server) and on download failures.
+- `_delete_from_ftp()` (called when the local copy already exists) increments on delete failure.
+- At the end of `sync()`, an aggregate WARNING is logged if either counter is non-zero — explains that persistent delete failures are wasteful (chunks linger and get re-listed) but not lossy. B1's staleness alarm covers the actual data-flow regression scenario.
+
+**Deliberately not added:**
+- Per-chunk retry-with-backoff. The FTP ops here are cheap; if they fail they fail, and persistent failures show up in the next-sync log too. A real retry policy belongs in a dedicated outbox/queue, which is overengineering for current scale.
 
 ### B6. Auto-update brain/CLAUDE.md known-issues from the latest_alerts.json ✅ DONE (2026-05-04)
 

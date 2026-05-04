@@ -66,8 +66,23 @@ class ChunkSyncer:
         self.cleanup_after_merge = os.getenv('CLEANUP_AFTER_MERGE', 'true').lower() == 'true'
         self.staleness_hours = float(os.getenv('STALENESS_HOURS', '6'))
 
+        # Chunk filenames whose name CONTAINS any of these prefixes are skipped
+        # at merge time. Original use case: filter out the 2020 test/demo chunks
+        # that ship with development installs. Comma-separated; default keeps
+        # the original behaviour. Set SKIP_DATE_PREFIXES='' to merge everything.
+        skip_raw = os.getenv('SKIP_DATE_PREFIXES', '2020-01-,2020-02-')
+        self.skip_date_prefixes = tuple(
+            p.strip() for p in skip_raw.split(',') if p.strip()
+        )
+
         # Set after sync(); read by main() to decide exit code.
         self._staleness: dict | None = None
+
+        # B5: counters for FTP failure audit. Reset on each sync() call.
+        # Aggregate logged at sync end so single-line per-failure WARNINGs
+        # don't get lost in long output.
+        self._ftp_delete_failures = 0
+        self._ftp_download_failures = 0
 
         # Optional allowlist: DEVICE_IDS=2,5 restricts which device dirs to sync.
         # If unset, every numeric subdirectory under SERVER_CHUNKS_ROOT is synced.
@@ -250,10 +265,12 @@ class ChunkSyncer:
                     ftp.delete(ftp_path)
                     logger.info(f"  Deleted from server: {filename}")
                 except Exception as e:
+                    self._ftp_delete_failures += 1
                     logger.warning(f"  Failed to delete from server: {filename} - {e}")
             ftp.quit()
             return local_path
         except Exception as e:
+            self._ftp_download_failures += 1
             logger.error(f"  FTP download failed for {filename}: {e}")
             if local_path.exists():
                 local_path.unlink()
@@ -266,6 +283,7 @@ class ChunkSyncer:
             ftp.quit()
             logger.info(f"  Deleted from server: {filename}")
         except Exception as e:
+            self._ftp_delete_failures += 1
             logger.warning(f"  Failed to delete from server: {filename} - {e}")
 
     def cleanup_server(self):
@@ -348,8 +366,8 @@ class ChunkSyncer:
 
         valid_dbs = []
         for db_path in chunk_dbs:
-            if '2020-01-' in db_path.name or '2020-02-' in db_path.name:
-                logger.info(f"  Skipping test data: {db_path.name}")
+            if any(p in db_path.name for p in self.skip_date_prefixes):
+                logger.info(f"  Skipping (matches SKIP_DATE_PREFIXES): {db_path.name}")
                 continue
             if db_path.name in already_merged:
                 continue
@@ -418,6 +436,10 @@ class ChunkSyncer:
         logger.info("=" * 50)
         logger.info("PoolAIssistant Brain - Database Sync Starting")
         logger.info("=" * 50)
+
+        # Reset per-run counters
+        self._ftp_delete_failures = 0
+        self._ftp_download_failures = 0
 
         state = self.load_state()
 
@@ -541,6 +563,19 @@ class ChunkSyncer:
         if self._staleness is not None:
             self._emit_staleness_marker(self._staleness)
             self._log_staleness(self._staleness)
+
+        # B5: aggregate FTP failure summary so per-line WARNINGs aren't lost
+        # in long sync output. Persistent failures here usually mean an FTP
+        # ACL change or chunks left undeleted on the server (which then get
+        # re-listed on every subsequent sync — annoying but not data-loss).
+        if self._ftp_delete_failures or self._ftp_download_failures:
+            logger.warning(
+                f"FTP failures this run: "
+                f"{self._ftp_download_failures} download(s), "
+                f"{self._ftp_delete_failures} delete(s). "
+                f"Persistent delete failures mean chunks linger on the server "
+                f"and get re-listed every sync (wasteful but not lossy)."
+            )
 
         logger.info("=" * 50)
         if not any_new_downloads and not any_chunks_seen:
