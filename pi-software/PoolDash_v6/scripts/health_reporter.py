@@ -9,8 +9,8 @@ Now includes:
 - Active alarms count
 - Issues list for quick problem identification
 
-Run via cron every 15 minutes:
-*/15 * * * * /opt/PoolAIssistant/venv/bin/python /home/poolaissistant/health_reporter.py >> /opt/PoolAIssistant/logs/health_reporter.log 2>&1
+Run via systemd timer (poolaissistant_health.timer) every 1 minute, or
+ad-hoc with: /opt/PoolAIssistant/venv/bin/python /opt/PoolAIssistant/app/scripts/health_reporter.py
 """
 
 import os
@@ -71,7 +71,14 @@ REMOTE_SETTABLE_KEYS = {
 POOL_DB = DATA_DIR / "pool_readings.sqlite3"
 CHUNK_TRACKER = DATA_DIR / "chunks" / "chunk_status.json"
 HEALTH_STATE_FILE = DATA_DIR / "health_state.json"
-CHUNK_MANAGER = Path("/home/poolaissistant/chunk_manager.py")
+# Sibling scripts in /opt/PoolAIssistant/app/scripts/. The hardcoded
+# /home/poolaissistant/ paths in earlier versions referenced a user that
+# never existed on production installs (the user is `poolai`), causing
+# every admin-triggered 'upload' or 'update' command to fail with
+# "Chunk manager not found" / "Update script not found" since at least 2026-04.
+SCRIPTS_DIR = Path(__file__).resolve().parent
+CHUNK_MANAGER = SCRIPTS_DIR / "chunk_manager.py"
+UPDATE_CHECK = SCRIPTS_DIR / "update_check.py"
 VENV_PYTHON = Path("/opt/PoolAIssistant/venv/bin/python")
 
 # Thresholds
@@ -596,10 +603,9 @@ def execute_command(settings, command):
 
         elif command_type == 'update':
             # Trigger update check
-            update_script = Path("/home/poolaissistant/update_check.py")
-            if update_script.exists() and VENV_PYTHON.exists():
+            if UPDATE_CHECK.exists() and VENV_PYTHON.exists():
                 proc = subprocess.run(
-                    [str(VENV_PYTHON), str(update_script)],
+                    [str(VENV_PYTHON), str(UPDATE_CHECK)],
                     capture_output=True,
                     text=True,
                     timeout=300

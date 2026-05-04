@@ -3,10 +3,11 @@ PoolAIssistant Alert Checker
 Monitors pool readings against established thresholds
 """
 
+import os
 import sqlite3
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 logging.basicConfig(
@@ -95,6 +96,42 @@ class AlertChecker:
         conn.close()
         return alerts
         
+    def check_staleness(self):
+        """Return staleness info dict (always populated) — pipeline-level alert.
+
+        is_stale=True means the newest reading in the DB is older than
+        STALENESS_HOURS env var (default 6). This is a meta-alert about the
+        pipeline itself, separate from per-sensor alerts.
+        """
+        threshold_h = float(os.getenv("STALENESS_HOURS", "6"))
+        info = {
+            "is_stale": False,
+            "latest_reading": None,
+            "age_hours": None,
+            "threshold_hours": threshold_h,
+        }
+        try:
+            conn = sqlite3.connect(self.db_path)
+            row = conn.execute("SELECT MAX(ts) FROM readings").fetchone()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"staleness query failed: {e}")
+            return info
+        latest = row[0] if row else None
+        if not latest:
+            return info
+        try:
+            latest_dt = datetime.fromisoformat(latest)
+        except ValueError:
+            return info
+        if latest_dt.tzinfo is None:
+            latest_dt = latest_dt.replace(tzinfo=timezone.utc)
+        age_h = (datetime.now(timezone.utc) - latest_dt).total_seconds() / 3600.0
+        info["latest_reading"] = latest
+        info["age_hours"] = round(age_h, 2)
+        info["is_stale"] = age_h > threshold_h
+        return info
+
     def check_trends(self):
         """Check for concerning trends (like Spa pH declining)."""
         conn = sqlite3.connect(self.db_path)
@@ -146,31 +183,49 @@ class AlertChecker:
         logger.info("PoolAIssistant Alert Check")
         logger.info("=" * 50)
         
+        # Pipeline staleness check (B1) — meta-alert, surfaced before per-sensor alerts
+        staleness = self.check_staleness()
+        if staleness["is_stale"]:
+            age_h = staleness["age_hours"]
+            logger.warning(
+                f"[CRITICAL] Pipeline STALE: newest reading is {age_h:.1f}h old "
+                f"(threshold {staleness['threshold_hours']}h). "
+                f"Per-sensor alerts below reflect data from {staleness['latest_reading']}, NOT live state."
+            )
+        elif staleness["age_hours"] is not None:
+            logger.info(f"Pipeline freshness OK ({staleness['age_hours']:.1f}h old).")
+
         # Check current values
         alerts = self.check_recent_readings()
-        
+
         if alerts:
             logger.warning(f"Found {len(alerts)} active alerts:")
             for a in alerts:
                 logger.warning(f"  [{a['level']}] {a['pool']} {a['sensor']}: {a['current_value']} (normal: {a['normal_range']})")
         else:
             logger.info("No active alerts - all readings within normal range")
-            
+
         # Check trends
         trends = self.check_trends()
-        
+
         if trends:
             logger.info(f"Trend alerts ({len(trends)}):")
             for t in trends:
                 logger.info(f"  {t['pool']} {t['sensor']}: {t['direction']} for {t['days']} days (change: {t['total_change']:+.3f})")
-        
-        # Save results
+
+        # Save results — staleness escalates overall status to CRITICAL
+        sensor_status = (
+            "CRITICAL" if any(a["level"] == "CRITICAL" for a in alerts)
+            else "WARNING" if alerts else "OK"
+        )
+        overall_status = "CRITICAL" if staleness["is_stale"] else sensor_status
+
         results = {
             "check_time": datetime.now().isoformat(),
+            "staleness": staleness,
             "alerts": alerts,
             "trends": trends,
-            "status": "CRITICAL" if any(a["level"] == "CRITICAL" for a in alerts) 
-                       else "WARNING" if alerts else "OK"
+            "status": overall_status,
         }
         
         Path("analysis").mkdir(exist_ok=True)

@@ -27,7 +27,7 @@ import re
 import sqlite3
 import logging
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from ftplib import FTP, error_perm
 
@@ -64,6 +64,10 @@ class ChunkSyncer:
         self.state_file = self.chunks_dir / 'sync_state.json'
         self.delete_after_download = os.getenv('DELETE_AFTER_DOWNLOAD', 'true').lower() == 'true'
         self.cleanup_after_merge = os.getenv('CLEANUP_AFTER_MERGE', 'true').lower() == 'true'
+        self.staleness_hours = float(os.getenv('STALENESS_HOURS', '6'))
+
+        # Set after sync(); read by main() to decide exit code.
+        self._staleness: dict | None = None
 
         # Optional allowlist: DEVICE_IDS=2,5 restricts which device dirs to sync.
         # If unset, every numeric subdirectory under SERVER_CHUNKS_ROOT is synced.
@@ -532,10 +536,16 @@ class ChunkSyncer:
 
         self._finalize_state(state, force_rebuild)
 
+        # B1: staleness alarm — set instance attr for main() to read
+        self._staleness = self._check_staleness()
+        if self._staleness is not None:
+            self._emit_staleness_marker(self._staleness)
+            self._log_staleness(self._staleness)
+
         logger.info("=" * 50)
         if not any_new_downloads and not any_chunks_seen:
             logger.warning("Sync completed but no chunks were found on server. "
-                           "Check Pi upload status — is the chunker still running?")
+                           "Check Pi upload status - is the chunker still running?")
         else:
             logger.info("Sync complete!")
         logger.info("=" * 50)
@@ -546,6 +556,63 @@ class ChunkSyncer:
         if force_rebuild:
             state['last_merge'] = datetime.now().isoformat()
         self.save_state(state)
+
+    # ------------------------------------------------------------------
+    # Staleness check (B1) — pipeline alarm when latest reading is too old
+    # ------------------------------------------------------------------
+    def _check_staleness(self) -> dict | None:
+        """Compare MAX(ts) in output DB to now. Return staleness dict or None."""
+        output_db = self.output_dir / 'pool_readings.db'
+        if not output_db.exists():
+            return None
+        try:
+            conn = sqlite3.connect(output_db)
+            row = conn.execute("SELECT MAX(ts) FROM readings").fetchone()
+            conn.close()
+        except Exception as e:
+            logger.error(f"staleness check failed: {e}")
+            return None
+        latest = row[0] if row else None
+        if not latest:
+            return None
+        try:
+            latest_dt = datetime.fromisoformat(latest)
+        except ValueError:
+            logger.warning(f"could not parse latest ts: {latest!r}")
+            return None
+        if latest_dt.tzinfo is None:
+            latest_dt = latest_dt.replace(tzinfo=timezone.utc)
+        age_hours = (datetime.now(timezone.utc) - latest_dt).total_seconds() / 3600.0
+        return {
+            'is_stale': age_hours > self.staleness_hours,
+            'latest_reading': latest,
+            'age_hours': round(age_hours, 2),
+            'threshold_hours': self.staleness_hours,
+            'checked_at': datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _emit_staleness_marker(self, info: dict):
+        """Write output/staleness.json so external monitors can read state without parsing logs."""
+        marker = self.output_dir / 'staleness.json'
+        try:
+            marker.write_text(json.dumps(info, indent=2), encoding='utf-8')
+        except Exception as e:
+            logger.warning(f"could not write staleness marker {marker}: {e}")
+
+    def _log_staleness(self, info: dict):
+        if info['is_stale']:
+            age_h = info['age_hours']
+            days = age_h / 24
+            logger.warning(
+                f"WARNING - newest reading is {age_h:.1f}h old "
+                f"({days:.1f} days, ts={info['latest_reading']}). "
+                f"Pipeline is STALE (threshold {info['threshold_hours']}h)."
+            )
+        else:
+            logger.info(
+                f"Freshness OK: newest reading {info['age_hours']:.1f}h old "
+                f"(threshold {info['threshold_hours']}h)."
+            )
 
     # ------------------------------------------------------------------
     # Status display
@@ -621,11 +688,14 @@ def main():
 
     success = syncer.sync(force_rebuild=force_rebuild)
 
-    if success:
-        alert_status = run_alert_check()
-        logger.info(f"Alert status: {alert_status}")
+    # Alerts run even if sync had no new data — the existing DB may still be useful
+    # and we want staleness to surface as a CRITICAL alert in latest_alerts.json.
+    alert_status = run_alert_check() if success else 'SKIPPED'
+    logger.info(f"Alert status: {alert_status}")
 
-    sys.exit(0 if success else 1)
+    # Exit non-zero on sync failure OR pipeline staleness, so cron/wrapper can alarm.
+    is_stale = bool(syncer._staleness and syncer._staleness.get('is_stale'))
+    sys.exit(0 if (success and not is_stale) else 1)
 
 
 if __name__ == '__main__':

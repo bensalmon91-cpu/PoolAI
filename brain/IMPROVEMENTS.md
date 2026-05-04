@@ -52,30 +52,27 @@ silent for 7 weeks again.
 
 These are concrete, scoped changes to brain/ files. Roughly ordered by value-per-effort.
 
-### B1. Staleness alarm — the single most-impactful change
+### B1. Staleness alarm ✅ DONE (2026-05-04)
 
 **Problem:** `db_sync.py` declared "Sync complete!" for 7 weeks while the database
 fell 7 weeks out of date. Every consumer downstream (alerts, baselines,
 investigator) cheerfully kept running on stale data.
 
-**Fix:** at the end of `sync()`, query `MAX(ts) FROM readings`. If the latest
-reading is older than `STALENESS_HOURS` (default: 6), log at WARNING level,
-write a marker file, and bubble up a non-zero exit code. The alert checker
-already runs after sync — it should also include "data is N hours stale" as
-a CRITICAL alert when over threshold.
+**Implementation:**
+- `ChunkSyncer._check_staleness()` queries `MAX(ts) FROM readings` after the
+  merge phase, computes hours since the newest reading.
+- Threshold is `STALENESS_HOURS` env var (default 6).
+- `output/staleness.json` written every sync as a structured marker — readable
+  by external monitors without parsing logs.
+- `db_sync.py` exits non-zero on stale data, even if the sync itself succeeded —
+  cron/Task Scheduler wrappers can now alarm.
+- `alert_checker.py` adds a `staleness` field to `analysis/latest_alerts.json`
+  and escalates overall `status` to `CRITICAL` when stale, regardless of
+  per-sensor alerts. The "stale" log line says explicitly that the per-sensor
+  alerts below reflect old data, not live state.
 
-Exact change: add a `_check_staleness()` method on `ChunkSyncer`, call it
-in `sync()` after the merge phase. Add `latest_reading_age_hours` to
-`output/analysis/latest_alerts.json` so downstream UIs / Slack hooks can show it.
-
-**Acceptance criteria:** running `python db_sync.py` against an FTP server
-with no new chunks should print something like:
-
-```
-WARNING — newest reading is 7 weeks old (2026-03-12). Pipeline is STALE.
-```
-
-…and exit non-zero so a wrapper script (or scheduled task) can alarm.
+Verified against the post-Mar-12 dataset on 2026-05-04: warning fires
+("1268.8h old, 52.9 days"), staleness.json written, exit code 1.
 
 ### B2. Replace Pi-key auth with a proper consumer key
 
