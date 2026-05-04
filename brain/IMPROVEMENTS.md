@@ -1,6 +1,6 @@
 # Brain — Pending Improvements & Open Questions
 
-**Last updated:** 2026-05-03
+**Last updated:** 2026-05-04
 
 This file tracks known weaknesses in the brain/ pipeline and proposes concrete next steps.
 Created during the multi-device refactor / consolidation pass on 2026-05-03.
@@ -38,13 +38,13 @@ The investigation is *outside* `brain/` — it's a Pi-software / web-portal task
 but `brain/` should make the staleness loud and unmissable so it can't go
 silent for 7 weeks again.
 
-| # | Action | Owner | Effort |
+| # | Action | Owner | Status |
 |---|---|---|---|
-| G1 | Hit `/api/heartbeat.php`-derived `device_health` (or look at the admin portal) for the Swanwood Pi to see `last_upload_success` | web-portal | 10 min |
-| G2 | If G1 says the Pi *is* uploading, check whether chunks are landing in `/data/chunks/{new_id}/` — re-run `python brain/db_sync.py --devices` | brain | 1 min |
-| G3 | If the Pi has stopped chunking, SSH to `poolai@10.0.30.5` and check `systemctl status pooldash-chunk-manager` (or whatever the unit is called) and `~/PoolDash_v6/logs/chunk_manager.log` | pi-software | 15 min |
-| G4 | If the API key on the Pi is stale (G2 returns 401s), rotate via admin portal and update Pi `settings.json` | web-portal + pi | 10 min |
-| G5 | Implement **B1** below (staleness alarm in brain) before relying on the pipeline for monitoring again | brain | 1 hour |
+| G1 | Hit `/api/heartbeat.php`-derived `device_health` (or look at the admin portal) for the Swanwood Pi to see `last_upload_success` | web-portal | ✅ done 2026-05-04 — found device 12 (replaced device 5 on 2026-04-12) has zero successful uploads since creation |
+| G2 | If G1 says the Pi *is* uploading, check whether chunks are landing in `/data/chunks/{new_id}/` — re-run `python brain/db_sync.py --devices` | brain | ✅ confirmed on 2026-05-04: only `/data/chunks/2/` and `/data/chunks/5/` exist, both empty since drained on Mar 12 |
+| G3 | If the Pi has stopped chunking, SSH to `poolai@10.0.30.5` and check `systemctl status pooldash-chunk-manager` (or whatever the unit is called) and `~/PoolDash_v6/logs/chunk_manager.log` | pi-software | 🟡 partial — admin-triggered upload fixed in v6.11.11 (`f1c5c38`) by correcting hardcoded `/home/poolaissistant/` path → `Path(__file__).resolve().parent`. **Autonomous `chunk_sync.timer` still suspected dormant** — needs SSH check |
+| G4 | If the API key on the Pi is stale (G2 returns 401s), rotate via admin portal and update Pi `settings.json` | web-portal + pi | ⏳ blocked behind G3 — diagnose timer state first |
+| G5 | Implement **B1** below (staleness alarm in brain) before relying on the pipeline for monitoring again | brain | ✅ done 2026-05-04 (`f1c5c38`) |
 
 ---
 
