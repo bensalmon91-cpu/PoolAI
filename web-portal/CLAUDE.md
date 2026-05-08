@@ -119,6 +119,11 @@ Email FROM: `noreply@poolai.*`
 
 5. **Duplicated includes/config across deploy trees.** `config/database.php`, `config/config.php`, `includes/auth.php`, and `includes/api_helpers.php` exist in BOTH `php_deploy/` and `admin_deploy/` — both deploy targets need them. Keep them in sync when editing (or factor into a shared dir + post-build copy if drift becomes a problem). `includes/PortalAuth.php`, `PortalDevices.php` and `config/portal.php` live only in `php_deploy/` (admin doesn't use them). `includes/AdminClients.php`, `AdminDevices.php`, `RemoteSettings.php`, `claude_api.php` live only in `admin_deploy/` (Pi/customer-portal don't use them).
 
+6. **admin.* Hostinger chroot mismatch (discovered + worked-around 2026-05-08).**
+   The FTP user `u931726538.claudeadmin` lands at PWD `/public_html` on connect, but **Apache serves from one level above** (the chroot root, where `default.php` lives — Hostinger's auto-generated landing page). Empirically verified by uploading probe files to both paths and seeing which one the web server returned. The "Directory: /home/u931726538/domains/admin.modprojects.co.uk/public_html" that hPanel showed in the FTP-account UI is misleading — it's the FTP user's default-PWD, NOT the web docroot.
+   **Workaround in code:** `deploy.py` now does `ftp.cwd("/")` immediately after connect (was missing). `deploy.manifest.json` for `admin-domain` uses `ftp_base_subdir: ""` (was `"public_html"`). Files now upload to chroot root and Apache serves them.
+   **Bootstrap step:** `.env` is NOT in the deploy globs (deploy.py's glob list filters by extension, dotfiles excluded). On first deploy of admin.*, the `.env` was FTP'd manually. When DB/secret creds rotate, **also FTP a fresh `admin_deploy/.env` to chroot root** — `deploy.py` will not do it automatically.
+
 ---
 
 ## Key API Endpoints

@@ -165,6 +165,14 @@ def ftp_connect(target: dict | None = None) -> ftplib.FTP_TLS:
     ctx.verify_mode = ssl.CERT_NONE
     ftp = ftplib.FTP_TLS(host, user, pw, context=ctx, timeout=60)
     ftp.prot_p()
+    # CD to chroot root so all subsequent relative STORs resolve from /. Some
+    # Hostinger FTP users have a default-PWD of /public_html that's a subdir of
+    # the actual web docroot - relative uploads from there land one level too
+    # deep. Force CWD / to make uploads match the manifest's intent.
+    try:
+        ftp.cwd("/")
+    except ftplib.error_perm:
+        pass  # some servers don't allow CWD / from FTP-rooted users; harmless
     return ftp
 
 

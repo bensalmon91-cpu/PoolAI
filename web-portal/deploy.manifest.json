@@ -20,11 +20,11 @@
       ]
     },
     "admin-domain": {
-      "$comment": "admin.modprojects.co.uk - admin UI + admin-only API. Same-origin between the two (no CORS or cross-subdomain cookies). FTP chroot lands at /home/u931726538/domains/admin.modprojects.co.uk/ so we use ftp_base_subdir: 'public_html' to upload into the served docroot.",
+      "$comment": "admin.modprojects.co.uk - admin UI + admin-only API. Same-origin between the two (no CORS or cross-subdomain cookies). FTP chroot lands at /home/u931726538/domains/admin.modprojects.co.uk/ AND Apache serves from THE SAME path (NOT from public_html/ as one would expect). Empirically verified 2026-05-08 by probe-file test. So ftp_base_subdir is empty - files go to the chroot root.",
       "description": "admin.modprojects.co.uk - admin UI + admin-only API",
       "deploy_method": "ftp",
-      "server_base_path": "/home/u931726538/domains/admin.modprojects.co.uk/public_html",
-      "ftp_base_subdir": "public_html",
+      "server_base_path": "/home/u931726538/domains/admin.modprojects.co.uk",
+      "ftp_base_subdir": "",
       "ftp_credentials_env_keys": {
         "$comment": "Export these in shell before running deploy.py (mirrors POOLAI_FTP_*). Real values live in root .env which deploy.py does NOT auto-load.",
         "host": "POOLAI_ADMIN_FTP_HOST",
