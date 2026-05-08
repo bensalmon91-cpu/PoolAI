@@ -25,8 +25,15 @@ Usage:
     python deploy.py verify --target admin-backend
 
 Credentials (never in repo; read from env):
-    POOLAI_FTP_HOST, POOLAI_FTP_USER, POOLAI_FTP_PASS
+    POOLAI_FTP_HOST, POOLAI_FTP_USER, POOLAI_FTP_PASS  (default for all FTP targets)
     POOLAI_ADMIN_SESSION  (mod_admin_session cookie value, for verify)
+
+A target can override the defaults via `ftp_credentials_env_keys` in the manifest:
+    "ftp_credentials_env_keys": {"host": "POOLAI_ADMIN_FTP_HOST",
+                                  "user": "POOLAI_ADMIN_FTP_USER",
+                                  "pass": "POOLAI_ADMIN_FTP_PASSWORD"}
+This lets a target with its own FTP chroot use a separate user without affecting
+the others.
 """
 
 from __future__ import annotations
@@ -131,17 +138,25 @@ def expand_target(target_name: str, target: dict) -> list[FileSpec]:
 # FTP helpers
 # --------------------------------------------------------------------------
 
-def _ftp_creds() -> tuple[str, str, str]:
-    host = os.environ.get("POOLAI_FTP_HOST", "").strip()
-    user = os.environ.get("POOLAI_FTP_USER", "").strip()
-    pw = os.environ.get("POOLAI_FTP_PASS", "").strip()
+def _ftp_creds(target: dict | None = None) -> tuple[str, str, str]:
+    """Resolve FTP credentials. A target may override defaults via
+    `ftp_credentials_env_keys: {host, user, pass}` pointing at alternate env vars."""
+    host_key, user_key, pass_key = "POOLAI_FTP_HOST", "POOLAI_FTP_USER", "POOLAI_FTP_PASS"
+    if target and isinstance(target.get("ftp_credentials_env_keys"), dict):
+        keys = target["ftp_credentials_env_keys"]
+        host_key = keys.get("host", host_key)
+        user_key = keys.get("user", user_key)
+        pass_key = keys.get("pass", pass_key)
+    host = os.environ.get(host_key, "").strip()
+    user = os.environ.get(user_key, "").strip()
+    pw = os.environ.get(pass_key, "").strip()
     if not host or not user or not pw:
-        fatal("FTP credentials missing. Set POOLAI_FTP_HOST / POOLAI_FTP_USER / POOLAI_FTP_PASS.")
+        fatal(f"FTP credentials missing. Set {host_key} / {user_key} / {pass_key}.")
     return host, user, pw
 
 
-def ftp_connect() -> ftplib.FTP_TLS:
-    host, user, pw = _ftp_creds()
+def ftp_connect(target: dict | None = None) -> ftplib.FTP_TLS:
+    host, user, pw = _ftp_creds(target)
     ctx = ssl.create_default_context()
     # Hostinger's cert hostname doesn't always match the FTP host - skip match
     # since we authenticate with user/password and are uploading, not reading
@@ -293,7 +308,7 @@ def deploy_ftp_target(target_name: str, target: dict, files: list[FileSpec], dry
             rel = f"{ftp_base_subdir}/{fs.dest}" if ftp_base_subdir else fs.dest
             print(f"       {fs.src.relative_to(ROOT)} -> {rel}")
         return {f.dest: f.sha for f in files}
-    ftp = ftp_connect()
+    ftp = ftp_connect(target)
     try:
         for fs in files:
             remote = f"{ftp_base_subdir}/{fs.dest}" if ftp_base_subdir else fs.dest
@@ -320,7 +335,7 @@ def deploy_php_installer_target(target_name: str, target: dict, files: list[File
         return {f.dest: f.sha for f in files}
 
     # FTP upload the installer
-    ftp = ftp_connect()
+    ftp = ftp_connect(target)
     try:
         ftp_ensure_dir(ftp, "/".join(ftp_filename.split("/")[:-1]))
         ftp.storbinary(f"STOR {ftp_filename}", io.BytesIO(bundle))

@@ -24,6 +24,7 @@ SOURCE_ENV_FILES = [
     "brain/.env",
     "ai-assistant/php/.env",
     "web-portal/php_deploy/.env",
+    "web-portal/admin_deploy/.env",
     "web-portal/poolai_deploy/.env",
 ]
 

@@ -1,6 +1,6 @@
 # PoolAIssistant Project - Cloud Integration Roadmap
 
-**Last Updated:** 2026-05-03 · **Pi software current:** v6.11.10
+**Last Updated:** 2026-05-08 · **Pi software current:** v6.11.10
 
 This master document tracks the PoolAIssistant ecosystem including the Pi software, web portal, and cloud integration features.
 
@@ -9,6 +9,7 @@ This master document tracks the PoolAIssistant ecosystem including the Pi softwa
 - **Pi software (released):** v6.11.10 (alarm-lifecycle hardening + first unit-test infra). Earlier shipped versions: v6.11.5 (WiFi static-IP preflight + DNS fallback), v6.11.6 (smart-link QR + PWA install + cloud chemistry + subscription card), v6.11.7–8 (review polish), v6.11.9 (alarm cleanup — superseded by v6.11.10 which fixes a dead-code sweep).
 - **Active Pis:** Swanwood (production) @ `10.0.30.247` (WiFi DHCP per 2026-04-26 recovery), tvcctv (second unit) @ `10.0.30.131`. Both will land on v6.11.10 at the next 03:00 update cron.
 - **Web portal:** legacy `poolaissistant.*/portal/*` retired 2026-05-03 (10 PHP files now 301-redirect to `poolai.*`). Customer portal at `poolai.modprojects.co.uk` is the canonical forward direction.
+- **Admin split (in flight, 2026-05-08):** admin UI + admin-only API moving from `poolaissistant.*/admin/*` to a new subdomain `admin.modprojects.co.uk`. Local code split is done (`web-portal/admin_deploy/`); deploy waits on hPanel subdomain creation + new FTP creds. `poolaissistant.*` retains all Pi-facing API and the customer-portal API; admin URLs there 308-redirect to `admin.*`.
 - **Next milestone:** fresh SD card install — validates the v6.11.3 installer cleanup end-to-end on a clean Pi. Plan logged in `pi-software/CLAUDE.md` under "Fresh SD Card Install Plan".
 - **Open backlog:** 2 items — hardcoded `poolai:12345678` default password (security), SSH/sudo TTY docs. See `.claude/projects/.../memory/project_installer_improvements.md`.
 
@@ -21,7 +22,8 @@ PoolAIssistant-Project/
 ├── pi-software/             # Raspberry Pi application
 │   └── PoolDash_v6/         # Main Pi codebase (Flask + Modbus)
 ├── web-portal/              # Server-side components
-│   ├── php_deploy/          # Admin backend (poolaissistant.modprojects.co.uk)
+│   ├── php_deploy/          # Pi-facing + customer-portal API (poolaissistant.modprojects.co.uk)
+│   ├── admin_deploy/        # Admin UI + admin-only API (admin.modprojects.co.uk)
 │   ├── poolai_deploy/       # Customer portal (poolai.modprojects.co.uk)
 │   └── database/            # SQL schema migrations
 ├── brain/                   # Swanwood Spa analytics (separate project)
@@ -33,7 +35,12 @@ See individual CLAUDE.md files for detailed documentation:
 - `pi-software/PoolDash_v6/CLAUDE.md` — Flask app layout and known UX papercuts
 - `web-portal/CLAUDE.md` — Server deployment, API endpoints, **domain split map** (which code lives on `poolaissistant.*` vs `poolai.*`)
 
-**Domain split TL;DR:** `poolaissistant.modprojects.co.uk` = admin backend & all API (Pi-facing). `poolai.modprojects.co.uk` = customer-facing portal (browser-facing, makes API calls back to `poolaissistant.*`). FTP lands in `poolai.*` only — admin-domain deploys hop via a server-side `copy()`. Full table + known quirks (incl. the duplicate `php_deploy/portal/` legacy app) in `web-portal/CLAUDE.md`.
+**Domain split TL;DR (three subdomains):**
+- `poolaissistant.modprojects.co.uk` = Pi-facing API (provision, heartbeat, snapshot, updates) + customer-portal API (`/api/portal/*`). No browser-facing pages — `/admin/*` here is now 308-redirect stubs to `admin.*`.
+- `admin.modprojects.co.uk` *(in flight, 2026-05-08)* = admin UI + admin-only API. Same-origin: admin pages and admin API live here together, no CORS or cross-subdomain cookies.
+- `poolai.modprojects.co.uk` = customer portal (browser-facing). Browsers here call `poolaissistant.*/api/portal/*` cross-origin.
+
+FTP for `poolai.*` lands directly in its docroot. `poolaissistant.*` deploys hop via a server-side `copy()` from `poolai.*` (FTP can't reach the admin-backend chroot). `admin.*` will get its own FTP creds — direct deploy. Full table + known quirks in `web-portal/CLAUDE.md`.
 
 ---
 
@@ -44,9 +51,16 @@ See individual CLAUDE.md files for detailed documentation:
 section is now a *map* of which key in `.env` corresponds to which service.
 
 ```
-=== ADMIN BACKEND ===
+=== ADMIN UI ===
+  URL: https://admin.modprojects.co.uk        (NEW — in flight 2026-05-08)
+  Admin: https://admin.modprojects.co.uk/admin/
+  (Pre-cutover, admin still lives at https://poolaissistant.modprojects.co.uk/admin/.
+   Once the new subdomain is provisioned and deployed, the old URL 308-redirects.)
+
+=== API BACKEND (Pi-facing + customer-portal API) ===
   URL: https://poolaissistant.modprojects.co.uk
-  Admin: https://poolaissistant.modprojects.co.uk/admin/
+  Pi endpoints: /api/heartbeat.php, /api/provision.php, /api/device/snapshot.php, /api/check_updates.php, ...
+  Customer-portal API: /api/portal/*
 
 === CUSTOMER PORTAL ===
   URL: https://poolai.modprojects.co.uk
@@ -55,6 +69,12 @@ section is now a *map* of which key in `.env` corresponds to which service.
   Host: SFTP_HOST          User: u931726538.mbs       Pass: SFTP_PASSWORD
   NOTE: FTP is chrooted to poolai.modprojects.co.uk, NOT poolaissistant!
   (Brain uses a different FTP account — u931726538.piaccess — for /data/chunks/)
+
+=== FTP (Admin UI — admin.*) ===
+  Host: POOLAI_ADMIN_FTP_HOST       User: POOLAI_ADMIN_FTP_USER       Pass: POOLAI_ADMIN_FTP_PASS
+  Provisioned 2026-05-08. Real values in root .env (gitignored).
+  FTP chroot lands one level above the docroot, so deploy.manifest.json
+  uses ftp_base_subdir: "public_html" to upload into the right place.
 
 === DATABASE (Shared MySQL on Hostinger) ===
   Host: DB_HOST            Name: DB_NAME

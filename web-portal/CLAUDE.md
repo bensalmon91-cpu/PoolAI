@@ -17,7 +17,8 @@ This is the server-side component that handles device provisioning, software upd
   See "Domain split" below for the full picture.
 
 === URLS ===
-Admin backend: https://poolaissistant.modprojects.co.uk  (admin panel: /admin/)
+API backend: https://poolaissistant.modprojects.co.uk  (Pi API + customer-portal API; no browser pages)
+Admin UI:    https://admin.modprojects.co.uk  (admin panel: /admin/) — IN FLIGHT 2026-05-08
 Customer portal: https://poolai.modprojects.co.uk
 
 === SHARED DATABASE (MySQL) ===
@@ -32,30 +33,50 @@ Bootstrap Secret (for device provisioning):
 
 ### Domain split — definitive map
 
-Two subdomains, very different roles. Many files share names across the two deploy trees, so don't trust filenames alone — check which `*_deploy/` directory you're editing.
+**Three subdomains as of 2026-05-08.** Many files share names across the deploy trees, so don't trust filenames alone — check which `*_deploy/` directory you're editing.
 
-**`poolaissistant.modprojects.co.uk` — admin backend & all API**
+**`poolaissistant.modprojects.co.uk` — Pi-facing + customer-portal API only**
 
-Every machine-to-machine call goes here. Pis never make requests to `poolai.*`.
+Every Pi machine-to-machine call goes here. No browser-facing pages: `/admin/*` is now 308-redirect stubs to `admin.*`, and `/portal/*` is 301-redirect stubs to `poolai.*` (retired earlier, 2026-05-03).
 
 | Code dir (`web-portal/php_deploy/…`) | Live URL | Role |
 |---|---|---|
-| `api/` | `/api/*` | Device API (provision, heartbeat, snapshot, updates), Admin API, Portal API (`/api/portal/*`) |
-| `admin/` | `/admin/*` | Admin dashboard (clients, devices, AI, software_updates) |
-| `staff/` | `/staff/*` | Staff interface |
-| `config/`, `includes/` | `/config/*`, `/includes/*` | Shared PHP libs |
-| `portal/` | `/portal/*` | **Retired 2026-05-03** — files now 301-redirect to `poolai.*` (see Known quirks) |
+| `api/` (Pi-facing) | `/api/heartbeat.php`, `/api/provision.php`, `/api/device/snapshot.php`, `/api/check_updates.php`, `/api/command_complete.php`, `/api/device_alias.php`, `/api/updates/*` | Pi API — auth via API key / bootstrap secret |
+| `api/portal/` | `/api/portal/*` | Customer-portal data API — auth via PortalAuth, called cross-origin from `poolai.*` browsers |
+| `api/ai/{ask_me,response,suggestion_feedback,heartbeat_extension}` | `/api/ai/*` | AI Q&A endpoints called by Pis (separate from the admin AI endpoints which moved to `admin.*`) |
+| `admin/` | `/admin/*` | **Retired 2026-05-08** — every file is a 308-redirect stub to `admin.*` |
+| `portal/` | `/portal/*` | **Retired 2026-05-03** — 301-redirect stubs to `poolai.*` (see Known quirks) |
+| `config/`, `includes/` | not web-served | Shared PHP libs (PortalAuth, PortalDevices, api_helpers, auth) |
 | `scripts/` | `/scripts/*` | Server-side cron scripts |
 | `database/` | not web-served | SQL migrations |
 | (data tree) | `/data/updates/*.tar.gz` | Software update tarballs |
 
 Server path: `/home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant/`
 Email FROM: `noreply@poolaissistant.*`, `alerts@poolaissistant.*`
-**FTP cannot reach this directly** — the FTP chroot lands on the customer-portal domain. Deploys hop via `_deploy_bundle.php` (see `deploy.manifest.json`) or via the cross-chroot `copy()` trick in software-update publishes.
+**FTP cannot reach this directly** — the FTP chroot lands on `poolai.*`. Deploys hop via `_deploy_bundle.php` (see `deploy.manifest.json`) or via the cross-chroot `copy()` trick in software-update publishes.
+
+**`admin.modprojects.co.uk` — admin UI + admin-only API** *(in flight, 2026-05-08)*
+
+Same-origin between admin pages and admin API: no CORS, no cross-subdomain cookies. Admin auth (`includes/auth.php`'s `requireAdmin()`) is enforced inside the new chroot only.
+
+| Code dir (`web-portal/admin_deploy/…`) | Live URL | Role |
+|---|---|---|
+| `admin/` | `/admin/*` | Admin dashboard — clients, devices, AI suggestions/responses/questions, bootstrap codes, software updates |
+| `staff/` | `/staff/*` | Staff timeclock interface (uses `requireAdmin()`, lives with admin) |
+| `api/admin/` | `/api/admin/*` | Admin REST endpoints — `_verify.php`, `client_actions.php` |
+| `api/admin_*.php` | `/api/admin_*.php` | Admin device controls — `admin_device_command`, `admin_health`, `admin_request_upload`, `admin_update_setting` |
+| `api/{clear_device_issues,delete_device,queue_test_question,device_alias}` | `/api/*` | Admin operations on devices (admin-session auth) |
+| `api/ai/{generate,norms,profiles,questions,queue,responses,suggestions}` | `/api/ai/*` | Admin AI endpoints (the Pi-facing `/api/ai/{ask_me,response,suggestion_feedback}` stay on `poolaissistant.*`) |
+| `config/`, `includes/` | not web-served | Admin-side shared libs (auth.php, AdminClients, AdminDevices, RemoteSettings, claude_api, api_helpers) |
+| `index.php`, `.htaccess` | `/` | Bare-domain redirect to `/admin/` + security headers |
+
+Server path: `/home/u931726538/domains/admin.modprojects.co.uk/` *(to be confirmed once hPanel subdomain is created)*
+Email FROM: TBD (likely keep `noreply@poolaissistant.*` — no functional change)
+**FTP:** new dedicated FTP user expected (`POOLAI_ADMIN_FTP_USER` in root `.env` once provisioned). Cleanest case is its own chroot like `poolai.*`'s setup.
 
 **`poolai.modprojects.co.uk` — customer-facing portal**
 
-Storefront. Mostly static pages + thin JS that makes API calls back to `poolaissistant.*/api/portal/`.
+Storefront. Mostly static pages + thin JS that makes API calls back to `poolaissistant.*/api/portal/*`.
 
 | Code dir (`web-portal/poolai_deploy/…`) | Live URL | Role |
 |---|---|---|
@@ -63,30 +84,40 @@ Storefront. Mostly static pages + thin JS that makes API calls back to `poolaiss
 
 Server path: `/home/u931726538/domains/poolai.modprojects.co.uk/`
 Email FROM: `noreply@poolai.*`
-**FTP root** — this is where `u931726538.mbs` lands. Every deploy starts here.
+**FTP root** — `u931726538.mbs` lands here. `php_deploy/` deploys hop through this chroot via `_deploy_bundle.php`.
 
 ### Who calls whom
 
-- **Pi → admin domain only.** `persist.py:82` `backend_url`, `update_check.py:44` `UPDATE_SERVER_URL`. Pi DNS-preflights `poolaissistant.*` specifically.
-- **Pi → customer domain for *display only*.** `main_ui.py:33-37` rewrites `poolaissistant.*` → `poolai.*` for QR codes / install hints. The Pi never makes HTTP requests to `poolai.*`.
-- **Customer browser → admin domain.** `poolai_deploy/config/portal.php:31` defines `PORTAL_API_URL = 'https://poolaissistant.*/api/portal'`. The customer portal's data calls cross subdomains; CORS is configured on the Pi probe endpoint (`health.py:23-24`) and on the admin API.
+- **Pi → `poolaissistant.*` only.** `persist.py:82` `backend_url`, `update_check.py:44` `UPDATE_SERVER_URL`. Pi DNS-preflights `poolaissistant.*` specifically. **Pis never call `admin.*` or `poolai.*`** (HTTP-wise — the QR-code URL rewrite to `poolai.*` is for human eyes only).
+- **Admin browser → `admin.*` only.** Admin pages and admin API are same-origin on this subdomain. No cross-subdomain calls.
+- **Customer browser → `poolaissistant.*` for data.** `poolai_deploy/config/portal.php:31` defines `PORTAL_API_URL = 'https://poolaissistant.*/api/portal'`. CORS is configured on the admin-domain customer-portal API endpoints.
 - **Software update package flow.** Tarball uploaded to `poolai.*` via FTP, then a server-side `copy()` crosses the chroot boundary into `poolaissistant.*/data/updates/`.
 
 ### Rules of thumb
 
-- *"Where does this PHP file deploy?"* — API endpoint or admin page? `php_deploy/`. Customer-facing chrome? `poolai_deploy/`.
-- *"Which URL goes in a Pi config?"* — Always `poolaissistant.*`. Never `poolai.*` (only exception is the QR-code rewrite, which is for human eyes, not HTTP).
-- *"Where does FTP land?"* — Always `poolai.*`. Server-side `copy()` is the bridge.
+- *"Where does this PHP file deploy?"* —
+  - Pi API or customer-portal API? → `php_deploy/`
+  - Admin UI or admin API? → `admin_deploy/`
+  - Customer-facing browser pages? → `poolai_deploy/`
+- *"Which URL goes in a Pi config?"* — Always `poolaissistant.*`. Never `poolai.*` or `admin.*`.
+- *"Where does FTP land?"* — `poolai.*` for the customer portal; `admin.*` for admin (once provisioned); `poolaissistant.*` only via the cross-chroot `copy()` hop.
 
 ### Known architectural quirks
 
-1. **Legacy customer portal at `poolaissistant.*/portal/*` was retired 2026-05-03.**
+1. **Admin moved to `admin.modprojects.co.uk` 2026-05-08.**
+   Admin UI + admin-only API now live in `web-portal/admin_deploy/`. Each retired admin file in `php_deploy/admin/*.php` is a 6-line 308-redirect stub to the equivalent path on `admin.*` (308 preserves the HTTP method so admin form POSTs don't downgrade to GET). The corresponding admin-only API endpoints have been **deleted** from `php_deploy/api/` rather than stubbed — they were never called by anything other than admin pages, which now live in the new chroot and use same-origin URLs.
+   `api/device_alias.php` was split: Pi-side (API-key auth) stays in `php_deploy/api/`, admin-side (session auth) moved to `admin_deploy/api/`. Same DB table, single auth concern per endpoint.
+   **Pre-existing bug fixed during the move:** `admin_deploy/api/ai/generate.php` had `require_once __DIR__ . '/../includes/claude_api.php'` — needed two `..` (the file is at `api/ai/`, not `api/`). Would have 500'd the admin "generate AI" button on the live site; never noticed because nobody clicked it.
+
+2. **Legacy customer portal at `poolaissistant.*/portal/*` was retired 2026-05-03.**
    Each `php_deploy/portal/*.php` now contains a 6-line stub that 301-redirects to the equivalent path on `poolai.*` (preserving query strings for verify/reset tokens). `php_deploy/includes/PortalAuth.php` and `PortalDevices.php` are kept — they're still consumed by `php_deploy/api/portal/readings.php`.
-   The deploy-manifest glob (`deploy.manifest.json:17`) is unchanged so the stubs ship and overwrite the live files. Once redirect logs show the legacy URL is dead, drop the glob and let server-side cleanup remove the directory.
+   The deploy-manifest glob (`deploy.manifest.json`) is unchanged so the stubs ship and overwrite the live files. Once redirect logs show the legacy URL is dead, drop the glob and let server-side cleanup remove the directory.
 
-2. **`PORTAL_BASE_URL` still differs between `php_deploy/config/portal.php` and `poolai_deploy/config/portal.php`** (`…/portal` vs root). Now mostly cosmetic — the admin-side PortalAuth no longer fires emails since the pages that called it are redirect stubs. But if anything in `api/portal/*` ever sends mail using the admin-side config, the embedded link will 301-bounce to `poolai.*`. Worth normalising on the next pass.
+3. **`PORTAL_BASE_URL` still differs between `php_deploy/config/portal.php` and `poolai_deploy/config/portal.php`** (`…/portal` vs root). Now mostly cosmetic — the admin-side PortalAuth no longer fires emails since the pages that called it are redirect stubs. But if anything in `api/portal/*` ever sends mail using the admin-side config, the embedded link will 301-bounce to `poolai.*`. Worth normalising on the next pass.
 
-3. **Shadow path that doesn't serve.** `/home/u931726538/public_html/poolaissistant/` exists on disk but is NOT served by `poolaissistant.modprojects.co.uk`. The live path is `/home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant/`. Don't FTP into the wrong one.
+4. **Shadow path that doesn't serve.** `/home/u931726538/public_html/poolaissistant/` exists on disk but is NOT served by `poolaissistant.modprojects.co.uk`. The live path is `/home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant/`. Don't FTP into the wrong one.
+
+5. **Duplicated includes/config across deploy trees.** `config/database.php`, `config/config.php`, `includes/auth.php`, and `includes/api_helpers.php` exist in BOTH `php_deploy/` and `admin_deploy/` — both deploy targets need them. Keep them in sync when editing (or factor into a shared dir + post-build copy if drift becomes a problem). `includes/PortalAuth.php`, `PortalDevices.php` and `config/portal.php` live only in `php_deploy/` (admin doesn't use them). `includes/AdminClients.php`, `AdminDevices.php`, `RemoteSettings.php`, `claude_api.php` live only in `admin_deploy/` (Pi/customer-portal don't use them).
 
 ---
 
@@ -153,16 +184,27 @@ The canonical playbook lives in [`pi-software/CLAUDE.md`](../pi-software/CLAUDE.
 web-portal/
 ├── CLAUDE.md              # This file
 ├── deploy.manifest.json   # Declarative deploy manifest (consumed by deploy.py)
-├── php_deploy/            # → poolaissistant.modprojects.co.uk
-│   ├── api/               #     Device API + Admin API + /api/portal/*
-│   ├── admin/             #     Admin dashboard (clients, devices, AI, updates)
-│   ├── staff/             #     Staff/timeclock interface
-│   ├── config/            #     database.php, config.php (admin-domain)
-│   ├── includes/          #     PortalAuth, PortalDevices (consumed by api/portal/*)
-│   ├── portal/            #     RETIRED — 301-redirect stubs to poolai.* (kept until cleanup)
-│   ├── scripts/           #     Server-side cron scripts
+├── php_deploy/            # → poolaissistant.modprojects.co.uk (Pi API + customer-portal API)
+│   ├── api/               #     Pi-facing endpoints + /api/portal/* (customer-portal data API)
+│   │   ├── ai/            #     Pi-facing AI: ask_me, response, suggestion_feedback, heartbeat_extension
+│   │   ├── device/        #     snapshot.php (Pi 6-min upload)
+│   │   ├── portal/        #     Customer-portal data API (link-code, link-status, readings)
+│   │   └── updates/       #     Pi update download + add
+│   ├── admin/             #     RETIRED 2026-05-08 — 308-redirect stubs to admin.*
+│   ├── portal/            #     RETIRED 2026-05-03 — 301-redirect stubs to poolai.*
+│   ├── config/            #     database.php, config.php, portal.php (PortalAuth config)
+│   ├── includes/          #     PortalAuth, PortalDevices, api_helpers, auth (still needed by scripts/)
+│   ├── scripts/           #     Server-side cron scripts (check_device_health, etc.)
 │   └── database/          #     SQL migrations
-├── poolai_deploy/         # → poolai.modprojects.co.uk
+├── admin_deploy/     # → admin.modprojects.co.uk (admin UI + admin-only API)  [NEW 2026-05-08]
+│   ├── admin/             #     Admin dashboard (clients, devices, AI, updates, bootstrap codes)
+│   ├── staff/             #     Staff/timeclock interface (uses requireAdmin)
+│   ├── api/               #     Admin-only API: api/admin/, api/admin_*.php, api/ai/{generate,norms,profiles,questions,queue,responses,suggestions}, plus admin-side device_alias/clear_device_issues/delete_device/queue_test_question
+│   ├── config/            #     database.php, config.php (duplicated from php_deploy)
+│   ├── includes/          #     auth, api_helpers (duplicated) + AdminClients, AdminDevices, RemoteSettings, claude_api (admin-only)
+│   ├── index.php          #     Bare-domain → /admin/ redirect
+│   └── .htaccess          #     Security headers + bare-domain redirect
+├── poolai_deploy/         # → poolai.modprojects.co.uk (customer-facing portal)
 │   ├── (root pages)       #     login, register, dashboard, device, account, qr, go, install, offline (PWA)
 │   ├── config/, includes/ #     Shared portal libs (Subscription, PortalAuth, PortalDevices)
 │   └── assets/            #     Static CSS/JS

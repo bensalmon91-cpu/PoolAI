@@ -2,12 +2,12 @@
   "$comment": "Declarative deploy manifest consumed by deploy.py. Paths are relative to web-portal/. Glob patterns are expanded by deploy.py.",
   "targets": {
     "admin-backend": {
-      "description": "poolaissistant.modprojects.co.uk - admin backend (FTP-chroot-inaccessible, uses PHP installer bundle)",
+      "description": "poolaissistant.modprojects.co.uk - Pi-facing API + customer-portal API. Admin UI moved to admin.* on 2026-05-08.",
       "deploy_method": "php_installer",
       "server_base_path": "/home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant",
       "installer_ftp_path": "_deploy_bundle.php",
       "installer_run_url": "https://poolai.modprojects.co.uk/_deploy_bundle.php",
-      "verify_url": "https://poolaissistant.modprojects.co.uk/api/admin/_verify.php",
+      "verify_url": "https://admin.modprojects.co.uk/api/admin/_verify.php",
       "session_cookie_name": "mod_admin_session",
       "files": [
         {"glob": "php_deploy/admin/**/*.php", "src_prefix": "php_deploy"},
@@ -15,9 +15,31 @@
         {"glob": "php_deploy/config/**/*.php", "src_prefix": "php_deploy"},
         {"glob": "php_deploy/includes/**/*.php", "src_prefix": "php_deploy"},
         {"glob": "php_deploy/portal/**/*.php", "src_prefix": "php_deploy"},
-        {"glob": "php_deploy/staff/**/*", "src_prefix": "php_deploy"},
         {"glob": "php_deploy/scripts/**/*.php", "src_prefix": "php_deploy"},
         {"glob": "php_deploy/database/**/*.sql", "src_prefix": "php_deploy"}
+      ]
+    },
+    "admin-domain": {
+      "$comment": "admin.modprojects.co.uk - admin UI + admin-only API. Same-origin between the two (no CORS or cross-subdomain cookies). FTP chroot lands at /home/u931726538/domains/admin.modprojects.co.uk/ so we use ftp_base_subdir: 'public_html' to upload into the served docroot.",
+      "description": "admin.modprojects.co.uk - admin UI + admin-only API",
+      "deploy_method": "ftp",
+      "server_base_path": "/home/u931726538/domains/admin.modprojects.co.uk/public_html",
+      "ftp_base_subdir": "public_html",
+      "ftp_credentials_env_keys": {
+        "$comment": "Export these in shell before running deploy.py (mirrors POOLAI_FTP_*). Real values live in root .env which deploy.py does NOT auto-load.",
+        "host": "POOLAI_ADMIN_FTP_HOST",
+        "user": "POOLAI_ADMIN_FTP_USER",
+        "pass": "POOLAI_ADMIN_FTP_PASS"
+      },
+      "verify_url": "https://admin.modprojects.co.uk/api/admin/_verify.php",
+      "session_cookie_name": "mod_admin_session",
+      "files": [
+        {"glob": "admin_deploy/**/*.php", "src_prefix": "admin_deploy"},
+        {"glob": "admin_deploy/**/*.html", "src_prefix": "admin_deploy"},
+        {"glob": "admin_deploy/**/*.css", "src_prefix": "admin_deploy"},
+        {"glob": "admin_deploy/**/*.js", "src_prefix": "admin_deploy"},
+        {"glob": "admin_deploy/**/*.json", "src_prefix": "admin_deploy"},
+        {"glob": "admin_deploy/.htaccess", "src_prefix": "admin_deploy"}
       ]
     },
     "customer-portal": {
@@ -25,7 +47,7 @@
       "deploy_method": "ftp",
       "server_base_path": "/home/u931726538/domains/poolai.modprojects.co.uk",
       "ftp_base_subdir": "",
-      "verify_url": "https://poolaissistant.modprojects.co.uk/api/admin/_verify.php",
+      "verify_url": "https://admin.modprojects.co.uk/api/admin/_verify.php",
       "session_cookie_name": "mod_admin_session",
       "files": [
         {"glob": "poolai_deploy/**/*.php", "src_prefix": "poolai_deploy"},
