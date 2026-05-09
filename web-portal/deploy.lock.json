@@ -128,7 +128,7 @@
     }
   },
   "admin-domain": {
-    "deployed_at": "2026-05-08T17:25:46Z",
+    "deployed_at": "2026-05-09T08:18:22Z",
     "files": {
       "admin/_run_migration_network.php": "edc60731dc9add0a2ae68797f3be3491a13d518c7174ac0c680fadc7cb33498b",
       "admin/ai_analytics.php": "977d46376701bd2f957a6de9291589ec6d79da526626fce2370eb5a4fa448334",
@@ -138,12 +138,13 @@
       "admin/ai_responses.php": "21fa375ab57e2015ca8d4be99ff2bd0da835d7a0c311d8f19e7a61bcbf060084",
       "admin/ai_settings.php": "626237c3569515a31e664478630b7f547da54a4328def229f362784d907ab479",
       "admin/ai_suggestions.php": "7246ee0767751e938df6aba4768c6c6b09e5cbbf5fbbbbcb582c31157ec97186",
+      "admin/audit.php": "af73378d0d9c99c7787f5dd42ba67cad65ae20e607a4f44c31c29120b610c15b",
       "admin/bootstrap_codes.php": "f8e10f6fb6984215d90cd1ef4b3248c5b9d4a52878da8a1ab956ee434b0824e8",
       "admin/client_detail.php": "66f51f8832f04e1ee1bc5bafe4b27d9408f7ae5644aa77d7daa5c6abb2b8b7eb",
       "admin/clients.php": "90d7690f31e141c40e7c348e77a9e9fd2799e9232fb2a61b59c0c2d359cf81da",
       "admin/device.php": "6020914857868ed7a216e61bfda16fb95af0ebb8f003084d9dab2f38bc94ce18",
       "admin/fix_devices.php": "5e0652fdd4b87cc25e7c2b20057d452b6727183e620720a515bf38a3033f6910",
-      "admin/index.php": "a1a6c8a8bb910a81ead8ecdf40cbf7d0ce3753fe6a34e1402381d41722887ae2",
+      "admin/index.php": "585053f475a0faa1810c2897f015360d3aa6acdc899ffe5ad18ee4c532e734a7",
       "admin/login.php": "19c0dc5ee727c6e6f63442b1774104f23b90be9f48e76b7fdc8f3d606cc673a2",
       "admin/logout.php": "e883452122274c3aa5e591c530fab735de03e604d955d6f87a7fea80c8662513",
       "admin/queue_test.php": "581e31df36db18aff63acca35a268424304df10036e89d855371b4c5d010242f",
@@ -171,7 +172,8 @@
       "includes/AdminClients.php": "25c7654a1b9657df1ab3577829d791801ce61ef54263d149b2531acd793c6896",
       "includes/AdminDevices.php": "32a4017af3827dceb08e27456839965e8b23e967953919ce2f7d95a0177b7e88",
       "includes/api_helpers.php": "302a4eed31d9c6e6fd5b279c3e20c9ddffa61f1764fc88192275c495b575535a",
-      "includes/auth.php": "71d4d2fbf71b9ffa6fa52cc4844ee29b9592bc9fd8905db89888af04bfb362b1",
+      "includes/audit.php": "48235de3d5b82cd2405c257a36443e802b2cfb6f972a3353a8715df1336efb61",
+      "includes/auth.php": "dde6d934a5041af6aa0230dcb5c7899ce0c0ea5ea7b8076ff32b8af89ec27f64",
       "includes/claude_api.php": "ee4f94385645ee3fb7f676ca78d1979cc5b95f6be614eaa9dce1d6c538d48264",
       "includes/RemoteSettings.php": "71973fd57ca30e96b06aaac0b097ae9e98b6c2584d391c64aa527b21da5d3eae",
       "index.php": "9fc795436de787df21ac894e39c7113ec47ba3eae393489ac2d408f3eca8ff81",
@@ -185,7 +187,7 @@
       "staff/assets/app.js": "d20cdb8020a36dc1a32ebc3530d2ce3c93b89f8cdb96d50cf25c3fcbb315bb2b",
       "staff/sw.js": "b6a7f0d6e3ad6e6ee7b0ffea77504c013da0e478cdec6c4cd53b4e972643a0a8",
       "staff/manifest.json": "d831956c2d1c04120e19c2eb47c3c92b8f8e29f95d8a02ad91a430311287483c",
-      ".htaccess": "e61f1b7f81193034352bd25dd211bc1a4101ca177678b1167b60578369d9a709"
+      ".htaccess": "a9f99330188efdf270d204660466a6acfbec14df118d396765547a7b80dd6293"
     }
   }
 }

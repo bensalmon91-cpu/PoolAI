@@ -328,8 +328,11 @@ $updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <div class="container">
         <header>
             <h1>Pool<span>AI</span>ssistant Admin</h1>
-            <nav style="display: flex; gap: 8px;">
+            <nav style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <a href="clients.php" class="logout-btn" style="background: #0ea5e9;">Clients</a>
+                <a href="bootstrap_codes.php" class="logout-btn" style="background: #10b981;">Bootstrap codes</a>
                 <a href="ai_dashboard.php" class="logout-btn" style="background: #8b5cf6;">AI Assistant</a>
+                <a href="audit.php" class="logout-btn" style="background: #64748b;">Audit log</a>
                 <a href="logout.php" class="logout-btn">Logout</a>
             </nav>
         </header>

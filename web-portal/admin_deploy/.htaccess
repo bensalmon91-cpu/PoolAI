@@ -16,3 +16,8 @@ RewriteRule ^$ /admin/ [R=301,L]
 <FilesMatch "^\.env">
     Require all denied
 </FilesMatch>
+
+# Block direct HTTP access to log files (admin_audit.log etc.)
+<FilesMatch "\.log$">
+    Require all denied
+</FilesMatch>
