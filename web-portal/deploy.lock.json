@@ -1,6 +1,6 @@
 {
   "admin-backend": {
-    "deployed_at": "2026-05-11T17:52:21Z",
+    "deployed_at": "2026-05-11T19:02:02Z",
     "files": {
       "admin/_run_migration_network.php": "cdcf1ab7f2bfe8cd71a574573194fe13da5f5c91a71273fb594a30ac6c504aa6",
       "admin/ai_analytics.php": "cdcf1ab7f2bfe8cd71a574573194fe13da5f5c91a71273fb594a30ac6c504aa6",
@@ -53,7 +53,7 @@
       "portal/register.php": "ffc456de22910f414b8c084d93131cd338c0851f86bb32e706a3a2fedff2f769",
       "portal/reset-password.php": "61dce977a8015f656a1a198bb29d49695e5ec755b530c8622ce78a0cbf4d1eff",
       "portal/verify-email.php": "3ba622cf6f2e0a4731263c60e3b2bee8c4a8b0d678e27a3dda931b65882a4eb0",
-      "scripts/check_device_health.php": "fe027d9eb05f783a940d19a24e996f4567dc06e1c7dd8049995c6ab2293602ad",
+      "scripts/check_device_health.php": "a7f8f1b58efea17192613e831cdf9d48b8f51b3f8ad76d1d0e506dda7da4003f",
       "database/migration_alias.sql": "d23c0d9532afaad28e0e58b58f393fb7c6bfcde55969c727fdb449a4e0fd4f82",
       "database/schema_ai.sql": "af3fb51fd6616fcde4415cafc25c76e2ce27591c34534bd03113828101462cb6",
       "database/schema_alarm_closures.sql": "3e79032868016ae2b8a9945f2098fb7b3735b1f3172b89e92d3d5fcd72307a8f",
