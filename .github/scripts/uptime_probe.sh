@@ -72,33 +72,33 @@ rm -f /tmp/body.$$ /tmp/err.$$
 probe \
     "admin login page"                          \
     GET                                         \
-    "https://poolaissistant.modprojects.co.uk/admin/login.php" \
+    "https://admin.modprojects.co.uk/admin/login.php" \
     200 "login"
 
 probe \
     "admin login POST returns invalid-creds"    \
     POST                                        \
-    "https://poolaissistant.modprojects.co.uk/admin/login.php" \
+    "https://admin.modprojects.co.uk/admin/login.php" \
     200 "Invalid username or password"          \
     -d "username=probe&password=probe"
 
 probe \
     "staff PWA login page"                      \
     GET                                         \
-    "https://poolaissistant.modprojects.co.uk/staff/login.php" \
+    "https://admin.modprojects.co.uk/staff/login.php" \
     200 "Staff"
 
 probe \
     "staff PWA login POST returns invalid-creds" \
     POST                                        \
-    "https://poolaissistant.modprojects.co.uk/staff/login.php" \
+    "https://admin.modprojects.co.uk/staff/login.php" \
     200 "Invalid username or password"          \
     -d "username=probe&password=probe"
 
 probe \
     "staff PWA manifest"                        \
     GET                                         \
-    "https://poolaissistant.modprojects.co.uk/staff/manifest.json" \
+    "https://admin.modprojects.co.uk/staff/manifest.json" \
     200 "PoolAI Staff"
 
 probe \
@@ -110,7 +110,7 @@ probe \
 probe \
     "drift verify endpoint needs auth (401)"    \
     POST                                        \
-    "https://poolaissistant.modprojects.co.uk/api/admin/_verify.php" \
+    "https://admin.modprojects.co.uk/api/admin/_verify.php" \
     401 ""                                      \
     -H "Accept: application/json"               \
     -H "Content-Type: application/json"         \
