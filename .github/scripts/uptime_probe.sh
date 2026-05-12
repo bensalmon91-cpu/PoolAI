@@ -73,7 +73,7 @@ probe \
     "admin login page"                          \
     GET                                         \
     "https://admin.modprojects.co.uk/admin/login.php" \
-    200 "login"
+    200 "Admin Panel"
 
 probe \
     "admin login POST returns invalid-creds"    \
@@ -86,7 +86,7 @@ probe \
     "staff PWA login page"                      \
     GET                                         \
     "https://admin.modprojects.co.uk/staff/login.php" \
-    200 "Staff"
+    200 "Staff Sign In"
 
 probe \
     "staff PWA login POST returns invalid-creds" \
@@ -111,7 +111,7 @@ probe \
     "drift verify endpoint needs auth (401)"    \
     POST                                        \
     "https://admin.modprojects.co.uk/api/admin/_verify.php" \
-    401 ""                                      \
+    401 "Admin authentication required"         \
     -H "Accept: application/json"               \
     -H "Content-Type: application/json"         \
     -d '{"paths":[]}'
