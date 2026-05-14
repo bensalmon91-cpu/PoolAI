@@ -17,6 +17,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../includes/AuditLog.php';
 
 setCorsHeaders();
 
@@ -78,6 +79,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             date('Y-m-d H:i:s', $device_ts),
             $device['id']
         ]);
+
+        AuditLog::record(
+            'device',
+            'device.alias_change',
+            ['type' => 'device', 'id' => (string)$device['id']],
+            ['type' => 'device', 'id' => (string)$device['id']],
+            'ok',
+            ['old' => $device['alias'] ?? '', 'new' => $device_alias, 'source' => 'device']
+        );
 
         jsonResponse([
             'ok' => true,

@@ -9,6 +9,7 @@
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/api_helpers.php';
+require_once __DIR__ . '/../../includes/AuditLog.php';
 
 setCorsHeaders();
 
@@ -96,6 +97,15 @@ try {
         WHERE id = ?
     ");
     $stmt->execute($params);
+
+    AuditLog::record(
+        'device',
+        'ai.suggestion_feedback',
+        ['type' => 'device', 'id' => (string)$device_id],
+        ['type' => 'ai_suggestion', 'id' => (string)$input['suggestion_id']],
+        'ok',
+        ['action' => $input['action'], 'has_feedback' => !empty($input['feedback'])]
+    );
 
     successResponse([], 'Feedback recorded');
 

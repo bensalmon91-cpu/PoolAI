@@ -10,6 +10,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../includes/AuditLog.php';
 require_once __DIR__ . '/ai/heartbeat_extension.php';
 
 setCorsHeaders();
@@ -28,6 +29,7 @@ if (empty($api_key)) {
 }
 
 if (empty($api_key)) {
+    AuditLog::record('device', 'device.heartbeat', ['type' => 'anonymous', 'id' => null], null, 'denied', ['reason' => 'missing_api_key']);
     errorResponse('Missing API key', 401);
 }
 
@@ -39,6 +41,7 @@ $stmt->execute([$api_key]);
 $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$device) {
+    AuditLog::record('device', 'device.heartbeat', ['type' => 'anonymous', 'id' => null], null, 'denied', ['reason' => 'invalid_api_key']);
     errorResponse('Invalid API key', 401);
 }
 
@@ -161,6 +164,20 @@ try {
     // To enable: run fix_devices.php to add alias columns, then restore this code
     $sync_alias = null;
 
+    AuditLog::record(
+        'device',
+        'device.heartbeat',
+        ['type' => 'device', 'id' => (string)$device_id],
+        ['type' => 'device', 'id' => (string)$device_id],
+        'ok',
+        [
+            'software_version' => $input['software_version'] ?? null,
+            'has_issues' => !empty($input['has_issues']),
+            'alarms_critical' => $input['alarms_critical'] ?? 0,
+            'pending_commands' => count($commands),
+        ]
+    );
+
     jsonResponse([
         'ok' => true,
         'commands' => $commands,
@@ -169,7 +186,9 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    errorResponse('Database error: ' . $e->getMessage(), 500);
+    AuditLog::record('device', 'device.heartbeat', ['type' => 'device', 'id' => (string)$device_id], null, 'fail', ['error' => $e->getMessage()]);
+    error_log("heartbeat.php DB error for device $device_id: " . $e->getMessage());
+    errorResponse('Database error', 500);
 }
 
 /**

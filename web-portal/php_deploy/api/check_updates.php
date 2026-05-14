@@ -10,6 +10,7 @@ header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/AuditLog.php';
 
 // Get current version from request
 $current_version = $_GET['version'] ?? '0.0.0';
@@ -28,6 +29,21 @@ try {
                          LIMIT 1");
     $latest = $stmt->fetch();
 
+    $available = $latest && version_compare($latest['version'], $current_version, '>');
+
+    AuditLog::record(
+        'device',
+        'device.update_poll',
+        ['type' => 'device', 'id' => null],
+        null,
+        'ok',
+        [
+            'current_version' => $current_version,
+            'latest_version' => $latest['version'] ?? null,
+            'update_available' => $available,
+        ]
+    );
+
     if (!$latest) {
         // No updates in database
         echo json_encode([
@@ -41,8 +57,7 @@ try {
     // Compare versions
     $latest_version = $latest['version'];
 
-    // Use version_compare for proper semantic versioning
-    if (version_compare($latest_version, $current_version, '>')) {
+    if ($available) {
         echo json_encode([
             'update_available' => true,
             'current_version' => $current_version,

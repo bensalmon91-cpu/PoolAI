@@ -15,6 +15,7 @@
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/AuditLog.php';
 
 header('Content-Type: application/json');
 
@@ -28,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // Authenticate device
 $device = authenticateDevice();
 if (!$device) {
+    AuditLog::record('device', 'device.snapshot', ['type' => 'anonymous', 'id' => null], null, 'denied', ['reason' => 'invalid_or_missing_api_key']);
     http_response_code(401);
     echo json_encode(['ok' => false, 'error' => 'Invalid or missing API key']);
     exit;
@@ -197,8 +199,15 @@ try {
                     $closure['closed_reason'] ?: 'observed_off',
                 ]);
             }
-        } catch (Exception $e) {
-            error_log("snapshot.php closures-insert failed (non-fatal): " . $e->getMessage());
+        } catch (PDOException $e) {
+            // 42S02 = table not found. Pre-migration servers don't have
+            // device_alarm_closures yet; treat that as soft-skip. Real errors
+            // (deadlock, FK violation, etc.) must surface to the outer catch.
+            if ($e->getCode() === '42S02') {
+                error_log("snapshot.php closures-insert skipped (table missing, pre-migration): " . $e->getMessage());
+            } else {
+                throw $e;
+            }
         }
     }
 
@@ -282,6 +291,22 @@ try {
 
     $pdo->commit();
 
+    AuditLog::record(
+        'device',
+        'device.snapshot',
+        ['type' => 'device', 'id' => (string)$deviceId],
+        ['type' => 'device', 'id' => (string)$deviceId],
+        'ok',
+        [
+            'readings_count' => count($readings),
+            'controllers_count' => count($controllers),
+            'alarms_total' => $alarmsTotal,
+            'alarms_critical' => $alarmsCritical,
+            'has_issues' => $hasIssues,
+            'payload_size' => $payloadSize,
+        ]
+    );
+
     // Calculate next upload time (in 6 minutes)
     $nextUploadAt = date('Y-m-d\TH:i:s\Z', strtotime('+6 minutes'));
 
@@ -293,12 +318,14 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    AuditLog::record('device', 'device.snapshot', ['type' => 'device', 'id' => (string)$deviceId], null, 'fail', ['error' => $e->getMessage()]);
     error_log("Snapshot error for device $deviceId: " . $e->getMessage());
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Database error']);
 } catch (Exception $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    AuditLog::record('device', 'device.snapshot', ['type' => 'device', 'id' => (string)$deviceId], null, 'fail', ['error' => $e->getMessage()]);
     error_log("Snapshot error for device $deviceId: " . $e->getMessage());
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Server error']);

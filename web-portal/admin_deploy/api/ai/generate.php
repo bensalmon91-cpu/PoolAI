@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/api_helpers.php';
 require_once __DIR__ . '/../../includes/claude_api.php';
+require_once __DIR__ . '/../../includes/AuditLog.php';
 
 setCorsHeaders();
 requireAdmin();
@@ -47,14 +48,40 @@ try {
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$device) {
+        AuditLog::record(
+            'admin',
+            'ai.generate',
+            ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? null],
+            ['type' => 'device', 'id' => (string)$device_id],
+            'denied',
+            ['action' => $action, 'pool' => $pool, 'reason' => 'device_not_found']
+        );
         errorResponse('Device not found', 404);
     }
+
+    AuditLog::record(
+        'admin',
+        'ai.generate',
+        ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? null],
+        ['type' => 'device', 'id' => (string)$device_id],
+        'ok',
+        ['action' => $action, 'pool' => $pool]
+    );
 
     // Initialize Claude API
     try {
         $claude = new ClaudeAPI();
     } catch (Exception $e) {
-        errorResponse('Claude API not configured: ' . $e->getMessage(), 500);
+        AuditLog::record(
+            'admin',
+            'ai.generate',
+            ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? null],
+            ['type' => 'device', 'id' => (string)$device_id],
+            'fail',
+            ['action' => $action, 'pool' => $pool, 'reason' => 'claude_api_unconfigured', 'error' => $e->getMessage()]
+        );
+        error_log('ai/generate Claude API init failed: ' . $e->getMessage());
+        errorResponse('Claude API not configured', 500);
     }
 
     // Get pool profile
@@ -270,7 +297,25 @@ try {
     }
 
 } catch (PDOException $e) {
-    errorResponse('Database error: ' . $e->getMessage(), 500);
+    AuditLog::record(
+        'admin',
+        'ai.generate',
+        ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? null],
+        ['type' => 'device', 'id' => (string)$device_id],
+        'fail',
+        ['action' => $action, 'pool' => $pool, 'reason' => 'db_error', 'error' => $e->getMessage()]
+    );
+    error_log('ai/generate DB error: ' . $e->getMessage());
+    errorResponse('Database error', 500);
 } catch (Exception $e) {
-    errorResponse('Error: ' . $e->getMessage(), 500);
+    AuditLog::record(
+        'admin',
+        'ai.generate',
+        ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? null],
+        ['type' => 'device', 'id' => (string)$device_id],
+        'fail',
+        ['action' => $action, 'pool' => $pool, 'reason' => 'unhandled_error', 'error' => $e->getMessage()]
+    );
+    error_log('ai/generate error: ' . $e->getMessage());
+    errorResponse('Error', 500);
 }

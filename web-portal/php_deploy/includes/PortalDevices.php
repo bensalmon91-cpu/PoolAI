@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../config/portal.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/AuditLog.php';
 
 class PortalDevices {
     private $pdo;
@@ -137,6 +138,15 @@ class PortalDevices {
             ");
             $stmt->execute([$device['id']]);
 
+            AuditLog::record(
+                'portal',
+                'device.link',
+                ['type' => 'user', 'id' => (string)$this->userId],
+                ['type' => 'device', 'id' => (string)$device['id']],
+                'ok',
+                ['code' => $linkCode, 'device_uuid' => $device['device_uuid']]
+            );
+
             return [
                 'ok' => true,
                 'message' => 'Device linked successfully',
@@ -175,6 +185,15 @@ class PortalDevices {
         $stmt = $this->pdo->prepare("DELETE FROM user_devices WHERE id = ?");
         $stmt->execute([$link['id']]);
 
+        AuditLog::record(
+            'portal',
+            'device.unlink',
+            ['type' => 'user', 'id' => (string)$this->userId],
+            ['type' => 'device', 'id' => (string)$deviceId],
+            'ok',
+            ['role' => $link['role']]
+        );
+
         return ['ok' => true, 'message' => 'Device unlinked'];
     }
 
@@ -198,6 +217,15 @@ class PortalDevices {
         if ($stmt->rowCount() === 0) {
             return ['ok' => false, 'error' => 'Device not found'];
         }
+
+        AuditLog::record(
+            'portal',
+            'device.nickname_change',
+            ['type' => 'user', 'id' => (string)$this->userId],
+            ['type' => 'device', 'id' => (string)$deviceId],
+            'ok',
+            ['nickname' => $nickname]
+        );
 
         return ['ok' => true];
     }

@@ -68,5 +68,29 @@ Access the UI at:
 http://192.168.4.1:8080 (AP) or http://192.168.2.1:8080 (LAN)
 
 ------------------------------------
+APPENDIX A - REMOTE INSTALL VIA SSH
+------------------------------------
+If installing from a workstation (not directly on the Pi keyboard/screen),
+sudo over SSH on a default sshd config will silently fail because sudo needs
+a TTY to read the password (even though we eventually configure NOPASSWD).
+
+Use `-tt` to force TTY allocation:
+
+    ssh -tt poolai@<pi-ip> "sudo bash /opt/PoolAIssistant/app/scripts/setup_pi.sh"
+
+Symptoms when -tt is missing (any of these):
+- Command hangs with no output
+- "sudo: no tty present and no askpass program specified"
+- "sudo: a password is required"
+
+Once setup_pi.sh has run and /etc/sudoers.d/poolai is in place (NOPASSWD), the
+-tt flag is no longer required, but it's harmless to keep in your scripts.
+
+ALTERNATIVE (preferred for production fleet automation):
+Pre-seed /etc/sudoers.d/poolai onto the SD card image before first boot, so
+NOPASSWD is in effect the first time you SSH in. This avoids the chicken-
+and-egg: you need NOPASSWD to run setup, but setup is what installs NOPASSWD.
+
+------------------------------------
 END
 ------------------------------------

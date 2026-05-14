@@ -10,6 +10,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../includes/AuditLog.php';
 
 setCorsHeaders();
 
@@ -74,6 +75,15 @@ try {
         WHERE id = ?
     ");
     $stmt->execute([$status, $result, $command_id]);
+
+    AuditLog::record(
+        'device',
+        'device.command_complete',
+        ['type' => 'device', 'id' => (string)$device_id],
+        ['type' => 'device_command', 'id' => (string)$command_id],
+        $success ? 'ok' : 'fail',
+        ['result' => $result]
+    );
 
     jsonResponse(['ok' => true]);
 

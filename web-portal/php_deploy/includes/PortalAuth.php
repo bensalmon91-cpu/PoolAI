@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../config/portal.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/AuditLog.php';
 
 class PortalAuth {
     private $pdo;
@@ -117,6 +118,7 @@ class PortalAuth {
 
         // Check rate limiting
         if ($this->isRateLimited($email, $ip)) {
+            AuditLog::record('portal', 'auth.login_fail', ['type' => 'anonymous', 'id' => null], null, 'denied', ['email' => $email, 'reason' => 'rate_limited']);
             return ['ok' => false, 'error' => 'Too many login attempts. Please try again in ' . PORTAL_LOGIN_LOCKOUT_MINUTES . ' minutes.'];
         }
 
@@ -133,21 +135,25 @@ class PortalAuth {
         $this->recordLoginAttempt($email, $ip, false);
 
         if (!$user) {
+            AuditLog::record('portal', 'auth.login_fail', ['type' => 'anonymous', 'id' => null], null, 'denied', ['email' => $email, 'reason' => 'no_such_user']);
             return ['ok' => false, 'error' => 'Invalid email or password'];
         }
 
         // Check password
         if (!password_verify($password, $user['password_hash'])) {
+            AuditLog::record('portal', 'auth.login_fail', ['type' => 'user', 'id' => (string)$user['id']], null, 'denied', ['email' => $email, 'reason' => 'bad_password']);
             return ['ok' => false, 'error' => 'Invalid email or password'];
         }
 
         // Check status
         if ($user['status'] === 'suspended') {
+            AuditLog::record('portal', 'auth.login_fail', ['type' => 'user', 'id' => (string)$user['id']], null, 'denied', ['email' => $email, 'reason' => 'suspended']);
             return ['ok' => false, 'error' => 'Your account has been suspended. Please contact support.'];
         }
 
         // Check email verification
         if (!$user['email_verified']) {
+            AuditLog::record('portal', 'auth.login_fail', ['type' => 'user', 'id' => (string)$user['id']], null, 'denied', ['email' => $email, 'reason' => 'unverified']);
             return ['ok' => false, 'error' => 'Please verify your email address before logging in.', 'unverified' => true];
         }
 
@@ -349,20 +355,47 @@ class PortalAuth {
     }
 
     /**
-     * Add entry to audit log
+     * Add entry to audit log.
+     *
+     * Dual-writes to the legacy portal_audit_log (FK'd to portal_users, read
+     * by the admin client-detail page) AND the new unified event_log. The
+     * legacy table goes away once client-detail reads from event_log.
      */
     private function auditLog($userId, $action, $details) {
-        $stmt = $this->pdo->prepare("
-            INSERT INTO portal_audit_log (user_id, action, details_json, ip_address, user_agent)
-            VALUES (?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([
-            $userId,
-            $action,
-            json_encode($details),
-            $_SERVER['REMOTE_ADDR'] ?? '',
-            substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 500)
-        ]);
+        // Legacy write — wrapped so a failure here cannot prevent the new
+        // AuditLog::record below from running.
+        try {
+            $stmt = $this->pdo->prepare("
+                INSERT INTO portal_audit_log (user_id, action, details_json, ip_address, user_agent)
+                VALUES (?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([
+                $userId,
+                $action,
+                json_encode($details),
+                $_SERVER['REMOTE_ADDR'] ?? '',
+                substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 500)
+            ]);
+        } catch (Throwable $e) {
+            error_log('PortalAuth::auditLog legacy write failed: ' . $e->getMessage());
+        }
+
+        $actionMap = [
+            'register'                 => 'auth.register',
+            'login'                    => 'auth.login',
+            'logout'                   => 'auth.logout',
+            'email_verified'           => 'auth.email_verify',
+            'password_reset_requested' => 'auth.pw_reset_request',
+            'password_reset'           => 'auth.pw_reset',
+        ];
+        AuditLog::record(
+            'portal',
+            $actionMap[$action] ?? ('auth.' . $action),
+            ['type' => 'user', 'id' => (string)$userId],
+            null,
+            'ok',
+            $details
+        );
     }
 
     /**

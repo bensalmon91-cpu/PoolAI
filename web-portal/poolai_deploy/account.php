@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/includes/PortalAuth.php';
 require_once __DIR__ . '/includes/Subscription.php';
+require_once __DIR__ . '/includes/AuditLog.php';
 require_once __DIR__ . '/config/database.php';
 
 $auth = new PortalAuth();
@@ -31,6 +32,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $stmt = $pdo->prepare("UPDATE portal_users SET name = ?, company = ? WHERE id = ?");
                 $stmt->execute([$name, $company, $user['id']]);
+
+                AuditLog::record(
+                    'portal', 'account.update',
+                    ['type' => 'user', 'id' => (string)$user['id']],
+                    null, 'ok',
+                    ['name' => $name, 'company' => $company]
+                );
 
                 // Refresh user data
                 $_SESSION['portal_user_name'] = $name;
@@ -62,6 +70,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $newHash = password_hash($newPassword, PASSWORD_BCRYPT, ['cost' => PORTAL_PASSWORD_BCRYPT_COST]);
                     $stmt = $pdo->prepare("UPDATE portal_users SET password_hash = ? WHERE id = ?");
                     $stmt->execute([$newHash, $user['id']]);
+
+                    AuditLog::record(
+                        'portal', 'auth.password_change',
+                        ['type' => 'user', 'id' => (string)$user['id']],
+                        null, 'ok', []
+                    );
+
                     $success = 'Password changed successfully.';
                 }
                 break;

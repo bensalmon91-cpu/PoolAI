@@ -10,6 +10,7 @@
  */
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/AuditLog.php';
 
 class AdminClients {
     private $pdo;
@@ -435,19 +436,50 @@ class AdminClients {
     }
 
     /**
-     * Log an admin action
+     * Log an admin action.
+     *
+     * Dual-write: legacy portal_audit_log row (read by getClientAuditLog on
+     * the client detail page) AND the new unified event_log (read by the
+     * admin audit viewer at admin/audit.php). The dual write goes away once
+     * the client-detail page reads from event_log directly.
      */
     private function logAction($userId, $action, $details = []) {
-        $stmt = $this->pdo->prepare("
-            INSERT INTO portal_audit_log (user_id, action, details_json, ip_address, created_at)
-            VALUES (?, ?, ?, ?, NOW())
-        ");
-        $stmt->execute([
-            $userId,
-            $action,
-            json_encode($details),
-            $_SERVER['REMOTE_ADDR'] ?? null,
-        ]);
+        // Legacy write — wrapped so a failure here cannot prevent the new
+        // AuditLog::record below from running. The new event_log is the
+        // canonical sink; legacy goes away once getClientAuditLog reads from
+        // event_log directly.
+        try {
+            $stmt = $this->pdo->prepare("
+                INSERT INTO portal_audit_log (user_id, action, details_json, ip_address, created_at)
+                VALUES (?, ?, ?, ?, NOW())
+            ");
+            $stmt->execute([
+                $userId,
+                $action,
+                json_encode($details),
+                $_SERVER['REMOTE_ADDR'] ?? null,
+            ]);
+        } catch (Throwable $e) {
+            error_log('AdminClients::logAction legacy write failed: ' . $e->getMessage());
+        }
+
+        $actionMap = [
+            'account_suspended'   => 'client.suspend',
+            'account_activated'   => 'client.activate',
+            'account_comped'      => 'client.comp',
+            'trial_extended'      => 'client.trial_extend',
+            'override_removed'    => 'client.override_remove',
+            'client_deleted'      => 'client.delete',
+            'admin_impersonation' => 'client.impersonate',
+        ];
+        AuditLog::record(
+            'admin',
+            $actionMap[$action] ?? ('client.' . $action),
+            ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? ($details['admin_id'] ?? null)],
+            $userId ? ['type' => 'user', 'id' => (string)$userId] : null,
+            'ok',
+            $details
+        );
     }
 
     /**

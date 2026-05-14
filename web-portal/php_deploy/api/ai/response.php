@@ -9,6 +9,7 @@
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/api_helpers.php';
+require_once __DIR__ . '/../../includes/AuditLog.php';
 
 setCorsHeaders();
 
@@ -123,6 +124,15 @@ try {
         $next_question['options'] = json_decode($next_question['options_json'], true);
         unset($next_question['options_json']);
     }
+
+    AuditLog::record(
+        'device',
+        'ai.response_ingest',
+        ['type' => 'device', 'id' => (string)$device_id],
+        ['type' => 'ai_question_queue', 'id' => (string)$queue['id']],
+        'ok',
+        ['question_id' => $queue['question_id'], 'has_next' => $next_question !== false]
+    );
 
     successResponse([
         'next_question' => $next_question ?: null

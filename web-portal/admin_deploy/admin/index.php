@@ -18,6 +18,7 @@ $stmt = $pdo->query("
         d.id,
         d.device_uuid,
         d.name,
+        d.alias,
         d.api_key,
         d.is_active,
         d.last_seen,
@@ -400,13 +401,13 @@ $updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </td>
                             <td>
                                 <a href="device.php?id=<?= $device['id'] ?>" class="device-link" title="View device details">
-                                    <?= htmlspecialchars($device['name'] ?: 'Device ' . $device['id']) ?>
+                                    <?= htmlspecialchars(($device['alias'] ?: $device['name']) ?: 'Device ' . $device['id']) ?>
                                 </a>
                                 <input type="text"
                                        class="editable-alias"
-                                       value="<?= htmlspecialchars($device['name'] ?: 'Device ' . $device['id']) ?>"
+                                       value="<?= htmlspecialchars(($device['alias'] ?: $device['name']) ?: 'Device ' . $device['id']) ?>"
                                        data-device-id="<?= $device['id'] ?>"
-                                       data-original="<?= htmlspecialchars($device['name'] ?: '') ?>"
+                                       data-original="<?= htmlspecialchars(($device['alias'] ?: $device['name']) ?: 'Device ' . $device['id']) ?>"
                                        placeholder="Enter name..."
                                        onchange="saveAlias(this)"
                                        onkeydown="if(event.key==='Enter')this.blur()"
@@ -626,9 +627,18 @@ $updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
     function saveAlias(input) {
         const deviceId = input.dataset.deviceId;
         const alias = input.value.trim();
+        const original = (input.dataset.original || '').trim();
         const savedEl = document.getElementById('saved-' + deviceId);
         const row = document.querySelector(`tr[data-device-id="${deviceId}"]`);
         const link = row.querySelector('.device-link');
+
+        // No-op: nothing typed, so don't persist the displayed-fallback ("Device 5")
+        // as a real alias. data-original now mirrors the displayed value initially,
+        // so an untouched blur is value === original.
+        if (alias === original) {
+            toggleEditName(deviceId);
+            return;
+        }
 
         fetch('/api/device_alias.php', {
             method: 'POST',

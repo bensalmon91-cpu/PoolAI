@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/AuditLog.php';
 
 requireAdmin();
 
@@ -41,6 +42,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $label = trim($_POST['label'] ?? '');
         $expiresHours = (int)($_POST['expires_hours'] ?? 72);
         if ($label === '') {
+            AuditLog::record(
+                'admin',
+                'bootstrap.code_create',
+                ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? null],
+                null,
+                'denied',
+                ['reason' => 'missing_label']
+            );
             $flash = ['err', 'Label required'];
         } else {
             // Generate a 24-char human-friendly code (URL-safe base32-ish).
@@ -68,6 +77,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $newCode = $plain;
             $flash = ['ok', "Code issued (label: " . htmlspecialchars($label) . "). Shown once only."];
+            AuditLog::record(
+                'admin',
+                'bootstrap.code_create',
+                ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? null],
+                ['type' => 'bootstrap_code', 'id' => (string)$pdo->lastInsertId()],
+                'ok',
+                ['label' => $label, 'expires_at' => $expiresAt]
+            );
         }
     } elseif ($action === 'revoke') {
         $id = (int)($_POST['id'] ?? 0);
@@ -80,6 +97,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             $stmt->execute([$reason, $id]);
             $flash = ['ok', 'Code revoked'];
+            AuditLog::record(
+                'admin',
+                'bootstrap.code_revoke',
+                ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? null],
+                ['type' => 'bootstrap_code', 'id' => (string)$id],
+                'ok',
+                ['reason' => $reason, 'rows_affected' => $stmt->rowCount()]
+            );
+        } else {
+            AuditLog::record(
+                'admin',
+                'bootstrap.code_revoke',
+                ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? null],
+                null,
+                'denied',
+                ['reason' => 'invalid_id']
+            );
         }
     }
 }

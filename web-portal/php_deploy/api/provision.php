@@ -28,6 +28,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
+require_once __DIR__ . '/../includes/AuditLog.php';
 
 setCorsHeaders();
 requireMethod('POST');
@@ -69,6 +70,21 @@ $clientIp = $_SERVER['REMOTE_ADDR'] ?? '';
 $codeRow = null;
 $authMode = null;
 
+// Denied-audit helper. Captures the forensic surface for credential probing:
+// reason, IP, attempted device UUID, and a SHORT hash prefix of the credential
+// (never the raw secret — IP + prefix is enough to correlate without leaking).
+$auditDenied = function(string $reason, string $credential = '') use ($deviceUuid, $clientIp): void {
+    $details = [
+        'reason' => $reason,
+        'ip' => $clientIp,
+        'device_uuid_attempt' => $deviceUuid,
+    ];
+    if ($credential !== '') {
+        $details['credential_prefix'] = substr(hash('sha256', $credential), 0, 8);
+    }
+    AuditLog::record('device', 'device.provision', ['type' => 'anonymous', 'id' => null], null, 'denied', $details);
+};
+
 if ($perDeviceCode !== '') {
     $hash = hash('sha256', trim($perDeviceCode));
     $stmt = $pdo->prepare("
@@ -81,31 +97,38 @@ if ($perDeviceCode !== '') {
     $codeRow = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$codeRow) {
+        $auditDenied('invalid_code', $perDeviceCode);
         errorResponse('Invalid bootstrap code', 401);
     }
     if ($codeRow['revoked_at']) {
+        $auditDenied('revoked_code', $perDeviceCode);
         errorResponse('Bootstrap code has been revoked', 401);
     }
     if ($codeRow['used_at']) {
         // Single-use. If the same device is re-provisioning, we could
         // allow a repeat - but safer to require a fresh code.
+        $auditDenied('used_code', $perDeviceCode);
         errorResponse('Bootstrap code has already been used', 401);
     }
     if ($codeRow['expires_at'] && strtotime($codeRow['expires_at']) < time()) {
+        $auditDenied('expired_code', $perDeviceCode);
         errorResponse('Bootstrap code has expired', 401);
     }
     $authMode = 'code';
 } elseif ($sharedSecret !== '') {
     $sharedDisabled = (bool)env('DISABLE_SHARED_BOOTSTRAP', false);
     if ($sharedDisabled) {
+        $auditDenied('shared_disabled', $sharedSecret);
         errorResponse('Shared bootstrap secret disabled; use a per-device code', 401);
     }
     $expected = (string)(defined('BOOTSTRAP_SECRET') ? BOOTSTRAP_SECRET : env('BOOTSTRAP_SECRET', ''));
     if ($expected === '' || !hash_equals($expected, trim($sharedSecret))) {
+        $auditDenied('invalid_shared_secret', $sharedSecret);
         errorResponse('Invalid bootstrap secret', 401);
     }
     $authMode = 'shared';
 } else {
+    $auditDenied('missing_credential');
     errorResponse('Missing bootstrap credential (X-Bootstrap-Code or X-Bootstrap-Secret)', 401);
 }
 
@@ -154,6 +177,21 @@ try {
     error_log('provision.php: ' . $e->getMessage());
     errorResponse('Provisioning failed', 500);
 }
+
+AuditLog::record(
+    'device',
+    'device.provision',
+    ['type' => 'device', 'id' => $deviceUuid],
+    ['type' => 'device', 'id' => (string)$deviceRowId],
+    'ok',
+    [
+        'auth_mode' => $authMode,
+        'hostname' => $hostname,
+        'model' => $model,
+        'software_version' => $softwareVersion,
+        'is_new' => !$existing,
+    ]
+);
 
 successResponse([
     'api_key' => $apiKey,

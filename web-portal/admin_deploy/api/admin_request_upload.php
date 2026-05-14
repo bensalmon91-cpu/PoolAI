@@ -10,20 +10,36 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/api_helpers.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/AuditLog.php';
 
 setCorsHeaders();
 
+$auditFail = function(string $result, string $reason, int $deviceId = 0, array $extra = []) {
+    $details = array_merge(['reason' => $reason], $extra);
+    AuditLog::record(
+        'admin',
+        'device.upload_request',
+        ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? null],
+        $deviceId > 0 ? ['type' => 'device', 'id' => (string)$deviceId] : null,
+        $result,
+        $details
+    );
+};
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $auditFail('denied', 'method_not_allowed');
     errorResponse('Method not allowed', 405);
 }
 
 // Require admin authentication (uses startSecureSession with correct session name)
 if (!isAdmin()) {
+    $auditFail('denied', 'not_authenticated');
     errorResponse('Admin authentication required', 401);
 }
 
 $device_id = intval($_GET['device_id'] ?? $_POST['device_id'] ?? 0);
 if ($device_id <= 0) {
+    $auditFail('denied', 'invalid_device_id');
     errorResponse('Missing or invalid device_id');
 }
 
@@ -36,6 +52,7 @@ try {
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$device) {
+        $auditFail('denied', 'device_not_found', $device_id);
         errorResponse('Device not found', 404);
     }
 
@@ -47,6 +64,7 @@ try {
     $stmt->execute([$device_id]);
 
     if ($stmt->fetch()) {
+        $auditFail('denied', 'upload_already_pending', $device_id);
         errorResponse('Upload already requested and pending');
     }
 
@@ -60,6 +78,15 @@ try {
 
     $command_id = $pdo->lastInsertId();
 
+    AuditLog::record(
+        'admin',
+        'device.upload_request',
+        ['type' => 'admin', 'id' => $_SESSION['admin_username'] ?? null],
+        ['type' => 'device', 'id' => (string)$device_id],
+        'ok',
+        ['command_id' => $command_id]
+    );
+
     jsonResponse([
         'ok' => true,
         'command_id' => $command_id,
@@ -67,5 +94,7 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    errorResponse('Database error: ' . $e->getMessage(), 500);
+    $auditFail('fail', 'db_error', $device_id, ['error' => $e->getMessage()]);
+    error_log("admin_request_upload DB error: " . $e->getMessage());
+    errorResponse('Database error', 500);
 }
