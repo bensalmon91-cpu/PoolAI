@@ -53,6 +53,7 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS bootstrap_codes (
 $input = getJsonInput();
 $deviceUuid = trim((string)($input['device_id'] ?? ''));
 $hostname = trim((string)($input['hostname'] ?? ''));
+$deviceAlias = trim((string)($input['device_alias'] ?? ''));
 $model = trim((string)($input['model'] ?? ''));
 $softwareVersion = trim((string)($input['software_version'] ?? ''));
 
@@ -154,11 +155,16 @@ try {
         $upd->execute([$apiKey, $existing['id']]);
         $deviceRowId = (int)$existing['id'];
     } else {
+        // pi_devices.name is NOT NULL - never insert NULL here. The Pi's
+        // auto_provision.py sends device_alias (not hostname), so a NULL
+        // name 500'd every fresh-device INSERT until 2026-06-11.
+        $name = $hostname !== '' ? $hostname
+            : ($deviceAlias !== '' ? $deviceAlias : 'Pi ' . substr($deviceUuid, 0, 8));
         $ins = $pdo->prepare("
             INSERT INTO pi_devices (device_uuid, name, api_key, is_active, last_seen)
             VALUES (?, ?, ?, 1, NOW())
         ");
-        $ins->execute([$deviceUuid, $hostname !== '' ? $hostname : null, $apiKey]);
+        $ins->execute([$deviceUuid, $name, $apiKey]);
         $deviceRowId = (int)$pdo->lastInsertId();
     }
 

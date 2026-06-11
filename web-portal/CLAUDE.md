@@ -13,8 +13,14 @@ This is the server-side component that handles device provisioning, software upd
   User: u931726538.mbs
   Pass: Henley2026!
 
-  NOTE: FTP is chrooted to poolai.modprojects.co.uk; admin-domain deploys hop via PHP installer.
-  See "Domain split" below for the full picture.
+  NOTE (corrected 2026-06-11, verified empirically): the u931726538.mbs FTP
+  chroot now lands DIRECTLY in the poolaissistant.modprojects.co.uk docroot
+  (a file STOR'd to / is served at https://poolaissistant.modprojects.co.uk/).
+  Earlier docs claimed it was chrooted to poolai.* and required a cross-chroot
+  copy() hop for poolaissistant deploys - that is no longer true. Single-file
+  API fixes can be FTP'd straight to api/<file>.php.
+  Also: curl FTPS uploads fail (error 56) from this network; use Python
+  ftplib.FTP_TLS with prot_p() like deploy.py does.
 
 === URLS ===
 API backend: https://poolaissistant.modprojects.co.uk  (Pi API + customer-portal API; no browser pages)
