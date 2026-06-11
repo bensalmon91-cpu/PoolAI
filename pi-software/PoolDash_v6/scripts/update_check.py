@@ -786,6 +786,40 @@ def apply_update(archive_path):
         except Exception as e:
             print(f"  Warning: Could not refresh SSH guard unit: {e}")
 
+        # Self-heal the kiosk autostart (v6.11.13). The screen must never
+        # sleep and a crashed Chromium must respawn, so converge every
+        # installed kiosk autostart on the shipped template. Wholesale
+        # overwrite is safe: rotation is read from settings at runtime, so
+        # the file carries no per-unit state. Only files we generated are
+        # touched (identified by the kiosk header line).
+        print("Refreshing kiosk autostart (screen keep-awake + browser respawn)...")
+        try:
+            autostart_src = APP_DIR / "deploy" / "labwc_autostart"
+            if autostart_src.exists():
+                shipped = autostart_src.read_text()
+                refreshed = []
+                for installed in Path("/home").glob("*/.config/labwc/autostart"):
+                    try:
+                        current = installed.read_text()
+                    except OSError:
+                        continue
+                    if "PoolAIssistant Kiosk Mode" not in current:
+                        continue
+                    if current == shipped:
+                        continue
+                    st = installed.stat()
+                    installed.write_text(shipped)
+                    os.chown(installed, st.st_uid, st.st_gid)
+                    refreshed.append(str(installed))
+                if refreshed:
+                    print(f"  Refreshed (takes effect at next reboot): {', '.join(refreshed)}")
+                else:
+                    print("  Kiosk autostart already current")
+            else:
+                print("  Warning: labwc_autostart template not found in update tarball")
+        except Exception as e:
+            print(f"  Warning: Could not refresh kiosk autostart: {e}")
+
         # Run maintenance logs migration (merge into pool_readings.sqlite3)
         print("Running database migrations...")
         migration_script = APP_DIR / "scripts" / "migrate_maintenance_logs.py"

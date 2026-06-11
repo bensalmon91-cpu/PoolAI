@@ -121,12 +121,6 @@ DEFAULTS = {
     # Language setting
     "language": "en",                    # "en", "fr", "es", "de", "it", "ru"
 
-    # Eco/Sleep Mode settings
-    "eco_mode_enabled": False,           # Enable screen dimming after inactivity
-    "eco_timeout_minutes": 5,            # Minutes of inactivity before dimming (1-60)
-    "eco_brightness_percent": 10,        # Dimmed screen brightness (0-100)
-    "eco_wake_on_touch": True,           # Wake screen on touch/click
-
     # Per-pool quick log actions
     "pool_actions": {},                  # {"Pool Name": ["Action1", "Action2", ...]}
 
@@ -135,6 +129,13 @@ DEFAULTS = {
 
     # Setup wizard (first boot)
     "setup_wizard_completed": False,     # True after initial setup wizard has been completed
+
+    # Cloud connection master switch (local-only mode). When False, every
+    # telemetry script (heartbeat, snapshot, chunk/device/remote sync) exits
+    # early and the unit runs as a standalone appliance. Software updates
+    # are deliberately NOT gated - update_check.py is the delivery path for
+    # fixes and must keep working.
+    "cloud_enabled": True,
 
     # Cloud Upload Settings (Portal Data Sync)
     "cloud_upload_enabled": True,           # Enable automatic snapshot uploads to portal
@@ -288,16 +289,6 @@ def load(app_instance_path: str) -> Dict[str, Any]:
         if merged.get("language") not in ("en", "fr", "es", "de", "it", "ru"):
             merged["language"] = DEFAULTS["language"]
 
-        # Eco/Sleep Mode settings
-        if not isinstance(merged.get("eco_mode_enabled"), bool):
-            merged["eco_mode_enabled"] = DEFAULTS["eco_mode_enabled"]
-        if not isinstance(merged.get("eco_timeout_minutes"), int) or not (1 <= merged.get("eco_timeout_minutes", 5) <= 60):
-            merged["eco_timeout_minutes"] = DEFAULTS["eco_timeout_minutes"]
-        if not isinstance(merged.get("eco_brightness_percent"), int) or not (0 <= merged.get("eco_brightness_percent", 10) <= 100):
-            merged["eco_brightness_percent"] = DEFAULTS["eco_brightness_percent"]
-        if not isinstance(merged.get("eco_wake_on_touch"), bool):
-            merged["eco_wake_on_touch"] = DEFAULTS["eco_wake_on_touch"]
-
         # Per-pool quick log actions
         if not isinstance(merged.get("pool_actions"), dict):
             merged["pool_actions"] = {}
@@ -309,6 +300,10 @@ def load(app_instance_path: str) -> Dict[str, Any]:
         # Setup wizard (first boot)
         if not isinstance(merged.get("setup_wizard_completed"), bool):
             merged["setup_wizard_completed"] = DEFAULTS["setup_wizard_completed"]
+
+        # Cloud connection master switch
+        if not isinstance(merged.get("cloud_enabled"), bool):
+            merged["cloud_enabled"] = DEFAULTS["cloud_enabled"]
 
         # Cloud upload settings
         if not isinstance(merged.get("cloud_upload_enabled"), bool):
@@ -512,17 +507,14 @@ def save(app_instance_path: str, data: Dict[str, Any]) -> Path:
         "appearance_compact_mode": bool(data.get("appearance_compact_mode", DEFAULTS["appearance_compact_mode"])),
         # Language setting
         "language": data.get("language") if data.get("language") in ("en", "fr", "es", "de", "it", "ru") else DEFAULTS["language"],
-        # Eco/Sleep Mode settings
-        "eco_mode_enabled": bool(data.get("eco_mode_enabled", DEFAULTS["eco_mode_enabled"])),
-        "eco_timeout_minutes": max(1, min(60, int(data.get("eco_timeout_minutes") or DEFAULTS["eco_timeout_minutes"]))),
-        "eco_brightness_percent": max(0, min(100, int(data.get("eco_brightness_percent") or DEFAULTS["eco_brightness_percent"]))),
-        "eco_wake_on_touch": bool(data.get("eco_wake_on_touch", DEFAULTS["eco_wake_on_touch"])),
         # Per-pool quick log actions
         "pool_actions": data.get("pool_actions") if isinstance(data.get("pool_actions"), dict) else {},
         # Network wizard
         "network_wizard_completed": bool(data.get("network_wizard_completed", DEFAULTS["network_wizard_completed"])),
         # Setup wizard (first boot)
         "setup_wizard_completed": bool(data.get("setup_wizard_completed", DEFAULTS["setup_wizard_completed"])),
+        # Cloud connection master switch
+        "cloud_enabled": bool(data.get("cloud_enabled", DEFAULTS["cloud_enabled"])),
         # Cloud upload settings
         "cloud_upload_enabled": bool(data.get("cloud_upload_enabled", DEFAULTS["cloud_upload_enabled"])),
         "cloud_upload_interval_minutes": max(1, min(60, int(data.get("cloud_upload_interval_minutes") or DEFAULTS["cloud_upload_interval_minutes"]))),

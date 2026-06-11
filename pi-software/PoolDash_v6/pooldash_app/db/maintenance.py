@@ -56,16 +56,32 @@ def ensure_maintenance_table_in_pool_db(pool_db_path: str):
     ensure_db(pool_db_path)
 
 
-def log_action(db_path: str, pool: str, action: str, note: str = ""):
-    """Log a maintenance action with input validation."""
+def log_action(db_path: str, pool: str, action: str, note: str = "", timestamp: str = None):
+    """Log a maintenance action with input validation.
+
+    timestamp: optional "YYYY-MM-DD HH:MM:SS" string to backdate the entry.
+    Arbitrarily old timestamps are allowed; only future timestamps are
+    rejected (block on physical impossibility, nothing else). Reads sort by
+    timestamp, so backdated rows land in the right place in history.
+    """
     pool, action, note = _validate_input(pool, action, note)
 
     if not pool or not action:
         logger.warning(f"Invalid log_action call: pool={pool!r}, action={action!r}")
         return
 
+    if timestamp:
+        try:
+            parsed = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError):
+            raise ValueError(f"Invalid timestamp {timestamp!r} - use YYYY-MM-DD HH:MM:SS")
+        if parsed > datetime.now():
+            raise ValueError(f"Timestamp {timestamp!r} is in the future")
+        ts = timestamp
+    else:
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     ensure_db(db_path)
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     try:
         with get_connection(db_path) as conn:

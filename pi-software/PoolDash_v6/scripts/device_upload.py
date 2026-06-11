@@ -250,6 +250,16 @@ def upload_alarm_delta(backend: str, token: str, db_path: str, state_path: str, 
 
 
 def main() -> int:
+    # Local-only mode: the master switch gates all telemetry (v6.11.13).
+    settings_path = load_env("POOLDASH_SETTINGS_PATH", "/opt/PoolAIssistant/data/pooldash_settings.json")
+    try:
+        with open(settings_path, "r", encoding="utf-8") as f:
+            if not json.load(f).get("cloud_enabled", True):
+                print("Cloud disabled by setting (cloud_enabled=false) - skipping")
+                return 0
+    except Exception:
+        pass
+
     token_path = load_env("DEVICE_TOKEN_PATH", "/opt/PoolAIssistant/data/device_token.json")
     data_path = load_env("POOLDB", "/opt/PoolAIssistant/data/pool_readings.sqlite3")
     status_path = load_env("BACKEND_STATUS_PATH", "/opt/PoolAIssistant/data/backend_status.json")

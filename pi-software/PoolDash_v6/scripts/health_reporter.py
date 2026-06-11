@@ -62,8 +62,6 @@ REMOTE_SETTABLE_KEYS = {
     'screen_rotation',
     'appearance_theme', 'appearance_font_size', 'appearance_accent_color',
     'appearance_compact_mode',
-    'eco_mode_enabled', 'eco_timeout_minutes', 'eco_brightness_percent',
-    'eco_wake_on_touch',
     'chart_downsample', 'chart_max_points',
     'language',
     'scheduled_reboot_enabled', 'scheduled_reboot_time',
@@ -108,6 +106,7 @@ def load_settings():
         'device_alias': data.get('device_alias', ''),
         'device_alias_updated_at': data.get('device_alias_updated_at', ''),
         'controllers': data.get('controllers', []),
+        'cloud_enabled': bool(data.get('cloud_enabled', True)),
     }
 
 
@@ -737,6 +736,13 @@ def main():
     if not settings:
         log("Cannot proceed without settings", "ERROR")
         return 1
+
+    # Local-only mode: the master switch gates all telemetry (v6.11.13).
+    # Note this also pauses admin-panel remote commands, which ride the
+    # heartbeat response - re-enable from the Pi's own Settings page.
+    if not settings.get('cloud_enabled', True):
+        log("Cloud disabled by setting (cloud_enabled=false) - skipping heartbeat")
+        return 0
 
     # Load persistent state
     state = load_health_state()

@@ -10,3 +10,9 @@ from pathlib import Path
 _TOOLS_DIR = Path(__file__).resolve().parent.parent
 if str(_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIR))
+
+# Also make the app root importable so tests can use pooldash_app.* modules
+# (e.g. pooldash_app.db.maintenance).
+_APP_ROOT = _TOOLS_DIR.parent
+if str(_APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_APP_ROOT))

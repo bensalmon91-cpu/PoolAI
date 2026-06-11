@@ -510,6 +510,11 @@ def should_upload() -> bool:
 def main() -> int:
     print(f"[{utc_now_iso()}] Cloud upload starting...")
 
+    # Local-only mode: the master switch gates all telemetry (v6.11.13).
+    if not load_json(SETTINGS_PATH).get("cloud_enabled", True):
+        print("Cloud disabled by setting (cloud_enabled=false) - skipping")
+        return 0
+
     # Check if we should upload
     if not should_upload():
         print("Skipping upload - not enough time elapsed or uploads disabled")

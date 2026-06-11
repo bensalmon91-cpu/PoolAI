@@ -218,10 +218,14 @@ if [ "$WITH_BROWSER" = true ]; then
 # Wait for network
 sleep 5
 
-# Disable screen blanking
-xset s off
-xset -dpms
-xset s noblank
+# Disable screen blanking.
+# xset only works under X11; on Wayland (labwc, the current Pi OS default)
+# blanking is a swayidle line managed by raspi-config - remove it too.
+xset s off 2>/dev/null
+xset -dpms 2>/dev/null
+xset s noblank 2>/dev/null
+command -v raspi-config >/dev/null && sudo raspi-config nonint do_blanking 1
+pkill swayidle 2>/dev/null
 
 # Hide mouse cursor after 3 seconds of inactivity
 unclutter -idle 3 &

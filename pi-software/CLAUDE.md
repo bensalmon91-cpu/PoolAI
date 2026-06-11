@@ -1,15 +1,22 @@
 # PoolAIssistant Pi Software
 
-**Current Version: 6.11.10** (released 2026-05-03)
+**Current Version: 6.11.13** (released 2026-06-11)
 
-## Live Pi fleet (2026-05-03)
+## Live Pi fleet (2026-06-11)
 
 | Host | IP | Role |
 |---|---|---|
 | `PoolAI-swanwood` | `10.0.30.247` (WiFi, DHCP) + `192.168.200.100` (eth0) | Production — Swanwood Spa pool monitoring |
-| `tvcctv`          | `10.0.30.131` (WiFi, DHCP) + `192.168.200.101` (eth0)    | Second unit, full install, reaches the same pool controllers |
 
-Both currently on **v6.11.4** (the last release pushed prior to 2026-05-03). Will pick up v6.11.10 at the next 03:00 `update_check.timer` cron, or instantly via Settings → Check for Updates / `sudo python3 /opt/PoolAIssistant/app/scripts/update_check.py --apply`. v6.11.10 bundles every shipped change since v6.11.4.
+> `tvcctv` (the former second unit at `10.0.30.131`) was decommissioned — confirmed gone 2026-06-11. Swanwood is the only live Pi.
+
+Updates land at the next 03:00 `update_check.timer` cron, or instantly via Settings → Check for Updates / `sudo python3 /opt/PoolAIssistant/app/scripts/update_check.py --apply`.
+
+**v6.11.13 (2026-06-11): screen never sleeps + backdated maintenance + local-only switch.**
+- Kiosk autostart kills swayidle, runs a `wlopm --on '*'` keep-awake loop, and wraps Chromium in `lwrespawn` (a crashed browser over the black swaybg looked exactly like a sleeping screen). `update_check.py` self-heals installed autostarts on update; Swanwood was also hotfixed live via SSH on 2026-06-11.
+- Eco/Sleep Mode removed entirely (persist defaults, System-tab form, base.html overlay, remote-settable allowlist).
+- Maintenance page gains a "Log Past Entry" card — backdate an action/TDS/note to any past date; future timestamps rejected. Tests in `tools/tests/test_maintenance_backdate.py`.
+- New `cloud_enabled` master switch (Settings → System → Cloud Connection): when off, heartbeat/snapshot/chunk/device/remote sync all exit early and the unit is a standalone appliance. Software updates deliberately stay on.
 
 > Swanwood was on a static WiFi IP (`10.0.30.5`) prior to the 2026-04-26 v6.11.4 ipv4.dns="" incident. During recovery, the user reverted to DHCP and the Pi grabbed its old lease (`10.0.30.247`). v6.11.5 ships the preflight + DNS fallback that prevents recurrence; v6.11.10 includes that fix. If Swanwood is later reconfigured back to static, update this table.
 

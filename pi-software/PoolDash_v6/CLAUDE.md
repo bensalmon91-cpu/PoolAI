@@ -1,6 +1,6 @@
 # PoolAIssistant Pi Software (PoolDash_v6 app)
 
-**Current Version: 6.11.10** (released 2026-05-03)
+**Current Version: 6.11.13** (released 2026-06-11)
 
 > This file documents the Flask app inside `PoolDash_v6/`.
 > For the higher-level install / fleet / deploy docs see the parent
@@ -255,6 +255,7 @@ Highlights of every shipped version since v6.11.2. Use `git log --oneline` for t
 - **Smart-link QR + PWA install + cloud chemistry + subscription card (v6.11.6)** — go.php-based smart links open the customer portal at `poolai.modprojects.co.uk` from a QR scan. PWA install button on the install page. Cloud-side chemistry display for offline Pis. Subscription status card on the settings page.
 - **v6.11.7–v6.11.8** — review-pass cleanups of v6.11.6 work; deferred polish items.
 - **Stale alarm cleanup, attempt 1 (v6.11.9)** — adds idempotent `closed_reason TEXT` column to `alarm_events`, `close_alarms_at_startup()` (closes every open row on logger boot), and `db_close_alarms_for_offline_controllers()` (per-cycle sweep that closes rows whose source controller has been offline ≥ 30 min). BAYROL + bitfield first-observation paths now treat `prev=None` as a transition from 0 so still-active alarms surface as fresh events after startup-clear. **Note:** the offline-sweep was dead code in this release — see v6.11.10.
+- **Screen never sleeps + backdated maintenance + local-only switch (v6.11.13)** — root cause of the sleeping kiosk screen: `xset` blanking-disable is an X11 no-op under labwc (Wayland), and a crashed un-respawned Chromium over the black swaybg looks identical to a sleeping screen. Autostart now kills swayidle, runs a `wlopm --on '*'` keep-awake loop, and wraps Chromium in `lwrespawn`; `update_check.py` self-heals installed autostarts. Eco Mode removed outright. Maintenance page gains a "Log Past Entry" card (backdate any action; future timestamps rejected; `test_maintenance_backdate.py`). New `cloud_enabled` master switch gates heartbeat/snapshot/chunk/device/remote sync for local-only operation — update checks deliberately stay on.
 - **Alarm cleanup fix + first unit-test infra (v6.11.10)** — fixes the v6.11.9 sweep: SQL now uses `last_success_ts` (frozen at offline-onset) instead of `last_failure_ts` (advances every poll, threshold never tripped). BAYROL polling loop now also calls the sweep. Migration uses `PRAGMA table_info()` instead of broad `OperationalError` swallow. Sweep failures log at WARNING. Adds `requirements-dev.txt` + `tools/tests/test_alarm_lifecycle.py` (6 tests, in-memory SQLite, sub-second runtime). First unit-test infrastructure in this codebase.
 
 ## Known rough edges (post-install UX, deferred backlog)

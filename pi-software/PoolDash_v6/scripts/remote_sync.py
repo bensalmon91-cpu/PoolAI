@@ -261,6 +261,11 @@ def main():
     settings = load_settings()
     state = load_sync_state()
 
+    # Local-only mode: the master switch gates all telemetry (v6.11.13).
+    if not settings.get("cloud_enabled", True):
+        print("Cloud disabled by setting (cloud_enabled=false) - skipping")
+        return 0
+
     if not should_sync(settings, state, args.force):
         return 0
 

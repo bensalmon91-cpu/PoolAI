@@ -1,13 +1,13 @@
 # PoolAIssistant Project - Cloud Integration Roadmap
 
-**Last Updated:** 2026-05-08 · **Pi software current:** v6.11.10
+**Last Updated:** 2026-06-11 · **Pi software current:** v6.11.13
 
 This master document tracks the PoolAIssistant ecosystem including the Pi software, web portal, and cloud integration features.
 
 ## Current state snapshot
 
-- **Pi software (released):** v6.11.10 (alarm-lifecycle hardening + first unit-test infra). Earlier shipped versions: v6.11.5 (WiFi static-IP preflight + DNS fallback), v6.11.6 (smart-link QR + PWA install + cloud chemistry + subscription card), v6.11.7–8 (review polish), v6.11.9 (alarm cleanup — superseded by v6.11.10 which fixes a dead-code sweep).
-- **Active Pis:** Swanwood (production) @ `10.0.30.247` (WiFi DHCP per 2026-04-26 recovery), tvcctv (second unit) @ `10.0.30.131`. Both will land on v6.11.10 at the next 03:00 update cron.
+- **Pi software (released):** v6.11.13 (screen never sleeps — labwc keep-awake + Chromium lwrespawn + Eco Mode removed; "Log Past Entry" backdated maintenance; `cloud_enabled` local-only switch). Earlier: v6.11.12 (alarm-closure cloud propagation + timer self-heal), v6.11.10 (alarm-lifecycle hardening + first unit-test infra).
+- **Active Pis:** Swanwood (production) @ `10.0.30.247` (WiFi DHCP per 2026-04-26 recovery) — the only live unit; tvcctv was decommissioned (confirmed 2026-06-11).
 - **Web portal:** legacy `poolaissistant.*/portal/*` retired 2026-05-03 (10 PHP files now 301-redirect to `poolai.*`). Customer portal at `poolai.modprojects.co.uk` is the canonical forward direction.
 - **Admin split (in flight, 2026-05-08):** admin UI + admin-only API moving from `poolaissistant.*/admin/*` to a new subdomain `admin.modprojects.co.uk`. Local code split is done (`web-portal/admin_deploy/`); deploy waits on hPanel subdomain creation + new FTP creds. `poolaissistant.*` retains all Pi-facing API and the customer-portal API; admin URLs there 308-redirect to `admin.*`.
 - **Next milestone:** fresh SD card install — validates the v6.11.3 installer cleanup end-to-end on a clean Pi. Plan logged in `pi-software/CLAUDE.md` under "Fresh SD Card Install Plan".

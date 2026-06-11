@@ -63,6 +63,36 @@
 </div>
 
 <div class="card">
+  <h3>Log Past Entry</h3>
+  <p class="form-hint mb-3">Record maintenance that was done earlier. Quick actions above always log at the current time.</p>
+  <form method="post">
+    <div class="grid-2">
+      <div>
+        <label for="past_action"><strong>Action</strong></label>
+        <select id="past_action" name="action" class="input--lg" onchange="togglePastTds(this)">
+          {% for a in actions %}
+            <option value="{{ a }}">{{ a }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="past_timestamp"><strong>When</strong></label>
+        <input id="past_timestamp" name="timestamp" type="datetime-local" class="input--lg" required>
+      </div>
+    </div>
+    <div id="past_tds_field" class="mt-2" style="display:none;">
+      <label for="past_tds"><strong>TDS value</strong></label>
+      <input id="past_tds" name="tds" type="number" step="any" placeholder="e.g. 850" class="input--lg w-auto">
+    </div>
+    <div class="mt-2">
+      <label for="past_note"><strong>Note (optional)</strong></label>
+      <textarea id="past_note" name="note" placeholder="Note..."></textarea>
+    </div>
+    <button class="btn mt-2" type="submit">Log Past Entry</button>
+  </form>
+</div>
+
+<div class="card">
   <div class="card-header-row">
     <h3>LSI Calculator</h3>
     <a class="btn btn--sm btn--secondary" href="{{ url_for('charts.lsi_chart_page', pool=pool) }}">View LSI History</a>
@@ -243,6 +273,26 @@
 </style>
 
 <script>
+// Log Past Entry: clamp the picker to "now" (server rejects future
+// timestamps too) and show the TDS value field only when TDS is selected.
+(function() {
+  var ts = document.getElementById('past_timestamp');
+  if (ts) {
+    var now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    ts.max = now.toISOString().slice(0, 16);
+  }
+})();
+
+function togglePastTds(select) {
+  var field = document.getElementById('past_tds_field');
+  var input = document.getElementById('past_tds');
+  var isTds = select.value === 'TDS';
+  field.style.display = isTds ? '' : 'none';
+  input.required = isTds;
+  if (!isTds) input.value = '';
+}
+
 // Auto-fill LSI fields from controller sensors
 function autoFillFromSensors() {
   const btn = document.getElementById('autofill-btn');

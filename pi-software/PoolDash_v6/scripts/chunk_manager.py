@@ -559,6 +559,16 @@ def main():
         show_status()
         return
 
+    # Local-only mode: the master switch gates all telemetry (v6.11.13).
+    # --status above stays available; it is a purely local report.
+    try:
+        with open(SETTINGS_FILE) as f:
+            if not json.load(f).get('cloud_enabled', True):
+                print("Cloud disabled by setting (cloud_enabled=false) - skipping")
+                return
+    except Exception:
+        pass
+
     settings = load_settings()
     delete_after = not args.keep_local
 

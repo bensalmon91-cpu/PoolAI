@@ -645,8 +645,24 @@ def maintenance_page(pool: str):
                     flash("Please enter a TDS value.")
                     return redirect(url_for("main.maintenance_page", pool=pool))
 
-            mdb.log_action(db_path, pool, action, note)
-            flash(f"Logged: {action}")
+            # Optional backdate from the "Log Past Entry" card. The
+            # datetime-local input submits "YYYY-MM-DDTHH:MM"; normalize to
+            # the DB's "YYYY-MM-DD HH:MM:SS". Blank = log at the current time.
+            raw_ts = (request.form.get("timestamp") or "").strip()
+            timestamp = None
+            if raw_ts:
+                try:
+                    timestamp = datetime.strptime(raw_ts, "%Y-%m-%dT%H:%M").strftime("%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    flash("Invalid date/time for past entry.")
+                    return redirect(url_for("main.maintenance_page", pool=pool))
+
+            try:
+                mdb.log_action(db_path, pool, action, note, timestamp=timestamp)
+            except ValueError as e:
+                flash(str(e))
+                return redirect(url_for("main.maintenance_page", pool=pool))
+            flash(f"Logged: {action}" + (f" (backdated to {timestamp})" if timestamp else ""))
             return redirect(url_for("main.maintenance_page", pool=pool))
 
     last_info = {}
@@ -3625,38 +3641,26 @@ def update_language():
 
 
 # ----------------------------
-# Eco/Sleep Mode Settings
+# Cloud Connection (local-only switch)
 # ----------------------------
 
-@main_bp.route("/settings/eco-mode", methods=["POST"])
-def update_eco_mode():
-    """Update eco/sleep mode settings."""
+@main_bp.route("/settings/cloud", methods=["POST"])
+def update_cloud_enabled():
+    """Enable/disable cloud telemetry (heartbeat, snapshot, sync uploads).
+
+    Software updates are deliberately NOT gated by this switch - the update
+    check is the delivery path for fixes and must keep working even when the
+    unit runs local-only.
+    """
     data = _persisted()
-
-    # Get form values
-    eco_enabled = request.form.get("eco_mode_enabled") == "on"
-    timeout = request.form.get("eco_timeout_minutes", "5")
-    brightness = request.form.get("eco_brightness_percent", "10")
-    wake_on_touch = request.form.get("eco_wake_on_touch") == "on"
-
-    # Validate and save
-    try:
-        timeout_val = max(1, min(60, int(timeout)))
-    except (ValueError, TypeError):
-        timeout_val = 5
-
-    try:
-        brightness_val = max(0, min(100, int(brightness)))
-    except (ValueError, TypeError):
-        brightness_val = 10
-
-    data["eco_mode_enabled"] = eco_enabled
-    data["eco_timeout_minutes"] = timeout_val
-    data["eco_brightness_percent"] = brightness_val
-    data["eco_wake_on_touch"] = wake_on_touch
+    enabled = request.form.get("cloud_enabled") == "on"
+    data["cloud_enabled"] = enabled
 
     _save_persisted(data)
-    flash("Eco mode settings saved", "success")
+    if enabled:
+        flash("Cloud connection enabled - uploads resume on the next timer cycle", "success")
+    else:
+        flash("Cloud connection disabled - unit is now local-only (software updates stay on)", "success")
     return redirect(url_for("main.system_page"))
 
 
@@ -3727,11 +3731,8 @@ def system_page():
         # Scheduled reboot settings
         scheduled_reboot_enabled=data.get("scheduled_reboot_enabled", True),
         scheduled_reboot_time=data.get("scheduled_reboot_time", "04:00"),
-        # Eco mode settings
-        eco_mode_enabled=data.get("eco_mode_enabled", False),
-        eco_timeout_minutes=data.get("eco_timeout_minutes", 5),
-        eco_brightness_percent=data.get("eco_brightness_percent", 10),
-        eco_wake_on_touch=data.get("eco_wake_on_touch", True),
+        # Cloud connection (local-only switch)
+        cloud_enabled=data.get("cloud_enabled", True),
         # Appearance settings
         appearance_theme=data.get("appearance_theme", "light"),
         appearance_accent_color=data.get("appearance_accent_color", "blue"),

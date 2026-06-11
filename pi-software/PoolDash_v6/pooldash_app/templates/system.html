@@ -328,74 +328,20 @@ document.querySelectorAll('input[name="screen_rotation"]').forEach(input => {
 });
 </script>
 
-<!-- ===== ECO / SLEEP MODE ===== -->
+<!-- ===== CLOUD CONNECTION (LOCAL-ONLY SWITCH) ===== -->
 <div class="card">
-  <h3>Eco / Sleep Mode</h3>
-  <p class="form-hint mb-3">Dim the screen after inactivity to save energy and reduce screen burn-in.</p>
-  <form method="post" action="{{ url_for('main.update_eco_mode') }}">
+  <h3>Cloud Connection</h3>
+  <p class="form-hint mb-3">When off, the unit runs local-only: heartbeat, snapshot and sync uploads stop. The dashboard, alarms, charts and maintenance log are unaffected. Software updates stay on.</p>
+  <form method="post" action="{{ url_for('main.update_cloud_enabled') }}">
     <div class="settings-section">
       <label class="checkbox-label">
-        <input type="checkbox" name="eco_mode_enabled" {% if eco_mode_enabled %}checked{% endif %} onchange="toggleEcoOptions(this)">
-        <span>Enable Eco Mode</span>
+        <input type="checkbox" name="cloud_enabled" {% if cloud_enabled %}checked{% endif %}>
+        <span>Enable cloud connection</span>
       </label>
     </div>
-
-    <div id="ecoModeOptions" style="{% if not eco_mode_enabled %}opacity:0.5;pointer-events:none;{% endif %}">
-      <div class="settings-divider"></div>
-
-      <div class="settings-section">
-        <h4 class="settings-section__title">Sleep After</h4>
-        <div class="input-row">
-          <input type="range" name="eco_timeout_minutes" id="ecoTimeout" min="1" max="60" value="{{ eco_timeout_minutes }}" oninput="updateTimeoutLabel(this)">
-          <span id="ecoTimeoutLabel" style="min-width:60px;text-align:right;">{{ eco_timeout_minutes }} min</span>
-        </div>
-      </div>
-
-      <div class="settings-divider"></div>
-
-      <div class="settings-section">
-        <h4 class="settings-section__title">Dimmed Brightness</h4>
-        <div class="input-row">
-          <input type="range" name="eco_brightness_percent" id="ecoBrightness" min="0" max="100" step="5" value="{{ eco_brightness_percent }}" oninput="updateBrightnessLabel(this)">
-          <span id="ecoBrightnessLabel" style="min-width:50px;text-align:right;">{{ eco_brightness_percent }}%</span>
-        </div>
-        <p class="form-hint mt-1">0% = fully dark overlay, 100% = no dimming</p>
-      </div>
-
-      <div class="settings-divider"></div>
-
-      <div class="settings-section">
-        <label class="checkbox-label">
-          <input type="checkbox" name="eco_wake_on_touch" {% if eco_wake_on_touch %}checked{% endif %}>
-          <span>Wake on touch/click</span>
-        </label>
-      </div>
-    </div>
-
-    <button class="btn btn--full mt-3" type="submit">Save Eco Settings</button>
+    <button class="btn btn--full mt-3" type="submit">Save Cloud Setting</button>
   </form>
 </div>
-
-<script>
-function toggleEcoOptions(checkbox) {
-  const options = document.getElementById('ecoModeOptions');
-  if (checkbox.checked) {
-    options.style.opacity = '1';
-    options.style.pointerEvents = 'auto';
-  } else {
-    options.style.opacity = '0.5';
-    options.style.pointerEvents = 'none';
-  }
-}
-
-function updateTimeoutLabel(input) {
-  document.getElementById('ecoTimeoutLabel').textContent = input.value + ' min';
-}
-
-function updateBrightnessLabel(input) {
-  document.getElementById('ecoBrightnessLabel').textContent = input.value + '%';
-}
-</script>
 
 <!-- ===== PROTECTED SETTINGS ===== -->
 <div class="card">

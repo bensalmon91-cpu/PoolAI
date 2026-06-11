@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import random
+import socket
 import sys
 import time
 from pathlib import Path
@@ -157,6 +158,9 @@ def provision(settings, force=False):
     payload = {
         "device_id": device_id,
         "device_alias": device_alias,
+        # pi_devices.name is NOT NULL server-side; hostname gives the server
+        # a sane device name even when no alias has been set yet.
+        "hostname": socket.gethostname(),
     }
 
     # Retry loop
