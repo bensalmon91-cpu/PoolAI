@@ -24,14 +24,19 @@ this commit **stays live on the server** until someone removes it by hand.
 The exact server paths to remove are listed in the
 [Server-side cleanup pass](#server-side-cleanup-pass) section below.
 
-### 2. Two live, unauthenticated endpoints need URGENT server-side removal
+### 2. Two live, unauthenticated endpoints — ✅ REMOVED FROM SERVER 2026-06-12
 
-| URL | Problem | Live check (2026-06-12) |
+| URL | Problem | Status |
 |---|---|---|
-| `https://admin.modprojects.co.uk/admin/setup.php` | **No auth. Creates admin users.** Only guards against duplicate usernames — does NOT lock out once an admin exists. Header says "Delete this file after setup!" but it was never deleted. | HTTP 200, form renders |
-| `https://poolaissistant.modprojects.co.uk/api/updates/add.php` | **No auth. Inserts rows into `software_updates`.** An attacker who can also place a tarball (or point at any reachable file) could queue a malicious "update" for the fleet; update signature enforcement is still in permissive rollout mode (`REQUIRE_SIGNATURE_DEFAULT = False`). Header says "should be protected or removed after use". | HTTP 400 (live, parses params) |
+| `https://admin.modprojects.co.uk/admin/setup.php` | **No auth. Creates admin users.** Only guards against duplicate usernames — does NOT lock out once an admin exists. Header says "Delete this file after setup!" but it was never deleted. | Found HTTP 200 → **deleted via admin FTP, verified 404** |
+| `https://poolaissistant.modprojects.co.uk/api/updates/add.php` | **No auth. Inserts rows into `software_updates`.** An attacker who can also place a tarball (or point at any reachable file) could queue a malicious "update" for the fleet; update signature enforcement is still in permissive rollout mode (`REQUIRE_SIGNATURE_DEFAULT = False`). Header says "should be protected or removed after use". | Found HTTP 400 (live) → **deleted via one-shot cleaner, verified 404**. Legacy `api/add_update.php` probed: not present. |
 
-Delete these from the server **before** worrying about anything else in this plan.
+**Bonus findings removed the same day:** three unauthenticated
+`deploy_fix_*.php` one-shots at the poolai docroot root (each HTTP hit
+re-wrote API files in the poolaissistant docroot with code embedded at
+write-time — a public regression button). Deleted via FTP, verified 404.
+A stale `update-v6.9.5.tar.gz` also sits at the poolai docroot root —
+harmless but worth removing on the next cleanup pass.
 
 ### 3. The server has Pi-critical files that are NOT in git
 
@@ -177,12 +182,17 @@ actually use it; if not, this is ~6 files + 4 assets of removable surface.**
 
 After this commit merges and deploys, remove by hand (FTP / hPanel file manager):
 
-**URGENT (security):**
-```
-admin.modprojects.co.uk docroot:      admin/setup.php
-poolaissistant docroot:               api/updates/add.php
-  (= /home/u931726538/domains/modprojects.co.uk/public_html/poolaissistant/api/updates/add.php)
-```
+**URGENT (security): ✅ DONE 2026-06-12** — `admin/setup.php` (admin docroot) and
+`api/updates/add.php` (poolaissistant docroot) deleted and verified 404, plus the
+three `deploy_fix_*.php` one-shots at the poolai docroot.
+
+**FTP layout discovered while doing it (corrects earlier docs):**
+- admin FTP chroot **root** IS the admin docroot (`/admin/...`, not
+  `public_html/...` — the empty `/public_html` dir there is an artifact).
+- mbs FTP chroot root is the **poolai.\*** docroot. The poolaissistant docroot is
+  NOT FTP-reachable; server-side deletions there need the one-shot self-deleting
+  PHP pattern (upload via mbs FTP, execute via `https://poolai.*/<file>.php`).
+- `.env` files at both docroots are blocked by `.htaccess` (verified 403).
 
 **Routine (dead code):**
 ```
