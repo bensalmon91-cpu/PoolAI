@@ -36,6 +36,7 @@ DATA_DIR = Path(os.environ.get("POOLDASH_DATA_DIR", "/opt/PoolAIssistant/data"))
 SETTINGS_PATH = Path(os.environ.get("POOLDASH_SETTINGS_PATH", DATA_DIR / "pooldash_settings.json"))
 POOL_DB_PATH = Path(os.environ.get("POOL_DB_PATH", DATA_DIR / "pool_readings.sqlite3"))
 CLEANUP_SCRIPT = SCRIPT_DIR / "data_cleanup.py"
+CHUNK_SCRIPT = SCRIPT_DIR / "chunk_manager.py"
 
 # Monitor settings
 CHECK_INTERVAL_SECONDS = 300  # Check every 5 minutes
@@ -110,13 +111,60 @@ def get_storage_info():
     return info
 
 
-def run_cleanup(reason: str, aggressive: bool = False):
-    """Run the cleanup script.
+def run_chunk_sync():
+    """Best-effort: push history chunks to the cloud before cleanup deletes rows.
 
-    Cloud copies of the data are maintained continuously by the snapshot
-    (cloud_upload) and chunk (chunk_manager) timers — the old pre-cleanup
-    remote_sync pass was retired 2026-06-12.
+    Snapshots (cloud_upload) keep the *latest* readings in the cloud
+    continuously, but full-resolution history only reaches the cloud as weekly
+    chunks on chunk_manager's own timer. Under sustained disk pressure cleanup
+    could delete rows before that timer fires, so we push any pending chunks
+    here first. Replaces the pre-cleanup remote_sync pass retired 2026-06-12.
+
+    chunk_manager self-guards on cloud_enabled and a missing API key; we still
+    skip early when clearly unconfigured to avoid a pointless subprocess. Never
+    raises — a failed sync must not block disk recovery.
     """
+    settings = load_settings()
+    if not settings.get("cloud_enabled", True):
+        log.info("Cloud disabled (cloud_enabled=false) - skipping pre-cleanup chunk sync")
+        return False
+    if not settings.get("remote_api_key"):
+        log.info("No API key - skipping pre-cleanup chunk sync")
+        return False
+    if not CHUNK_SCRIPT.exists():
+        log.warning(f"Chunk manager not found: {CHUNK_SCRIPT}")
+        return False
+
+    log.info("Uploading history chunks before cleanup...")
+    try:
+        result = subprocess.run(
+            [sys.executable, str(CHUNK_SCRIPT)],
+            capture_output=True,
+            text=True,
+            timeout=600,  # 10 minute timeout for chunk create + upload
+            cwd=str(SCRIPT_DIR.parent),
+            env={
+                **os.environ,
+                "POOLDASH_SETTINGS_PATH": str(SETTINGS_PATH),
+                "POOL_DB_PATH": str(POOL_DB_PATH),
+                "POOLDASH_DATA_DIR": str(DATA_DIR),
+            },
+        )
+        if result.returncode == 0:
+            log.info("Pre-cleanup chunk sync completed")
+            return True
+        log.error(f"Pre-cleanup chunk sync failed (exit {result.returncode}): {result.stderr.strip()}")
+        return False
+    except subprocess.TimeoutExpired:
+        log.error("Pre-cleanup chunk sync timed out")
+        return False
+    except Exception as e:
+        log.error(f"Pre-cleanup chunk sync error: {e}")
+        return False
+
+
+def run_cleanup(reason: str, aggressive: bool = False):
+    """Run the cleanup script, syncing history chunks to the cloud first."""
     global last_cleanup_time
 
     # Check if we've run cleanup recently
@@ -127,6 +175,9 @@ def run_cleanup(reason: str, aggressive: bool = False):
             return False
 
     log.warning(f"{'EMERGENCY ' if aggressive else ''}Cleanup triggered: {reason}")
+
+    # Push any un-uploaded history chunks to the cloud before deleting rows.
+    run_chunk_sync()
 
     if not CLEANUP_SCRIPT.exists():
         log.error(f"Cleanup script not found: {CLEANUP_SCRIPT}")
