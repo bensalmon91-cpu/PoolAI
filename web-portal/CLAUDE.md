@@ -13,14 +13,21 @@ This is the server-side component that handles device provisioning, software upd
   User: u931726538.mbs
   Pass: Henley2026!
 
-  NOTE (corrected 2026-06-11, verified empirically): the u931726538.mbs FTP
-  chroot now lands DIRECTLY in the poolaissistant.modprojects.co.uk docroot
-  (a file STOR'd to / is served at https://poolaissistant.modprojects.co.uk/).
-  Earlier docs claimed it was chrooted to poolai.* and required a cross-chroot
-  copy() hop for poolaissistant deploys - that is no longer true. Single-file
-  API fixes can be FTP'd straight to api/<file>.php.
+  NOTE (re-verified 2026-06-12 by full NLST listing): the u931726538.mbs FTP
+  chroot root IS the poolai.modprojects.co.uk docroot (portal pages,
+  service-worker.js, manifest.json all live at /). The original docs were
+  right; the 2026-06-11 "lands in poolaissistant docroot" correction was
+  wrong - that day's one-shots executed fine because files STOR'd here are
+  served at https://poolai.*/<file>.php, and the scripts copy()/unlink()
+  into the poolaissistant docroot by absolute path. So: poolaissistant.*
+  deploys/deletions still need the one-shot self-deleting PHP pattern
+  (upload via mbs FTP, execute via https://poolai.*/<file>.php).
+  The admin.* FTP chroot root IS the admin docroot (/admin/..., /api/...);
+  the empty /public_html dir there is an artifact - ignore it.
   Also: curl FTPS uploads fail (error 56) from this network; use Python
-  ftplib.FTP_TLS with prot_p() like deploy.py does.
+  ftplib.FTP_TLS with prot_p() like deploy.py does. (Hostinger's FTPS cert
+  fails TLS verification - deploy.py's CERT_NONE workaround is still
+  required; try verified first if revisiting.)
 
 === URLS ===
 API backend: https://poolaissistant.modprojects.co.uk  (Pi API + customer-portal API; no browser pages)
