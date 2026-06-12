@@ -50,6 +50,35 @@ def _smart_link_qr(device_id: str, backend_url: str):
         return url, ""
 
 
+# ---- Update check (must never block a page render) ----
+# The update check talks to the cloud server and can take 30s+ when the
+# server is unreachable. Page renders only ever read the cached status file;
+# the check itself runs as a detached subprocess tracked here.
+_update_check_proc = None
+_update_check_lock = threading.Lock()
+
+
+def _read_update_status():
+    """Read the cached update status JSON written by scripts/update_check.py.
+
+    Never does network I/O — this is the only update info a page render may use.
+    """
+    update_status_path = os.getenv("UPDATE_STATUS_PATH", "/opt/PoolAIssistant/data/update_status.json")
+    if update_status_path and os.path.exists(update_status_path):
+        try:
+            with open(update_status_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _update_check_running():
+    """True while the detached update-check subprocess is still running."""
+    with _update_check_lock:
+        return _update_check_proc is not None and _update_check_proc.poll() is None
+
+
 # ---- Network info cache (avoid slow subprocess calls on every page load) ----
 _net_cache = {"ssid": "", "wlan_ip": "", "eth_ip": "", "ts": 0}
 _net_cache_ttl = 10  # Cache for 10 seconds (short enough that a dropped WiFi is visible on next page load)
@@ -775,14 +804,7 @@ def settings():
         "UPLOAD_INTERVAL_MINUTES": current_app.config.get("UPLOAD_INTERVAL_MINUTES", 10),
     }
 
-    update_status_path = os.getenv("UPDATE_STATUS_PATH", "/opt/PoolAIssistant/data/update_status.json")
-    update_status = {}
-    if update_status_path and os.path.exists(update_status_path):
-        try:
-            with open(update_status_path, "r", encoding="utf-8") as f:
-                update_status = json.load(f)
-        except Exception:
-            update_status = {}
+    update_status = _read_update_status()
 
     ssid, wlan_ip, eth_ip = _get_cached_network_info()
     device_ip = _primary_device_ip()
@@ -2783,24 +2805,42 @@ def update_backend_credentials():
 
 @main_bp.route("/settings/check_update", methods=["POST"])
 def check_update():
+    """Start an update check in the background and return immediately.
+
+    The check can block 30s+ when the cloud server is unreachable, so it must
+    never run inside the request. The page polls /settings/update_check_status
+    and re-renders from the cached status file once the check finishes.
+    """
+    global _update_check_proc
     script_path = Path(__file__).resolve().parents[2] / "scripts" / "update_check.py"
     if not script_path.exists():
         flash("Update check script not found.")
         return redirect(url_for("main.system_page"))
 
-    try:
-        subprocess.run(
-            ["python3", str(script_path)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        flash("Update check complete.")
-    except subprocess.CalledProcessError as e:
-        flash(f"Update check failed: {e.stderr or e.stdout or e}")
-    except Exception as e:
-        flash(f"Update check failed: {e}")
+    with _update_check_lock:
+        if _update_check_proc is not None and _update_check_proc.poll() is None:
+            flash("An update check is already running.")
+            return redirect(url_for("main.system_page"))
+        try:
+            _update_check_proc = subprocess.Popen(
+                ["python3", str(script_path)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            flash("Checking for updates... results will appear below shortly.")
+        except Exception as e:
+            flash(f"Update check failed to start: {e}")
     return redirect(url_for("main.system_page"))
+
+
+@main_bp.route("/settings/update_check_status")
+def update_check_status():
+    """AJAX endpoint: is a check running, plus the cached status file."""
+    return {
+        "ok": True,
+        "running": _update_check_running(),
+        "status": _read_update_status(),
+    }
 
 
 @main_bp.route("/settings/apply_update", methods=["POST"])
@@ -3673,15 +3713,8 @@ def system_page():
     """System settings page (updates, storage, screen, protected settings)."""
     data = _persisted()
 
-    # Get update status
-    update_status_path = os.getenv("UPDATE_STATUS_PATH", "/opt/PoolAIssistant/data/update_status.json")
-    update_status = {}
-    if update_status_path and os.path.exists(update_status_path):
-        try:
-            with open(update_status_path, "r", encoding="utf-8") as f:
-                update_status = json.load(f)
-        except Exception:
-            update_status = {}
+    # Get update status (cached file only — never network I/O in a render)
+    update_status = _read_update_status()
 
     # Get storage info
     storage_info = _get_storage_info()
@@ -4566,7 +4599,7 @@ def setup_check_updates():
         response = requests.get(
             f"{backend_url}/api/check_updates.php",
             params={"version": current_version},
-            timeout=10,
+            timeout=3,
         )
 
         if response.status_code == 200:

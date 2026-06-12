@@ -106,6 +106,7 @@ document.querySelectorAll('input[name="appearance_accent_color"]').forEach(input
       <button class="btn btn--sm btn--secondary">Check for Updates</button>
     </form>
   </div>
+  <p id="updateCheckProgress" class="form-hint mt-2" style="display:none">Checking for updates&hellip;</p>
   {% if update_status and update_status.update_available and update_status.download_path %}
   <form method="post" action="{{ url_for('main.apply_update') }}" class="mt-2" onsubmit="return confirm('Apply update to v{{ update_status.version }}? The service will restart.')">
     <button class="btn btn--full btn--primary">Apply Update (v{{ update_status.version }})</button>
@@ -148,6 +149,26 @@ document.querySelectorAll('input[name="appearance_accent_color"]').forEach(input
 {% endif %}
 
 <script>
+(function() {
+  // Poll while a background update check is running, then re-render the page
+  // so the fresh status (from update_status.json) appears. No-op when idle.
+  function pollUpdateCheck() {
+    fetch('/settings/update_check_status')
+      .then(r => r.json())
+      .then(data => {
+        const progress = document.getElementById('updateCheckProgress');
+        if (data.running) {
+          progress.style.display = '';
+          setTimeout(pollUpdateCheck, 2000);
+        } else if (progress.style.display !== 'none') {
+          location.reload();
+        }
+      })
+      .catch(() => {});
+  }
+  pollUpdateCheck();
+})();
+
 (function() {
   fetch('/settings/update_timer_status')
     .then(r => r.json())
