@@ -129,7 +129,6 @@ sudo tee "$DATA_DIR/pooldash_settings.json" > /dev/null <<'EOF'
   "ezetrol_layout": "CDAB",
   "device_id": "",
   "device_alias": "",
-  "remote_sync_enabled": false,
   "remote_api_key": "",
   "data_retention_enabled": true,
   "screen_rotation": 0,

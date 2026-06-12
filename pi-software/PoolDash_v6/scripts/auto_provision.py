@@ -184,10 +184,9 @@ def provision(settings, force=False):
                     was_new = result.get("provisioned", False)
 
                     if new_api_key:
-                        # Save the API key and enable sync
+                        # Save the API key (remote_sync_* legacy keys retired
+                        # 2026-06-12 - uploads ride cloud_upload/chunk timers)
                         settings["remote_api_key"] = new_api_key
-                        settings["remote_sync_enabled"] = True
-                        settings["remote_sync_url"] = backend_url
 
                         if device_name and not device_alias:
                             settings["device_alias"] = device_name

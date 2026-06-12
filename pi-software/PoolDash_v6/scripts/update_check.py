@@ -753,6 +753,46 @@ def apply_update(archive_path):
         except Exception as e:
             print(f"  Warning: timer reconciliation failed: {e}")
 
+        # Retire legacy units — the inverse of the self-heal above. Units we
+        # have deliberately removed from the codebase must also be stopped
+        # and removed on already-deployed Pis, or they keep firing forever.
+        # remote_sync was superseded by cloud_upload (snapshots) +
+        # chunk_manager (history chunks) and retired 2026-06-12.
+        retired_units = [
+            "poolaissistant_remote_sync.timer",
+            "poolaissistant_remote_sync.service",
+        ]
+        print("Removing retired systemd units...")
+        try:
+            removed = []
+            for unit in retired_units:
+                unit_path = Path("/etc/systemd/system") / unit
+                if not unit_path.exists():
+                    continue
+                subprocess.run(
+                    ["sudo", "systemctl", "stop", unit],
+                    capture_output=True, text=True, timeout=30
+                )
+                subprocess.run(
+                    ["sudo", "systemctl", "disable", unit],
+                    capture_output=True, text=True, timeout=30
+                )
+                subprocess.run(
+                    ["sudo", "rm", "-f", str(unit_path)],
+                    capture_output=True, text=True, timeout=15
+                )
+                removed.append(unit)
+            if removed:
+                subprocess.run(
+                    ["sudo", "systemctl", "daemon-reload"],
+                    capture_output=True, text=True, timeout=30
+                )
+                print(f"  Retired: {', '.join(removed)}")
+            else:
+                print("  No retired units present")
+        except Exception as e:
+            print(f"  Warning: retired-unit cleanup failed: {e}")
+
         # Self-heal the SSH guard unit. Older Pis shipped with a unit that had
         # After=network.target + DefaultDependencies=no, which left SSH unable
         # to come up for hours when network.target was delayed by a flaky

@@ -407,13 +407,8 @@ def _persisted():
     current_app.config["UPLOAD_INTERVAL_MINUTES"] = data.get("upload_interval_minutes", 10)
     current_app.config["BACKEND_URL"] = data.get("backend_url", "")
     current_app.config["BOOTSTRAP_SECRET"] = data.get("bootstrap_secret", "")
-    # Remote sync settings
-    current_app.config["REMOTE_SYNC_ENABLED"] = data.get("remote_sync_enabled", False)
-    current_app.config["REMOTE_SYNC_URL"] = data.get("remote_sync_url", "https://modprojects.co.uk")
+    # Device API key (set by auto-provisioning, used by all cloud uploads)
     current_app.config["REMOTE_API_KEY"] = data.get("remote_api_key", "")
-    current_app.config["REMOTE_SYNC_SCHEDULE"] = data.get("remote_sync_schedule", "3days")
-    current_app.config["REMOTE_SYNC_INTERVAL_HOURS"] = data.get("remote_sync_interval_hours", 72)
-    current_app.config["LAST_REMOTE_SYNC_TS"] = data.get("last_remote_sync_ts", "")
     # Data retention settings
     current_app.config["DATA_RETENTION_ENABLED"] = data.get("data_retention_enabled", True)
     current_app.config["DATA_RETENTION_FULL_DAYS"] = data.get("data_retention_full_days", 30)
@@ -439,13 +434,8 @@ def _save_persisted(data):
     current_app.config["UPLOAD_INTERVAL_MINUTES"] = data.get("upload_interval_minutes", 10)
     current_app.config["BACKEND_URL"] = data.get("backend_url", "")
     current_app.config["BOOTSTRAP_SECRET"] = data.get("bootstrap_secret", "")
-    # Remote sync settings
-    current_app.config["REMOTE_SYNC_ENABLED"] = data.get("remote_sync_enabled", False)
-    current_app.config["REMOTE_SYNC_URL"] = data.get("remote_sync_url", "https://modprojects.co.uk")
+    # Device API key (set by auto-provisioning, used by all cloud uploads)
     current_app.config["REMOTE_API_KEY"] = data.get("remote_api_key", "")
-    current_app.config["REMOTE_SYNC_SCHEDULE"] = data.get("remote_sync_schedule", "3days")
-    current_app.config["REMOTE_SYNC_INTERVAL_HOURS"] = data.get("remote_sync_interval_hours", 72)
-    current_app.config["LAST_REMOTE_SYNC_TS"] = data.get("last_remote_sync_ts", "")
     # Data retention settings
     current_app.config["DATA_RETENTION_ENABLED"] = data.get("data_retention_enabled", True)
     current_app.config["DATA_RETENTION_FULL_DAYS"] = data.get("data_retention_full_days", 30)
@@ -843,12 +833,6 @@ def settings():
         device_alias=data.get("device_alias", ""),
         screen_rotation=data.get("screen_rotation", 0),
         chart_max_points=data.get("chart_max_points", 5000),
-        remote_sync_enabled=data.get("remote_sync_enabled", False),
-        remote_sync_url=data.get("remote_sync_url", "https://modprojects.co.uk"),
-        remote_api_key=data.get("remote_api_key", ""),
-        remote_sync_schedule=data.get("remote_sync_schedule", "3days"),
-        remote_sync_interval_hours=data.get("remote_sync_interval_hours", 72),
-        last_remote_sync_ts=data.get("last_remote_sync_ts", ""),
         data_retention_enabled=data.get("data_retention_enabled", True),
         data_retention_full_days=data.get("data_retention_full_days", 30),
         data_retention_hourly_days=data.get("data_retention_hourly_days", 90),
@@ -3193,53 +3177,6 @@ def advanced_settings():
     return redirect(url_for("main.settings"))
 
 
-@main_bp.route("/settings/advanced/remote_sync", methods=["POST"])
-def update_remote_sync():
-    """Update remote sync settings."""
-    action = (request.form.get("action") or "").strip().lower()
-    data = _persisted()
-
-    if action == "reset":
-        data["remote_sync_enabled"] = False
-        data["remote_sync_url"] = "https://modprojects.co.uk"
-        data["remote_api_key"] = ""
-        data["remote_sync_schedule"] = "3days"
-        data["remote_sync_interval_hours"] = 72
-        _save_persisted(data)
-        flash("Remote sync settings reset to defaults.")
-        return redirect(url_for("main.settings"))
-
-    # Update settings
-    data["remote_sync_enabled"] = request.form.get("remote_sync_enabled") == "on"
-    data["remote_sync_url"] = (request.form.get("remote_sync_url") or "https://modprojects.co.uk").strip()
-    data["remote_api_key"] = (request.form.get("remote_api_key") or "").strip()
-
-    schedule = (request.form.get("remote_sync_schedule") or "3days").strip()
-    if schedule not in ("daily", "3days", "weekly", "custom"):
-        schedule = "3days"
-    data["remote_sync_schedule"] = schedule
-
-    # Set interval based on schedule
-    schedule_hours = {"daily": 24, "3days": 72, "weekly": 168}
-    if schedule == "custom":
-        try:
-            data["remote_sync_interval_hours"] = max(1, int(request.form.get("remote_sync_interval_hours") or 72))
-        except ValueError:
-            data["remote_sync_interval_hours"] = 72
-    else:
-        data["remote_sync_interval_hours"] = schedule_hours.get(schedule, 72)
-
-    # Validate URL
-    if data["remote_sync_enabled"] and data["remote_sync_url"]:
-        if not data["remote_sync_url"].startswith("http"):
-            flash("Remote sync URL must start with http or https.")
-            return redirect(url_for("main.settings"))
-
-    _save_persisted(data)
-    flash("Remote sync settings updated.")
-    return redirect(url_for("main.settings"))
-
-
 @main_bp.route("/settings/advanced/data_retention", methods=["POST"])
 def update_data_retention():
     """Update data retention settings."""
@@ -3470,41 +3407,6 @@ def update_chart_performance():
 
     _save_persisted(data)
     flash(f"Chart limit set to {data['chart_max_points']} points.")
-    return redirect(url_for("main.settings"))
-
-
-@main_bp.route("/settings/advanced/sync_now", methods=["POST"])
-def trigger_remote_sync():
-    """Manually trigger a remote sync using chunked uploads."""
-    # Use chunk manager for large databases (safer, resumable)
-    chunk_script = Path(__file__).resolve().parents[2] / "scripts" / "chunk_manager.py"
-    legacy_script = Path(__file__).resolve().parents[2] / "scripts" / "remote_sync.py"
-
-    # Prefer chunk manager if available
-    if chunk_script.exists():
-        script_path = chunk_script
-        script_args = []  # chunk_manager handles everything
-    elif legacy_script.exists():
-        script_path = legacy_script
-        script_args = ["--force"]
-    else:
-        flash("Sync script not found.")
-        return redirect(url_for("main.settings"))
-
-    def _do_sync():
-        try:
-            subprocess.run(
-                ["python3", str(script_path)] + script_args,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=600,  # 10 minutes for chunked upload
-            )
-        except Exception:
-            pass
-
-    threading.Thread(target=_do_sync, name="pooldash_remote_sync", daemon=True).start()
-    flash("Sync started in background. Data will be uploaded in compressed weekly chunks.")
     return redirect(url_for("main.settings"))
 
 
@@ -3743,12 +3645,6 @@ def system_page():
         ezetrol_channel_map=current_app.config.get("EZETROL_CHANNEL_MAP", {}),
         ezetrol_layout=current_app.config.get("EZETROL_LAYOUT", "CDAB"),
         chart_max_points=data.get("chart_max_points", 5000),
-        remote_sync_enabled=data.get("remote_sync_enabled", False),
-        remote_sync_url=data.get("remote_sync_url", "https://modprojects.co.uk"),
-        remote_api_key=data.get("remote_api_key", ""),
-        remote_sync_schedule=data.get("remote_sync_schedule", "3days"),
-        remote_sync_interval_hours=data.get("remote_sync_interval_hours", 72),
-        last_remote_sync_ts=data.get("last_remote_sync_ts", ""),
         data_retention_enabled=data.get("data_retention_enabled", True),
         data_retention_full_days=data.get("data_retention_full_days", 30),
         data_retention_hourly_days=data.get("data_retention_hourly_days", 90),
