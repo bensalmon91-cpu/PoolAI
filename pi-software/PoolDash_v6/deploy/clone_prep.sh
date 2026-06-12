@@ -361,7 +361,6 @@ sudo tee "$DATA_DIR/pooldash_settings.json" > /dev/null <<'EOF'
   "device_id": "",
   "device_alias": "",
   "device_name": "",
-  "remote_sync_enabled": false,
   "screen_rotation": 0,
   "maintenance_actions": [
     "Backwash Filter",

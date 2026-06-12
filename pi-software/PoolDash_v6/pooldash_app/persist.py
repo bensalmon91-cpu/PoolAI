@@ -88,13 +88,10 @@ DEFAULTS = {
     "device_alias": "",           # Human-friendly name (e.g., "Leisure Centre Pool")
     "device_alias_updated_at": "",  # ISO timestamp of last alias change (for sync)
 
-    # Remote sync settings (MOD Projects backend)
-    "remote_sync_enabled": False,
-    "remote_sync_url": "https://poolaissistant.modprojects.co.uk",
+    # Device API key (set by auto-provisioning, used by all cloud uploads).
+    # The legacy remote_sync_* keys were retired 2026-06-12 — old settings
+    # files may still contain them; they are ignored and dropped on save.
     "remote_api_key": "",
-    "remote_sync_schedule": "3days",  # "daily", "3days", "weekly", "custom"
-    "remote_sync_interval_hours": 72,  # used when schedule is "custom"
-    "last_remote_sync_ts": "",
 
     # Data retention / thinning settings
     "data_retention_enabled": True,
@@ -230,19 +227,9 @@ def load(app_instance_path: str) -> Dict[str, Any]:
         if not isinstance(merged.get("device_alias_updated_at"), str):
             merged["device_alias_updated_at"] = ""
 
-        # Remote sync settings
-        if not isinstance(merged.get("remote_sync_enabled"), bool):
-            merged["remote_sync_enabled"] = DEFAULTS["remote_sync_enabled"]
-        if not isinstance(merged.get("remote_sync_url"), str):
-            merged["remote_sync_url"] = DEFAULTS["remote_sync_url"]
+        # Device API key
         if not isinstance(merged.get("remote_api_key"), str):
             merged["remote_api_key"] = ""
-        if merged.get("remote_sync_schedule") not in ("daily", "3days", "weekly", "custom"):
-            merged["remote_sync_schedule"] = DEFAULTS["remote_sync_schedule"]
-        if not isinstance(merged.get("remote_sync_interval_hours"), int):
-            merged["remote_sync_interval_hours"] = DEFAULTS["remote_sync_interval_hours"]
-        if not isinstance(merged.get("last_remote_sync_ts"), str):
-            merged["last_remote_sync_ts"] = ""
 
         # Data retention settings
         if not isinstance(merged.get("data_retention_enabled"), bool):
@@ -480,13 +467,8 @@ def save(app_instance_path: str, data: Dict[str, Any]) -> Path:
         "device_name": (data.get("device_name") or "").strip()[:12],  # Hostname suffix, max 12 chars
         "device_alias": (data.get("device_alias") or "").strip(),
         "device_alias_updated_at": (data.get("device_alias_updated_at") or "").strip(),
-        # Remote sync settings
-        "remote_sync_enabled": bool(data.get("remote_sync_enabled", DEFAULTS["remote_sync_enabled"])),
-        "remote_sync_url": (data.get("remote_sync_url") or DEFAULTS["remote_sync_url"]).strip(),
+        # Device API key
         "remote_api_key": (data.get("remote_api_key") or "").strip(),
-        "remote_sync_schedule": data.get("remote_sync_schedule") or DEFAULTS["remote_sync_schedule"],
-        "remote_sync_interval_hours": int(data.get("remote_sync_interval_hours") or DEFAULTS["remote_sync_interval_hours"]),
-        "last_remote_sync_ts": (data.get("last_remote_sync_ts") or "").strip(),
         # Data retention settings
         "data_retention_enabled": bool(data.get("data_retention_enabled", DEFAULTS["data_retention_enabled"])),
         "data_retention_full_days": int(data.get("data_retention_full_days") or DEFAULTS["data_retention_full_days"]),

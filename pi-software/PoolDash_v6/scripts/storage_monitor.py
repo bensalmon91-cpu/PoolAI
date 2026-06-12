@@ -36,7 +36,6 @@ DATA_DIR = Path(os.environ.get("POOLDASH_DATA_DIR", "/opt/PoolAIssistant/data"))
 SETTINGS_PATH = Path(os.environ.get("POOLDASH_SETTINGS_PATH", DATA_DIR / "pooldash_settings.json"))
 POOL_DB_PATH = Path(os.environ.get("POOL_DB_PATH", DATA_DIR / "pool_readings.sqlite3"))
 CLEANUP_SCRIPT = SCRIPT_DIR / "data_cleanup.py"
-SYNC_SCRIPT = SCRIPT_DIR / "remote_sync.py"
 
 # Monitor settings
 CHECK_INTERVAL_SECONDS = 300  # Check every 5 minutes
@@ -48,7 +47,6 @@ EMERGENCY_FREE_MB = 200       # Aggressive cleanup when less than 200MB free
 # State
 running = True
 last_cleanup_time = None
-last_sync_time = None
 MIN_CLEANUP_INTERVAL = 1800   # Don't run cleanup more than once per 30 minutes
 
 
@@ -62,8 +60,6 @@ def signal_handler(signum, frame):
 def load_settings():
     """Load settings from JSON file."""
     defaults = {
-        "remote_sync_enabled": False,
-        "remote_sync_url": "",
         "remote_api_key": "",
     }
 
@@ -114,54 +110,13 @@ def get_storage_info():
     return info
 
 
-def run_sync():
-    """Sync data to remote server before cleanup."""
-    global last_sync_time
-
-    settings = load_settings()
-    if not settings.get("remote_sync_enabled") or not settings.get("remote_api_key"):
-        log.info("Remote sync not configured - skipping sync before cleanup")
-        return False
-
-    if not SYNC_SCRIPT.exists():
-        log.warning(f"Sync script not found: {SYNC_SCRIPT}")
-        return False
-
-    log.info("Syncing data to remote server before cleanup...")
-
-    try:
-        result = subprocess.run(
-            [sys.executable, str(SYNC_SCRIPT), "--force"],
-            capture_output=True,
-            text=True,
-            timeout=600,  # 10 minute timeout for sync
-            cwd=str(SCRIPT_DIR.parent),
-            env={
-                **os.environ,
-                "POOLDASH_SETTINGS_PATH": str(SETTINGS_PATH),
-                "POOL_DB_PATH": str(POOL_DB_PATH),
-                "POOLDASH_DATA_DIR": str(DATA_DIR),
-            }
-        )
-
-        if result.returncode == 0:
-            log.info("Remote sync completed successfully")
-            last_sync_time = time.time()
-            return True
-        else:
-            log.error(f"Remote sync failed: {result.stderr}")
-            return False
-
-    except subprocess.TimeoutExpired:
-        log.error("Remote sync timed out")
-        return False
-    except Exception as e:
-        log.error(f"Failed to run sync: {e}")
-        return False
-
-
 def run_cleanup(reason: str, aggressive: bool = False):
-    """Run the cleanup script. Always sync first if configured."""
+    """Run the cleanup script.
+
+    Cloud copies of the data are maintained continuously by the snapshot
+    (cloud_upload) and chunk (chunk_manager) timers — the old pre-cleanup
+    remote_sync pass was retired 2026-06-12.
+    """
     global last_cleanup_time
 
     # Check if we've run cleanup recently
@@ -172,9 +127,6 @@ def run_cleanup(reason: str, aggressive: bool = False):
             return False
 
     log.warning(f"{'EMERGENCY ' if aggressive else ''}Cleanup triggered: {reason}")
-
-    # ALWAYS try to sync before deleting data
-    run_sync()
 
     if not CLEANUP_SCRIPT.exists():
         log.error(f"Cleanup script not found: {CLEANUP_SCRIPT}")

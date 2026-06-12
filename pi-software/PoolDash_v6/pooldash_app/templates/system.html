@@ -450,58 +450,6 @@ document.querySelectorAll('input[name="screen_rotation"]').forEach(input => {
 
     <div class="settings-divider"></div>
 
-    <!-- Remote Sync -->
-    <div class="settings-section">
-      <h4 class="settings-section__title">Remote Sync (MOD Projects)</h4>
-      <p class="form-hint mb-2">
-        Upload database snapshots to your MOD Projects dashboard.
-        {% if last_remote_sync_ts %}<br><small>Last sync: {{ last_remote_sync_ts }}</small>{% endif %}
-      </p>
-      <form method="post" action="{{ url_for('main.update_remote_sync') }}">
-        <div class="form-stack">
-          <label class="checkbox-label">
-            <input type="checkbox" name="remote_sync_enabled" {% if remote_sync_enabled %}checked{% endif %}>
-            <span>Enable remote sync</span>
-          </label>
-          <div class="form-field">
-            <label>Server URL</label>
-            <input type="url" name="remote_sync_url" value="{{ remote_sync_url }}" placeholder="https://...">
-          </div>
-          <div class="form-field">
-            <label>API Key</label>
-            <input type="text" name="remote_api_key" value="{{ remote_api_key }}" placeholder="64-character key" class="mono text-sm">
-          </div>
-          <div class="form-field">
-            <label>Schedule</label>
-            <select name="remote_sync_schedule" id="syncSchedule" onchange="toggleCustomInterval()">
-              <option value="daily" {% if remote_sync_schedule == 'daily' %}selected{% endif %}>Daily</option>
-              <option value="3days" {% if remote_sync_schedule == '3days' %}selected{% endif %}>Every 3 days</option>
-              <option value="weekly" {% if remote_sync_schedule == 'weekly' %}selected{% endif %}>Weekly</option>
-              <option value="custom" {% if remote_sync_schedule == 'custom' %}selected{% endif %}>Custom</option>
-            </select>
-          </div>
-          <div id="customIntervalDiv" class="form-field" style="{% if remote_sync_schedule != 'custom' %}display:none;{% endif %}">
-            <label>Custom interval (hours)</label>
-            <input type="number" name="remote_sync_interval_hours" value="{{ remote_sync_interval_hours }}" min="1" max="720" style="width:100px;">
-          </div>
-        </div>
-        <div class="btn-row mt-3">
-          <button class="btn btn--sm" type="submit">Save</button>
-          <button class="btn btn--sm btn--secondary" type="submit" name="action" value="reset"
-                  onclick="return confirm('Reset sync settings?')">Reset</button>
-        </div>
-      </form>
-      <form method="post" action="{{ url_for('main.trigger_remote_sync') }}" class="mt-3">
-        <button class="btn btn--sm btn--secondary btn--full" type="submit"
-                onclick="return confirm('Start a manual sync now?')"
-                {% if not remote_sync_enabled or not remote_api_key %}disabled title="Enable sync first"{% endif %}>
-          Sync Now
-        </button>
-      </form>
-    </div>
-
-    <div class="settings-divider"></div>
-
     <!-- Data Retention -->
     <div class="settings-section">
       <h4 class="settings-section__title">Data Retention</h4>
@@ -709,11 +657,6 @@ function unlockProtectedSettings() {
 document.getElementById('protected-password').addEventListener('keypress', function(e) {
   if (e.key === 'Enter') { e.preventDefault(); unlockProtectedSettings(); }
 });
-
-function toggleCustomInterval() {
-  document.getElementById('customIntervalDiv').style.display =
-    (document.getElementById('syncSchedule').value === 'custom') ? 'block' : 'none';
-}
 
 function toggleRebootOptions(checkbox) {
   const options = document.getElementById('rebootOptions');
