@@ -155,12 +155,15 @@ actually use it; if not, this is ~6 files + 4 assets of removable surface.**
 | `admin/fix_devices.php` | One-shot column fixer, header says "DELETE AFTER USE". The `alias` column it adds has existed since `database/migration_alias.sql`; the whole admin UI depends on it daily. Admin-guarded (302 to login), so not urgent — just dead. |
 | `admin/_run_migration_network.php` | One-shot migration runner for `device_health.network_json` (v6.11.2 network-health feature, live since 2026-04). Self-deletes server-side after success; the local copy only re-uploads it on every deploy. Admin-guarded + idempotent, so not urgent — just dead. |
 
-### UNSURE — left untouched
+### UNSURE — RESOLVED 2026-06-13
 
-| File | Why unsure |
+| File | Decision |
 |---|---|
-| `admin/seed_questions.php` | Dev tool (seeds AI question templates). Admin-guarded. Useful again if AI question bank needs re-seeding. |
-| `admin/queue_test.php` + `api/queue_test_question.php` | Dev tool pair for testing the AI question queue. Admin-guarded. Keep while AI features are still being tuned? |
+| `admin/seed_questions.php` | **DELETED** (git + server) — orphaned dev seeder, no references. |
+| `admin/queue_test.php` (page) | **DELETED** (git + server) — orphaned; superseded by the inline "Test AI" button (`admin/index.php:437`). |
+| `api/queue_test_question.php` | **KEPT** — live: powers the "Test AI" button on every device card. |
+| `staff/*` PWA (10 files) | **DELETED** (git + server, tree removed) — owner confirmed unused; never linked from admin nav. The `staff_checkins` DB table is left in place (harmless, self-created by the old endpoint; drop manually if desired). |
+| `php_deploy/api/device_alias.php` (Pi-side) | **KEPT** — dead today (Pi syncs alias via heartbeat, which is itself disabled), but the natural Pi-side endpoint if alias sync is ever re-enabled. Revisit with the alias-sync feature, not standalone. |
 
 ---
 
