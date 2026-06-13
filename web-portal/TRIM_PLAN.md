@@ -38,21 +38,23 @@ write-time — a public regression button). Deleted via FTP, verified 404.
 A stale `update-v6.9.5.tar.gz` also sits at the poolai docroot root —
 harmless but worth removing on the next cleanup pass.
 
-### 3. The server has Pi-critical files that are NOT in git
+### 3. The server has Pi-critical files that are NOT in git — ✅ IMPORTED 2026-06-13
 
 These were installed by one-shot installers (mostly from `brain/deploy/*`) and
-never imported into `web-portal/`. **They must never be deleted server-side**,
-and a follow-up should download them into git so the repo mirrors reality:
+never imported into `web-portal/`. The six below were fetched from the
+poolaissistant docroot (via a one-shot base64-dump PHP, sha256-verified) and
+committed to `web-portal/php_deploy/` so the repo now mirrors reality. **Still
+must never be deleted server-side.**
 
-| Server path (poolaissistant docroot) | Caller | Evidence |
+| Server path (poolaissistant docroot) | Caller | Status |
 |---|---|---|
-| `api/updates/check.php` | **THE Pi update path** — `scripts/update_check.py:246` | live: HTTP 200 |
-| `api/health.php` | `scripts/auto_provision.py:301` | |
-| `api/chunks_status.php` | `scripts/chunk_manager.py:365`, `auto_provision.py:331` | installed by `brain/deploy/install_chunks_api.php` |
-| `api/upload_chunk.php` | `scripts/chunk_manager.py:308` | installed by `brain/deploy/install_chunks_api.php` |
-| `api/device_status.php` | `scripts/auto_provision.py:364` | installed by `brain/deploy/install_device_status.php` |
-| `api/backup_settings.php` | `scripts/settings_backup.py:99` | |
-| `api/add_update.php` | legacy docs only (`pi-software/PoolDash_v6/CLAUDE.md`) | presence unverified — if live and unauthenticated, same risk class as `updates/add.php` |
+| `api/updates/check.php` | **THE Pi update path** — `scripts/update_check.py:246` | imported + **refactored**: it hardcoded the DB password with an inline `new PDO(...)`; rewritten to use the shared `config/database.php` `db()` like every sibling, and the clean version redeployed to the server (verified both update paths still work). |
+| `api/health.php` | `scripts/auto_provision.py:301` | imported verbatim |
+| `api/chunks_status.php` | `scripts/chunk_manager.py:365`, `auto_provision.py:331` | imported verbatim (installed by `brain/deploy/install_chunks_api.php`) |
+| `api/upload_chunk.php` | `scripts/chunk_manager.py:308` | imported verbatim (installed by `brain/deploy/install_chunks_api.php`) |
+| `api/device_status.php` | `scripts/auto_provision.py:364` | imported verbatim (installed by `brain/deploy/install_device_status.php`) |
+| `api/backup_settings.php` | `scripts/settings_backup.py:99` | imported verbatim |
+| `api/add_update.php` | legacy docs only (`pi-software/PoolDash_v6/CLAUDE.md`) | NOT present on server (probed 2026-06-12) — nothing to import |
 
 ---
 
