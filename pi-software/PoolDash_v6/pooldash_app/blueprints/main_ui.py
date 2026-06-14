@@ -7,6 +7,7 @@ import sqlite3
 import zipfile
 import time
 import ipaddress
+from contextlib import closing
 from io import BytesIO
 from datetime import datetime
 from pathlib import Path
@@ -77,6 +78,86 @@ def _update_check_running():
     """True while the detached update-check subprocess is still running."""
     with _update_check_lock:
         return _update_check_proc is not None and _update_check_proc.poll() is None
+
+
+# ---- System health (SoC temp / fan / throttle), for the System tab ----
+# RPi5 throttle/under-voltage bit meanings from `vcgencmd get_throttled`.
+_THROTTLE_FLAGS = {
+    0: "under-voltage now",
+    1: "ARM frequency capped now",
+    2: "throttled now",
+    3: "soft temperature limit now",
+    16: "under-voltage occurred",
+    17: "ARM frequency capping occurred",
+    18: "throttling occurred",
+    19: "soft temperature limit occurred",
+}
+
+
+def _read_int_file(path, divisor=1):
+    try:
+        with open(path, "r") as f:
+            return int(f.read().strip()) / divisor
+    except Exception:
+        return None
+
+
+def _system_health():
+    """Read SoC temperature, fan RPM, CPU clock, throttle flags and load.
+
+    Pure sysfs reads where possible (no privileges needed); falls back to
+    vcgencmd only for the throttle bitmask. Every field is best-effort: a
+    missing/unreadable source yields None rather than raising, so the System
+    tab degrades gracefully on non-Pi hosts or trimmed images.
+    """
+    health = {}
+
+    temp = _read_int_file("/sys/class/thermal/thermal_zone0/temp", 1000.0)
+    health["temp_c"] = round(temp, 1) if temp is not None else None
+
+    freq = _read_int_file("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq", 1000.0)
+    health["cpu_mhz"] = int(freq) if freq is not None else None
+
+    # Fan RPM: the official RPi5 Active Cooler reports via a hwmon fanN_input.
+    fan_rpm = None
+    try:
+        import glob
+        for fan_file in glob.glob("/sys/class/hwmon/hwmon*/fan1_input"):
+            v = _read_int_file(fan_file)
+            if v is not None:
+                fan_rpm = int(v)
+                break
+    except Exception:
+        pass
+    health["fan_rpm"] = fan_rpm
+
+    # Load average + core count.
+    try:
+        health["load_1m"] = round(os.getloadavg()[0], 2)
+        health["cpu_count"] = os.cpu_count()
+    except Exception:
+        health["load_1m"] = None
+        health["cpu_count"] = None
+
+    # Throttle bitmask via vcgencmd (short timeout; absent on non-Pi).
+    health["throttled_hex"] = None
+    health["throttle_flags"] = []
+    health["throttle_ok"] = None
+    try:
+        out = subprocess.run(
+            ["vcgencmd", "get_throttled"],
+            capture_output=True, text=True, timeout=3
+        )
+        if out.returncode == 0 and "=" in out.stdout:
+            raw = out.stdout.strip().split("=", 1)[1]
+            val = int(raw, 16)
+            health["throttled_hex"] = raw
+            health["throttle_flags"] = [msg for bit, msg in _THROTTLE_FLAGS.items() if val & (1 << bit)]
+            health["throttle_ok"] = (val == 0)
+    except Exception:
+        pass
+
+    return health
 
 
 # ---- Network info cache (avoid slow subprocess calls on every page load) ----
@@ -716,7 +797,7 @@ def lsi_autofill(pool: str):
 
     try:
         import sqlite3
-        with sqlite3.connect(db_path) as conn:
+        with closing(sqlite3.connect(db_path)) as conn:
             conn.row_factory = sqlite3.Row
 
             # Get latest pH reading
@@ -3607,6 +3688,63 @@ def update_cloud_enabled():
 
 
 # ----------------------------
+# Monitoring cadence (poll interval + intensive window)
+# ----------------------------
+
+@main_bp.route("/settings/monitoring", methods=["POST"])
+def update_monitoring():
+    """Set the normal logger poll interval. The logger re-reads it live."""
+    data = _persisted()
+    try:
+        secs = int(request.form.get("logger_poll_interval_seconds") or 30)
+    except ValueError:
+        secs = 30
+    data["logger_poll_interval_seconds"] = max(5, min(3600, secs))
+    _save_persisted(data)
+    flash(f"Poll interval set to {data['logger_poll_interval_seconds']}s (takes effect within one cycle).", "success")
+    return redirect(url_for("main.system_page"))
+
+
+@main_bp.route("/settings/monitoring/intensive", methods=["POST"])
+def set_intensive_monitoring():
+    """Start or stop a temporary intensive-monitoring window for fault-finding.
+
+    Start: sets intensive_monitoring_until = now + duration. The logger polls at
+    intensive_poll_interval_seconds until then, then auto-reverts. Stop: clears
+    the window immediately.
+    """
+    data = _persisted()
+    action = (request.form.get("action") or "start").strip().lower()
+
+    if action == "stop":
+        data["intensive_monitoring_until"] = 0
+        _save_persisted(data)
+        flash("Intensive monitoring stopped - back to normal poll interval.", "success")
+        return redirect(url_for("main.system_page"))
+
+    try:
+        minutes = int(request.form.get("duration_minutes") or 30)
+    except ValueError:
+        minutes = 30
+    minutes = max(1, min(240, minutes))  # cap at 4 hours so it can never run away
+    try:
+        fast = int(request.form.get("intensive_poll_interval_seconds") or 5)
+    except ValueError:
+        fast = 5
+    data["intensive_poll_interval_seconds"] = max(1, min(60, fast))
+    data["intensive_monitoring_until"] = int(time.time()) + minutes * 60
+    _save_persisted(data)
+    flash(f"Intensive monitoring ON for {minutes} min at {data['intensive_poll_interval_seconds']}s polling (auto-reverts after).", "success")
+    return redirect(url_for("main.system_page"))
+
+
+@main_bp.route("/system/health-metrics")
+def system_health_metrics():
+    """AJAX: live SoC temperature / fan / throttle / load for the System tab."""
+    return {"ok": True, "health": _system_health()}
+
+
+# ----------------------------
 # System Page
 # ----------------------------
 
@@ -3662,6 +3800,11 @@ def system_page():
         scheduled_reboot_time=data.get("scheduled_reboot_time", "04:00"),
         # Cloud connection (local-only switch)
         cloud_enabled=data.get("cloud_enabled", True),
+        # Monitoring cadence
+        logger_poll_interval_seconds=data.get("logger_poll_interval_seconds", 30),
+        intensive_poll_interval_seconds=data.get("intensive_poll_interval_seconds", 5),
+        intensive_monitoring_until=int(data.get("intensive_monitoring_until") or 0),
+        intensive_now=int(time.time()),
         # Appearance settings
         appearance_theme=data.get("appearance_theme", "light"),
         appearance_accent_color=data.get("appearance_accent_color", "blue"),

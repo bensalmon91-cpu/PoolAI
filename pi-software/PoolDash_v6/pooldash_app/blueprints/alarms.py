@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+from contextlib import closing
 from flask import Blueprint, current_app, render_template, jsonify, request
 
 alarms_bp = Blueprint("alarms", __name__, url_prefix="/alarms")
@@ -34,7 +35,7 @@ def alarms_api(pool: str):
     """
     limit = int(request.args.get("limit", "120"))
 
-    with _connect() as con:
+    with closing(_connect()) as con:
         active = con.execute(
             """
             SELECT pool, host, system_name, serial_number, source_label, bit_name, started_ts
@@ -158,7 +159,7 @@ def controller_states_api(pool: str):
     """
     controllers = []
 
-    with _connect() as con:
+    with closing(_connect()) as con:
         # Get hosts from readings table (more reliable than alarm_events)
         hosts = con.execute(
             """

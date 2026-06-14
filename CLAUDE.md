@@ -1,12 +1,12 @@
 # PoolAIssistant Project - Cloud Integration Roadmap
 
-**Last Updated:** 2026-06-12 · **Pi software current:** v6.11.14
+**Last Updated:** 2026-06-14 · **Pi software current:** v6.11.15
 
 This master document tracks the PoolAIssistant ecosystem including the Pi software, web portal, and cloud integration features.
 
 ## Current state snapshot
 
-- **Pi software (released):** v6.11.14 (reliability revamp — Settings/System pages never hang on update checks; legacy `remote_sync` retired with a self-healing unit cleanup; pre-cleanup chunk sync; PR #1 merged 2026-06-12). Earlier: v6.11.13 (screen never sleeps — labwc keep-awake + Chromium lwrespawn + Eco Mode removed; "Log Past Entry" backdated maintenance; `cloud_enabled` local-only switch), v6.11.12 (alarm-closure cloud propagation + timer self-heal).
+- **Pi software (released):** v6.11.15 (UI SQLite connection-leak fix that was bloating the WAL to 5.5GB and overheating Swanwood; logger poll default 5s→30s + configurable Monitoring controls + Intensive-monitoring window; System Health card exposing SoC temp/fan/throttle). Earlier: v6.11.14 (reliability revamp — non-blocking update check, `remote_sync` retired, pre-cleanup chunk sync; PR #1 merged 2026-06-12). Earlier: v6.11.13 (screen never sleeps — labwc keep-awake + Chromium lwrespawn + Eco Mode removed; "Log Past Entry" backdated maintenance; `cloud_enabled` local-only switch), v6.11.12 (alarm-closure cloud propagation + timer self-heal).
 - **Active Pis:** Swanwood (production) @ `10.0.30.247` (WiFi DHCP per 2026-04-26 recovery) — the only live unit; tvcctv was decommissioned (confirmed 2026-06-11).
 - **Web portal:** legacy `poolaissistant.*/portal/*` retired 2026-05-03 (10 PHP files now 301-redirect to `poolai.*`). Customer portal at `poolai.modprojects.co.uk` is the canonical forward direction.
 - **Admin split (in flight, 2026-05-08):** admin UI + admin-only API moving from `poolaissistant.*/admin/*` to a new subdomain `admin.modprojects.co.uk`. Local code split is done (`web-portal/admin_deploy/`); deploy waits on hPanel subdomain creation + new FTP creds. `poolaissistant.*` retains all Pi-facing API and the customer-portal API; admin URLs there 308-redirect to `admin.*`.

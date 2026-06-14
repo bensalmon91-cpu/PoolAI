@@ -134,6 +134,16 @@ DEFAULTS = {
     # fixes and must keep working.
     "cloud_enabled": True,
 
+    # Modbus logging cadence. The logger re-reads these each cycle (no restart
+    # needed). Default raised from 5s to 30s in v6.11.15 - pool chemistry moves
+    # slowly, so 5s was needless SD-card I/O and wear. "Intensive monitoring"
+    # is a temporary fault-finding window: while intensive_monitoring_until
+    # (epoch seconds) is in the future the logger polls at the intensive
+    # interval, then auto-reverts. 0 = off.
+    "logger_poll_interval_seconds": 30,
+    "intensive_poll_interval_seconds": 5,
+    "intensive_monitoring_until": 0,
+
     # Cloud Upload Settings (Portal Data Sync)
     "cloud_upload_enabled": True,           # Enable automatic snapshot uploads to portal
     "cloud_upload_interval_minutes": 6,     # Upload interval (default 6 minutes)
@@ -291,6 +301,16 @@ def load(app_instance_path: str) -> Dict[str, Any]:
         # Cloud connection master switch
         if not isinstance(merged.get("cloud_enabled"), bool):
             merged["cloud_enabled"] = DEFAULTS["cloud_enabled"]
+
+        # Modbus logging cadence
+        if not isinstance(merged.get("logger_poll_interval_seconds"), int):
+            merged["logger_poll_interval_seconds"] = DEFAULTS["logger_poll_interval_seconds"]
+        merged["logger_poll_interval_seconds"] = max(5, min(3600, merged["logger_poll_interval_seconds"]))
+        if not isinstance(merged.get("intensive_poll_interval_seconds"), int):
+            merged["intensive_poll_interval_seconds"] = DEFAULTS["intensive_poll_interval_seconds"]
+        merged["intensive_poll_interval_seconds"] = max(1, min(60, merged["intensive_poll_interval_seconds"]))
+        if not isinstance(merged.get("intensive_monitoring_until"), (int, float)) or isinstance(merged.get("intensive_monitoring_until"), bool):
+            merged["intensive_monitoring_until"] = 0
 
         # Cloud upload settings
         if not isinstance(merged.get("cloud_upload_enabled"), bool):
@@ -497,6 +517,10 @@ def save(app_instance_path: str, data: Dict[str, Any]) -> Path:
         "setup_wizard_completed": bool(data.get("setup_wizard_completed", DEFAULTS["setup_wizard_completed"])),
         # Cloud connection master switch
         "cloud_enabled": bool(data.get("cloud_enabled", DEFAULTS["cloud_enabled"])),
+        # Modbus logging cadence (clamped; intensive window is epoch seconds)
+        "logger_poll_interval_seconds": max(5, min(3600, int(data.get("logger_poll_interval_seconds") or DEFAULTS["logger_poll_interval_seconds"]))),
+        "intensive_poll_interval_seconds": max(1, min(60, int(data.get("intensive_poll_interval_seconds") or DEFAULTS["intensive_poll_interval_seconds"]))),
+        "intensive_monitoring_until": int(data.get("intensive_monitoring_until") or 0),
         # Cloud upload settings
         "cloud_upload_enabled": bool(data.get("cloud_upload_enabled", DEFAULTS["cloud_upload_enabled"])),
         "cloud_upload_interval_minutes": max(1, min(60, int(data.get("cloud_upload_interval_minutes") or DEFAULTS["cloud_upload_interval_minutes"]))),

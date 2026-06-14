@@ -364,6 +364,103 @@ document.querySelectorAll('input[name="screen_rotation"]').forEach(input => {
   </form>
 </div>
 
+<!-- ===== SYSTEM HEALTH (SoC temp / fan / throttle) ===== -->
+<div class="card">
+  <h3>System Health</h3>
+  <p class="form-hint mb-3">Live Raspberry Pi vitals. Refreshes automatically.</p>
+  <div id="sysHealth" class="storage-grid mb-2">
+    <div class="storage-item"><span class="muted">SoC temp</span><strong id="sh-temp">…</strong></div>
+    <div class="storage-item"><span class="muted">Fan</span><strong id="sh-fan">…</strong></div>
+    <div class="storage-item"><span class="muted">CPU clock</span><strong id="sh-cpu">…</strong></div>
+    <div class="storage-item"><span class="muted">Load (1m)</span><strong id="sh-load">…</strong></div>
+  </div>
+  <p id="sh-throttle" class="form-hint">Throttle status: …</p>
+</div>
+
+<script>
+(function() {
+  function fmt(v, suffix) { return (v === null || v === undefined) ? "—" : v + (suffix || ""); }
+  function paintHealth(h) {
+    var t = document.getElementById('sh-temp');
+    t.textContent = fmt(h.temp_c, '°C');
+    t.className = (h.temp_c == null) ? '' : (h.temp_c >= 80 ? 'status-bad' : (h.temp_c >= 70 ? 'status-warn' : 'status-ok'));
+    document.getElementById('sh-fan').textContent = (h.fan_rpm == null) ? 'not detected' : (h.fan_rpm + ' rpm');
+    document.getElementById('sh-cpu').textContent = fmt(h.cpu_mhz, ' MHz');
+    document.getElementById('sh-load').textContent = (h.load_1m == null) ? '—' : (h.load_1m + (h.cpu_count ? ' / ' + h.cpu_count : ''));
+    var thr = document.getElementById('sh-throttle');
+    if (h.throttle_ok === true) { thr.textContent = 'Throttle status: OK (no throttling or under-voltage)'; thr.className = 'form-hint status-ok'; }
+    else if (h.throttle_ok === false) { thr.textContent = 'Throttle status: ' + (h.throttle_flags || []).join(', '); thr.className = 'form-hint status-warn'; }
+    else { thr.textContent = 'Throttle status: unavailable'; thr.className = 'form-hint'; }
+  }
+  function pollHealth() {
+    fetch('/system/health-metrics').then(function(r){return r.json();})
+      .then(function(d){ if (d.ok) paintHealth(d.health); })
+      .catch(function(){});
+  }
+  pollHealth();
+  setInterval(pollHealth, 8000);
+})();
+</script>
+
+<!-- ===== MONITORING CADENCE ===== -->
+<div class="card">
+  <h3>Monitoring</h3>
+  <p class="form-hint mb-3">How often the logger reads the controllers. Lower = more detail but more SD-card I/O and heat. Pool chemistry changes slowly, so 30s is plenty for everyday use.</p>
+
+  <form method="post" action="{{ url_for('main.update_monitoring') }}">
+    <div class="settings-section">
+      <label>Normal poll interval</label>
+      <div class="input-row">
+        <select name="logger_poll_interval_seconds" class="input--flex">
+          <option value="15" {% if logger_poll_interval_seconds == 15 %}selected{% endif %}>15 seconds</option>
+          <option value="30" {% if logger_poll_interval_seconds == 30 %}selected{% endif %}>30 seconds (default)</option>
+          <option value="60" {% if logger_poll_interval_seconds == 60 %}selected{% endif %}>60 seconds</option>
+          <option value="120" {% if logger_poll_interval_seconds == 120 %}selected{% endif %}>2 minutes</option>
+        </select>
+        <button class="btn btn--sm" type="submit">Save</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="settings-divider mt-3 mb-3"></div>
+
+  <h4 class="settings-section__title">Intensive monitoring (fault-finding)</h4>
+  {% set intensive_active = intensive_monitoring_until > intensive_now %}
+  {% if intensive_active %}
+  <p class="form-hint status-warn mb-2">
+    ● Active — polling every {{ intensive_poll_interval_seconds }}s,
+    auto-reverts in ~{{ ((intensive_monitoring_until - intensive_now) / 60) | round(0, 'ceil') | int }} min.
+  </p>
+  <form method="post" action="{{ url_for('main.set_intensive_monitoring') }}">
+    <input type="hidden" name="action" value="stop">
+    <button class="btn btn--full btn--secondary" type="submit">Stop intensive monitoring now</button>
+  </form>
+  {% else %}
+  <p class="form-hint mb-2">Temporarily poll fast to catch intermittent faults. Reverts to the normal interval automatically when the window ends.</p>
+  <form method="post" action="{{ url_for('main.set_intensive_monitoring') }}">
+    <input type="hidden" name="action" value="start">
+    <div class="settings-section">
+      <label>Fast interval</label>
+      <select name="intensive_poll_interval_seconds" class="input--flex">
+        <option value="2">2 seconds</option>
+        <option value="5" selected>5 seconds</option>
+        <option value="10">10 seconds</option>
+      </select>
+    </div>
+    <div class="settings-section mt-2">
+      <label>For how long</label>
+      <select name="duration_minutes" class="input--flex">
+        <option value="15">15 minutes</option>
+        <option value="30" selected>30 minutes</option>
+        <option value="60">1 hour</option>
+        <option value="120">2 hours</option>
+      </select>
+    </div>
+    <button class="btn btn--full mt-3" type="submit">Start intensive monitoring</button>
+  </form>
+  {% endif %}
+</div>
+
 <!-- ===== PROTECTED SETTINGS ===== -->
 <div class="card">
   <h3>Protected Settings</h3>

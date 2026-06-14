@@ -413,7 +413,47 @@ POINTS, LABEL_ALIASES = _load_points()
 # Settings (edit as needed)
 # -----------------------------
 
-SAMPLE_SECONDS = float(os.getenv("SAMPLE_SECONDS", "5"))
+SAMPLE_SECONDS = float(os.getenv("SAMPLE_SECONDS", "30"))  # fallback; default raised 5->30 in v6.11.15
+
+# Settings file the logger re-reads each cycle so poll-interval changes (and the
+# temporary intensive-monitoring window) take effect without a restart.
+_SETTINGS_PATH = os.getenv("POOLDASH_SETTINGS_PATH", "/opt/PoolAIssistant/data/pooldash_settings.json")
+INTENSIVE_DEFAULT_SECONDS = 5.0
+
+
+def current_sample_seconds(settings: "dict | None" = None, now: "float | None" = None) -> float:
+    """Desired seconds between poll cycles, re-evaluated every loop.
+
+    Reads pooldash_settings.json each call so the interval can change live.
+    While `intensive_monitoring_until` (epoch seconds) is in the future, returns
+    the intensive interval; otherwise the normal `logger_poll_interval_seconds`.
+    Falls back to SAMPLE_SECONDS on any error. Pass settings/now to unit-test.
+    """
+    if settings is None:
+        try:
+            with open(_SETTINGS_PATH, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+        except Exception:
+            return SAMPLE_SECONDS
+    if not isinstance(settings, dict):
+        return SAMPLE_SECONDS
+    if now is None:
+        now = time.time()
+    try:
+        normal = float(settings.get("logger_poll_interval_seconds") or SAMPLE_SECONDS)
+    except (TypeError, ValueError):
+        normal = SAMPLE_SECONDS
+    try:
+        until = float(settings.get("intensive_monitoring_until") or 0)
+    except (TypeError, ValueError):
+        until = 0.0
+    if until > now:
+        try:
+            intensive = float(settings.get("intensive_poll_interval_seconds") or INTENSIVE_DEFAULT_SECONDS)
+        except (TypeError, ValueError):
+            intensive = INTENSIVE_DEFAULT_SECONDS
+        return max(1.0, intensive)
+    return max(1.0, normal)
 
 # Connection resilience settings (can be overridden via env vars)
 MODBUS_TIMEOUT = float(os.getenv("MODBUS_TIMEOUT", "5"))  # seconds (was 3)
@@ -1724,7 +1764,7 @@ def main_bayrol_loop(
 
         # Sleep to next tick
         elapsed = time.time() - loop_start
-        sleep_s = max(0.1, SAMPLE_SECONDS - elapsed)
+        sleep_s = max(0.1, current_sample_seconds() - elapsed)
         time.sleep(sleep_s)
 
     # unreachable
@@ -2019,7 +2059,7 @@ def main() -> int:
 
         # sleep to next tick
         elapsed = time.time() - loop_start
-        sleep_s = max(0.1, SAMPLE_SECONDS - elapsed)
+        sleep_s = max(0.1, current_sample_seconds() - elapsed)
         time.sleep(sleep_s)
 
     # unreachable
