@@ -526,6 +526,24 @@ try {
                                 </div>
                                 <?php endif; ?>
                             </div>
+                            <?php $sh = $device['system_health'] ?? null; ?>
+                            <div class="info-item">
+                                <div class="label">Fan</div>
+                                <div class="value large"><?= ($sh && isset($sh['fan_rpm']) && $sh['fan_rpm'] !== null) ? number_format($sh['fan_rpm']) . ' rpm' : '&mdash;' ?></div>
+                                <?php if ($sh && empty($sh['fan_rpm'])): ?><div class="text-sm" style="color:#94a3b8;">not firmware-managed</div><?php endif; ?>
+                            </div>
+                            <div class="info-item">
+                                <div class="label">Throttle</div>
+                                <?php if ($sh && array_key_exists('throttle_ok', $sh) && $sh['throttle_ok'] !== null): ?>
+                                    <?php if ($sh['throttle_ok']): ?>
+                                        <div class="value large" style="color:#10b981;">OK</div>
+                                    <?php else: ?>
+                                        <div class="value" style="color:#f59e0b;"><?= htmlspecialchars(implode(', ', $sh['throttle_flags'] ?? [])) ?: 'throttled' ?></div>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <div class="value large">&mdash;</div>
+                                <?php endif; ?>
+                            </div>
                             <div class="info-item">
                                 <div class="label">Memory</div>
                                 <div class="value large"><?= $device['memory_used_pct'] !== null ? number_format($device['memory_used_pct'], 0) . '%' : '-' ?></div>

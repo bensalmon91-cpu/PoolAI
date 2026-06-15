@@ -879,6 +879,35 @@ def apply_update(archive_path):
         else:
             print("  Migration script not found (may be older version)")
 
+        # Ensure the data directory stays owned by the service user. The
+        # update runs as root (sudo / the 03:00 timer), and any root-written
+        # file here - notably pooldash_settings.json - ends up root:root 0600,
+        # which the poolai-run UI and logger then CANNOT read. That silently
+        # empties their config (no controllers -> "setup wizard" / "No pools
+        # configured"): the real cause of the 2026-06-09/06-14 "settings wipe".
+        # Reclaiming ownership after every apply closes that class of failure.
+        print("Ensuring data directory ownership (service user)...")
+        try:
+            import pwd
+            pwd.getpwnam("poolai")  # no-op if the user is missing -> skip
+            subprocess.run(
+                ["chown", "-R", "poolai:poolai", str(DATA_DIR)],
+                capture_output=True, text=True, timeout=60
+            )
+            # settings must be readable by the service user; 0644 is fine on a
+            # single-tenant appliance (no live secrets live here).
+            settings_file = DATA_DIR / "pooldash_settings.json"
+            if settings_file.exists():
+                subprocess.run(
+                    ["chmod", "0644", str(settings_file)],
+                    capture_output=True, text=True, timeout=10
+                )
+            print("  Data ownership reset to poolai:poolai")
+        except KeyError:
+            print("  Service user 'poolai' not found - skipping ownership reset")
+        except Exception as e:
+            print(f"  Warning: could not reset data ownership: {e}")
+
         print("Restart the service to use the new version:")
         print("  sudo systemctl restart poolaissistant_ui")
 

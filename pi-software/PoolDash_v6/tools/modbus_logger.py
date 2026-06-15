@@ -455,6 +455,25 @@ def current_sample_seconds(settings: "dict | None" = None, now: "float | None" =
         return max(1.0, intensive)
     return max(1.0, normal)
 
+
+# Belt-and-braces WAL bound. SQLite auto-checkpoints while no reader pins the
+# WAL, but a leaked reader (the v6.11.15 UI bug) can defeat that and let the WAL
+# grow to gigabytes. Periodically TRUNCATE from the writer so it can never run
+# away again. ~hourly at the 30s default.
+WAL_CHECKPOINT_CYCLES = int(os.getenv("WAL_CHECKPOINT_CYCLES", "120"))
+
+
+def maybe_checkpoint_wal(con, poll_count: int) -> None:
+    """Periodically truncate the WAL. Best-effort: a busy result (reader
+    mid-snapshot) just means we retry on the next interval."""
+    if WAL_CHECKPOINT_CYCLES <= 0 or poll_count <= 0 or poll_count % WAL_CHECKPOINT_CYCLES != 0:
+        return
+    try:
+        row = con.execute("PRAGMA wal_checkpoint(TRUNCATE);").fetchone()
+        logging.info("WAL checkpoint(TRUNCATE) [busy,log,ckpt]: %s", tuple(row) if row else "n/a")
+    except Exception as e:
+        logging.debug("WAL checkpoint skipped: %s", e)
+
 # Connection resilience settings (can be overridden via env vars)
 MODBUS_TIMEOUT = float(os.getenv("MODBUS_TIMEOUT", "5"))  # seconds (was 3)
 MODBUS_RETRIES = int(os.getenv("MODBUS_RETRIES", "3"))    # retry attempts (was 1)
@@ -1724,6 +1743,9 @@ def main_bayrol_loop(
         if HEALTH_LOG_INTERVAL > 0 and _poll_count % HEALTH_LOG_INTERVAL == 0:
             log_health_summary()
 
+        # Keep the WAL from ever bloating (belt-and-braces; see v6.11.16)
+        maybe_checkpoint_wal(con, _poll_count)
+
         for pool_name, cfg in pools.items():
             host = cfg["host"]
             port = int(cfg.get("port", 502))
@@ -1859,6 +1881,9 @@ def main() -> int:
         # Periodic health summary logging
         if HEALTH_LOG_INTERVAL > 0 and _poll_count % HEALTH_LOG_INTERVAL == 0:
             log_health_summary()
+
+        # Keep the WAL from ever bloating (belt-and-braces; see v6.11.16)
+        maybe_checkpoint_wal(con, _poll_count)
 
         for pool_name, cfg in pools.items():
             host = cfg["host"]

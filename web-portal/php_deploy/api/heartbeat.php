@@ -107,6 +107,20 @@ try {
         }
     }
 
+    // SoC health (v6.11.16+): temp/fan/throttle/load. Same tolerant pattern as
+    // network_json - skips silently until the device_health.system_json column
+    // exists.
+    if (!empty($input['system_health']) && is_array($input['system_health'])) {
+        try {
+            if (!isset($healthId)) { $healthId = (int)$pdo->lastInsertId(); }
+            $sys = json_encode($input['system_health']);
+            $pdo->prepare("UPDATE device_health SET system_json = ? WHERE id = ?")
+                ->execute([$sys, $healthId]);
+        } catch (PDOException $e) {
+            // system_json column doesn't exist yet - silently skip.
+        }
+    }
+
     // Update device last_seen, and settings snapshot if the Pi sent one.
     // Silently tolerates hosts where the schema migration hasn't run yet.
     if (!empty($input['settings_snapshot']) && is_array($input['settings_snapshot'])) {

@@ -1,6 +1,6 @@
 # PoolAIssistant Pi Software
 
-**Current Version: 6.11.15** (released 2026-06-14)
+**Current Version: 6.11.16** (released 2026-06-15)
 
 ## Live Pi fleet (2026-06-11)
 

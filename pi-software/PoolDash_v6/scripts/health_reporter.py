@@ -235,6 +235,61 @@ def get_cpu_temp():
         return None
 
 
+_THROTTLE_FLAGS = {
+    0: "under-voltage now", 1: "ARM freq capped now", 2: "throttled now",
+    3: "soft temp limit now", 16: "under-voltage occurred",
+    17: "ARM freq capping occurred", 18: "throttling occurred",
+    19: "soft temp limit occurred",
+}
+
+
+def collect_system_health():
+    """SoC health for the heartbeat: temp, fan RPM, CPU clock, load, throttle.
+
+    Best-effort sysfs reads + vcgencmd for the throttle bitmask. Lets the admin
+    panel surface overheating / throttling across the fleet, not just on the
+    Pi's own System tab. Every field degrades to None rather than raising.
+    """
+    import glob
+    data = {
+        "temp_c": get_cpu_temp(),
+        "fan_rpm": None,
+        "cpu_mhz": None,
+        "load_1m": None,
+        "throttled_hex": None,
+        "throttle_flags": [],
+        "throttle_ok": None,
+    }
+    try:
+        with open("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq") as f:
+            data["cpu_mhz"] = int(int(f.read().strip()) / 1000)
+    except Exception:
+        pass
+    try:
+        for fan_file in glob.glob("/sys/class/hwmon/hwmon*/fan1_input"):
+            with open(fan_file) as f:
+                data["fan_rpm"] = int(f.read().strip())
+                break
+    except Exception:
+        pass
+    try:
+        data["load_1m"] = round(os.getloadavg()[0], 2)
+    except Exception:
+        pass
+    try:
+        out = subprocess.run(["vcgencmd", "get_throttled"],
+                             capture_output=True, text=True, timeout=3)
+        if out.returncode == 0 and "=" in out.stdout:
+            raw = out.stdout.strip().split("=", 1)[1]
+            val = int(raw, 16)
+            data["throttled_hex"] = raw
+            data["throttle_flags"] = [m for b, m in _THROTTLE_FLAGS.items() if val & (1 << b)]
+            data["throttle_ok"] = (val == 0)
+    except Exception:
+        pass
+    return data
+
+
 def get_ip_address():
     """Get primary IP address."""
     try:
@@ -802,6 +857,8 @@ def main():
         # Connectivity snapshot — primary iface, wifi link details, regdom state,
         # 24h disconnect count. Lets the admin panel surface flaky installs.
         'network': collect_network_health(),
+        # SoC vitals (temp/fan/throttle/load) for fleet-wide overheat visibility
+        'system_health': collect_system_health(),
         # Timestamp
         'reported_at': datetime.now().isoformat(),
     }

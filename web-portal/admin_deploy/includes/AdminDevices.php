@@ -132,6 +132,22 @@ class AdminDevices {
                     $device['network_status'] = 'schema_missing';
                 }
             }
+
+            // SoC vitals (v6.11.16+): temp/fan/throttle/load. Tolerant of the
+            // system_json column not existing yet.
+            $device['system_health'] = null;
+            if (!empty($device['health_id'])) {
+                try {
+                    $sysStmt = $this->pdo->prepare("SELECT system_json FROM device_health WHERE id = ?");
+                    $sysStmt->execute([$device['health_id']]);
+                    $srow = $sysStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($srow && !empty($srow['system_json'])) {
+                        $device['system_health'] = json_decode($srow['system_json'], true);
+                    }
+                } catch (PDOException $e) {
+                    // system_json column not present yet - leave null.
+                }
+            }
         }
 
         return $device;
