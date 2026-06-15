@@ -908,6 +908,23 @@ def apply_update(archive_path):
         except Exception as e:
             print(f"  Warning: could not reset data ownership: {e}")
 
+        # Persistent journald. Without /var/log/journal the journal is volatile
+        # and all history is lost on every reboot - which blinded the 2026-06-14
+        # settings-wipe diagnosis. Creating the directory flips journald to
+        # persistent storage (the default Storage=auto uses it when present).
+        print("Ensuring persistent journald...")
+        try:
+            if not Path("/var/log/journal").exists():
+                subprocess.run(["mkdir", "-p", "/var/log/journal"],
+                               capture_output=True, text=True, timeout=10)
+                subprocess.run(["systemctl", "restart", "systemd-journald"],
+                               capture_output=True, text=True, timeout=20)
+                print("  journald is now persistent (survives reboots)")
+            else:
+                print("  journald already persistent")
+        except Exception as e:
+            print(f"  Warning: could not enable persistent journald: {e}")
+
         print("Restart the service to use the new version:")
         print("  sudo systemctl restart poolaissistant_ui")
 

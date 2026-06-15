@@ -1,10 +1,20 @@
 import json
 import os
 import sqlite3
+import threading
+import time
 from contextlib import closing
 from flask import Blueprint, current_app, render_template, jsonify, request
 
 alarms_bp = Blueprint("alarms", __name__, url_prefix="/alarms")
+
+# Controller operation modes change slowly, but the kiosk dashboard polls
+# /controller-states constantly. Cache the computed result per pool for a few
+# seconds so a burst of polls collapses to one DB pass (v6.11.17 - paired with
+# the idx_readings_host_label index that makes that pass cheap).
+_states_cache = {}          # pool -> (monotonic_ts, result_dict)
+_states_cache_ttl = 30.0
+_states_cache_lock = threading.Lock()
 
 def _get_db_path() -> str:
     # Match charts blueprint behavior and fall back to the default pool readings DB.
@@ -157,6 +167,13 @@ def controller_states_api(pool: str):
     Returns the active mode for each controller (Chlorine, pH, Ch4).
     Based on Ezetrol Modbus Register Documentation v4.4.2
     """
+    # Serve a recent cached result if we have one (modes change slowly).
+    now = time.monotonic()
+    with _states_cache_lock:
+        hit = _states_cache.get(pool)
+        if hit and (now - hit[0]) < _states_cache_ttl:
+            return jsonify(hit[1])
+
     controllers = []
 
     with closing(_connect()) as con:
@@ -231,10 +248,13 @@ def controller_states_api(pool: str):
                         "ts": ts,
                     })
 
-    return jsonify({
+    result = {
         "pool": pool,
         "controllers": controllers,
-    })
+    }
+    with _states_cache_lock:
+        _states_cache[pool] = (time.monotonic(), result)
+    return jsonify(result)
 
 
 @alarms_bp.get("/api/<pool>/states")

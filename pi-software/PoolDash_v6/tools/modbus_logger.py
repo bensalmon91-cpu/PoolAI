@@ -474,6 +474,35 @@ def maybe_checkpoint_wal(con, poll_count: int) -> None:
     except Exception as e:
         logging.debug("WAL checkpoint skipped: %s", e)
 
+
+def log_self_check() -> None:
+    """Emit one structured operational line for at-a-glance verification and
+    post-incident forensics (journald is persistent from v6.11.17). Captures the
+    things that have actually bitten us: the poll interval in effect, WAL/DB
+    sizes (the 5.5GB bloat), SoC temp, and whether the settings file is readable
+    by this (service) user - the root of the recurring 'settings wipe'."""
+    def _mb(p):
+        try:
+            return round(os.path.getsize(p) / 1048576.0, 1)
+        except OSError:
+            return None
+    try:
+        data_dir = os.path.dirname(_SETTINGS_PATH) or "."
+        db_path = os.path.join(data_dir, "pool_readings.sqlite3")
+        temp = None
+        try:
+            with open("/sys/class/thermal/thermal_zone0/temp") as f:
+                temp = round(int(f.read().strip()) / 1000.0, 1)
+        except Exception:
+            pass
+        logging.info(
+            "SELFCHECK interval=%.0fs db=%sMB wal=%sMB temp=%sC settings_readable=%s",
+            current_sample_seconds(), _mb(db_path), _mb(db_path + "-wal"),
+            temp, os.access(_SETTINGS_PATH, os.R_OK),
+        )
+    except Exception as e:
+        logging.debug("self-check failed: %s", e)
+
 # Connection resilience settings (can be overridden via env vars)
 MODBUS_TIMEOUT = float(os.getenv("MODBUS_TIMEOUT", "5"))  # seconds (was 3)
 MODBUS_RETRIES = int(os.getenv("MODBUS_RETRIES", "3"))    # retry attempts (was 1)
@@ -1102,6 +1131,12 @@ def db_init(con: sqlite3.Connection) -> None:
     """)
     con.execute("CREATE INDEX IF NOT EXISTS idx_readings_host_ts ON readings(host, ts);")
     con.execute("CREATE INDEX IF NOT EXISTS idx_readings_label_ts ON readings(point_label, ts);")
+    # (host, point_label) makes "latest value per controller+register" a pure
+    # index seek: WHERE host=? AND point_label=? ORDER BY rowid DESC LIMIT 1
+    # (rowid is the implicit index tail). Without it the dashboard's
+    # controller-states poll did a TEMP B-TREE sort over each label's millions
+    # of rows -> 55MB/s reads + 90% iowait on the 11M-row DB (v6.11.17).
+    con.execute("CREATE INDEX IF NOT EXISTS idx_readings_host_label ON readings(host, point_label);")
 
     con.execute("""
     CREATE TABLE IF NOT EXISTS device_meta (
@@ -1742,6 +1777,7 @@ def main_bayrol_loop(
         # Periodic health summary logging
         if HEALTH_LOG_INTERVAL > 0 and _poll_count % HEALTH_LOG_INTERVAL == 0:
             log_health_summary()
+            log_self_check()
 
         # Keep the WAL from ever bloating (belt-and-braces; see v6.11.16)
         maybe_checkpoint_wal(con, _poll_count)
@@ -1881,6 +1917,7 @@ def main() -> int:
         # Periodic health summary logging
         if HEALTH_LOG_INTERVAL > 0 and _poll_count % HEALTH_LOG_INTERVAL == 0:
             log_health_summary()
+            log_self_check()
 
         # Keep the WAL from ever bloating (belt-and-braces; see v6.11.16)
         maybe_checkpoint_wal(con, _poll_count)
