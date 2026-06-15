@@ -177,25 +177,17 @@ def controller_states_api(pool: str):
     controllers = []
 
     with closing(_connect()) as con:
-        # Get hosts from readings table (more reliable than alarm_events)
+        # Host list comes from device_meta (one row per controller, primary-key
+        # lookup, ~0ms) rather than SELECT DISTINCT host FROM readings, which on
+        # EZETROL had no 'Status_Mode_%' rows and so fell through to a DISTINCT
+        # scan of the whole multi-million-row readings table - a 15s+ disk-bound
+        # query on every poll, the real driver of the 90% iowait / overheat
+        # (v6.11.18; the v6.11.17 idx_readings_host_label only covered the
+        # per-register seeks below).
         hosts = con.execute(
-            """
-            SELECT DISTINCT host FROM readings
-            WHERE pool = ? AND point_label LIKE 'Status_Mode_%'
-            ORDER BY host
-            LIMIT 10;
-            """,
+            "SELECT host FROM device_meta WHERE pool = ? ORDER BY host LIMIT 10;",
             (pool,),
         ).fetchall()
-
-        if not hosts:
-            # Fallback: try to get hosts from any readings
-            hosts = con.execute(
-                """
-                SELECT DISTINCT host FROM readings WHERE pool = ? LIMIT 10;
-                """,
-                (pool,),
-            ).fetchall()
 
         for h in hosts:
             host = h["host"]
