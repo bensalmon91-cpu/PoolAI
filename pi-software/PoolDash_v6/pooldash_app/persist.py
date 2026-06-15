@@ -99,7 +99,7 @@ DEFAULTS = {
     "data_retention_hourly_days": 90,    # keep hourly averages for this many days
     "data_retention_daily_days": 365,    # keep daily averages for this many days
     "storage_threshold_percent": 80,     # start aggressive cleanup at this % of storage
-    "storage_max_mb": 500,               # target max DB size in MB
+    "storage_max_mb": 20000,             # far backstop for emergency cleanup; disk-% is the real guard (was 500, which purged GBs of history)
 
     # Display settings
     "screen_rotation": 0,                # 0, 90, 180, or 270 degrees

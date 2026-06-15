@@ -42,7 +42,12 @@ DEFAULTS = {
     "data_retention_hourly_days": 90,
     "data_retention_daily_days": 365,
     "storage_threshold_percent": 80,
-    "storage_max_mb": 500,
+    # Far backstop only. The real emergency guard is the disk-percent threshold
+    # above; this size cap used to default to 500MB, which on a unit that had
+    # accumulated GBs would trigger emergency_cleanup and purge ~92% of history
+    # down to 400MB. Raised to 20000MB so it only fires if the SD is genuinely
+    # filling - routine thinning is time-based (full/hourly/daily days).
+    "storage_max_mb": 20000,
 }
 
 
@@ -352,7 +357,7 @@ def emergency_cleanup(con, target_mb, dry_run=False):
     return total_deleted
 
 
-def run_cleanup(settings, dry_run=False):
+def run_cleanup(settings, dry_run=False, vacuum=False):
     """Run the full cleanup process."""
     if not POOL_DB_PATH.exists():
         print(f"Database not found: {POOL_DB_PATH}")
@@ -404,9 +409,14 @@ def run_cleanup(settings, dry_run=False):
         if not dry_run:
             print("\nOptimizing database...")
             con.execute("ANALYZE")
-            # Only VACUUM if we deleted significant data
-            if stats.get("total_rows", 0) > 100000:
-                print("Running VACUUM (this may take a while)...")
+            # VACUUM only on explicit request (--vacuum). It takes an EXCLUSIVE
+            # lock for minutes on a multi-GB DB, which blocks the logger's
+            # writes and trips its 120s systemd watchdog (kill+restart loop).
+            # The nightly timer therefore never VACUUMs - SQLite reuses freed
+            # pages in place, so the DB stops growing without the lock. Reclaim
+            # disk space manually with --vacuum, run with the logger stopped.
+            if vacuum:
+                print("Running VACUUM (exclusive lock; this may take a while)...")
                 con.execute("VACUUM")
 
         print("\n✓ Cleanup complete!")
@@ -420,6 +430,7 @@ def main():
     parser = argparse.ArgumentParser(description="Clean up and thin pool readings data")
     parser.add_argument("--force", action="store_true", help="Force cleanup regardless of schedule")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done without making changes")
+    parser.add_argument("--vacuum", action="store_true", help="Reclaim freed space (exclusive lock - run with the logger stopped)")
     args = parser.parse_args()
 
     print(f"=== Data Cleanup - {datetime.now().isoformat()} ===")
@@ -433,7 +444,7 @@ def main():
     if args.dry_run:
         print("DRY RUN MODE - No changes will be made\n")
 
-    success = run_cleanup(settings, args.dry_run)
+    success = run_cleanup(settings, args.dry_run, vacuum=args.vacuum)
 
     if success and not args.dry_run:
         state = load_cleanup_state()

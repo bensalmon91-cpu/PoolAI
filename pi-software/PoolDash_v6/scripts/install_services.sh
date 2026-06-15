@@ -184,6 +184,23 @@ systemctl enable chunk_sync.timer
 systemctl start chunk_sync.timer
 echo "  -> Chunk sync: every 6 hours"
 
+# Install data retention/cleanup timer (daily 3 AM). Thins old readings per
+# the retention settings so the DB doesn't grow unbounded. Units live in
+# systemd/ (not the top-level scripts/ that update_check's reconcile globs),
+# so install them explicitly here.
+echo "Installing data cleanup timer..."
+if [ -f "$SCRIPT_DIR/systemd/poolaissistant_data_cleanup.service" ] && [ -f "$SCRIPT_DIR/systemd/poolaissistant_data_cleanup.timer" ]; then
+    cp "$SCRIPT_DIR/systemd/poolaissistant_data_cleanup.service" "$SYSTEMD_DIR/"
+    cp "$SCRIPT_DIR/systemd/poolaissistant_data_cleanup.timer" "$SYSTEMD_DIR/"
+    systemctl daemon-reload
+    systemctl enable poolaissistant_data_cleanup.timer
+    systemctl start poolaissistant_data_cleanup.timer
+    echo "  -> Data cleanup: daily at 3 AM (time-based retention)"
+else
+    echo "  WARNING: Data cleanup unit files not found in $SCRIPT_DIR/systemd/" >&2
+    SKIPPED_COMPONENTS+=("data cleanup timer")
+fi
+
 # Install health reporter timer. This drives the heartbeat that updates
 # pi_devices.last_seen on the admin server. Without it, the Pi appears
 # offline in the admin panel even when it's logging Modbus data normally.

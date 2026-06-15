@@ -793,6 +793,37 @@ def apply_update(archive_path):
         except Exception as e:
             print(f"  Warning: retired-unit cleanup failed: {e}")
 
+        # Self-heal the data-cleanup timer. It lives in scripts/systemd/ (not
+        # the top-level scripts/*.timer the reconcile above globs) and was never
+        # in install_services.sh, so existing Pis never got it - which is why
+        # the readings DB grew unbounded. Install + enable it idempotently.
+        print("Ensuring data-cleanup timer...")
+        try:
+            sysd = APP_DIR / "scripts" / "systemd"
+            dc_svc = sysd / "poolaissistant_data_cleanup.service"
+            dc_tmr = sysd / "poolaissistant_data_cleanup.timer"
+            already = subprocess.run(
+                ["systemctl", "is-enabled", "poolaissistant_data_cleanup.timer"],
+                capture_output=True, text=True
+            ).returncode == 0
+            if already:
+                print("  Already enabled")
+            elif dc_svc.exists() and dc_tmr.exists():
+                for src in (dc_svc, dc_tmr):
+                    subprocess.run(["sudo", "cp", str(src), "/etc/systemd/system/"],
+                                   capture_output=True, text=True, timeout=30)
+                subprocess.run(["sudo", "systemctl", "daemon-reload"],
+                               capture_output=True, text=True, timeout=30)
+                subprocess.run(["sudo", "systemctl", "enable", "poolaissistant_data_cleanup.timer"],
+                               capture_output=True, text=True, timeout=30)
+                subprocess.run(["sudo", "systemctl", "start", "poolaissistant_data_cleanup.timer"],
+                               capture_output=True, text=True, timeout=30)
+                print("  Installed + enabled (daily 3 AM)")
+            else:
+                print("  Skipped (unit files not in tarball)")
+        except Exception as e:
+            print(f"  Warning: could not ensure data-cleanup timer: {e}")
+
         # Self-heal the SSH guard unit. Older Pis shipped with a unit that had
         # After=network.target + DefaultDependencies=no, which left SSH unable
         # to come up for hours when network.target was delayed by a flaky
