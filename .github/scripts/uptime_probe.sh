@@ -35,14 +35,16 @@ probe() {
         sleep 5
     done
 
-    # 429 = Hostinger WAF rate-limited the GitHub Actions runner. Real
+    # 429/403 = Hostinger WAF blocking the GitHub Actions runner. Real
     # browsers do not see this; only scripted traffic from shared CI IPs
     # does. The server is actively responding, which is the opposite of
-    # the silent-500 mode this probe was built to catch - so treat 429 as
-    # "alive, just throttled" and skip the marker check (the body will be
-    # a WAF page, not the real response).
-    if [[ "$status" == "429" ]]; then
-        echo "ok    $name (alive, WAF rate-limited)"
+    # the silent-500 mode this probe was built to catch - so treat both
+    # as "alive, just WAF-blocked" and skip the marker check (the body
+    # will be a WAF page, not the real response).
+    # Note: Hostinger changed from 429 (rate-limit) to 403 (hard block)
+    # for GH Actions IPs around 2026-06-14.
+    if [[ "$status" == "429" || "$status" == "403" ]]; then
+        echo "ok    $name (alive, WAF blocked)"
         return
     fi
     if [[ "$status" != "$expected_code" ]]; then
