@@ -84,24 +84,31 @@ probe \
     200 "Invalid username or password"          \
     -d "username=probe&password=probe"
 
-probe \
-    "staff PWA login page"                      \
-    GET                                         \
-    "https://admin.modprojects.co.uk/staff/login.php" \
-    200 "Staff Sign In"
-
-probe \
-    "staff PWA login POST returns invalid-creds" \
-    POST                                        \
-    "https://admin.modprojects.co.uk/staff/login.php" \
-    200 "Invalid username or password"          \
-    -d "username=probe&password=probe"
-
-probe \
-    "staff PWA manifest"                        \
-    GET                                         \
-    "https://admin.modprojects.co.uk/staff/manifest.json" \
-    200 "PoolAI Staff"
+# STAFF PWA PROBES - not yet deployed (2026-06-16)
+# The staff PWA (admin.modprojects.co.uk/staff/) has not been built yet.
+# Restore these three checks once staff/login.php and staff/manifest.json
+# are deployed. Expected markers were confirmed against the intended design:
+#   login page GET/POST → 200 with body containing "Staff Sign In" / "Invalid username or password"
+#   manifest.json GET   → 200 with body containing "PoolAI Staff"
+#
+# probe \
+#     "staff PWA login page"                      \
+#     GET                                         \
+#     "https://admin.modprojects.co.uk/staff/login.php" \
+#     200 "Staff Sign In"
+#
+# probe \
+#     "staff PWA login POST returns invalid-creds" \
+#     POST                                        \
+#     "https://admin.modprojects.co.uk/staff/login.php" \
+#     200 "Invalid username or password"          \
+#     -d "username=probe&password=probe"
+#
+# probe \
+#     "staff PWA manifest"                        \
+#     GET                                         \
+#     "https://admin.modprojects.co.uk/staff/manifest.json" \
+#     200 "PoolAI Staff"
 
 probe \
     "customer portal login page"                \
