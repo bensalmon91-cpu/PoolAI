@@ -1,6 +1,6 @@
 # PoolAIssistant Pi Software (PoolDash_v6 app)
 
-**Current Version: 6.11.19** (released 2026-06-15)
+**Current Version: 6.11.20** (released 2026-06-24)
 
 > This file documents the Flask app inside `PoolDash_v6/`.
 > For the higher-level install / fleet / deploy docs see the parent
@@ -243,10 +243,11 @@ Protected settings in web UI require password: `PoolAI`
 
 ---
 
-## Recently landed (v6.11.2 — v6.11.10)
+## Recently landed (v6.11.2 — v6.11.20)
 
 Highlights of every shipped version since v6.11.2. Use `git log --oneline` for the full trail.
 
+- **Cloud upload fix — two stacked bugs (v6.11.20)** — uploads silently dead since 2026-06-15. `get_controller_status()`'s `readings` query picked the wrong index and temp-sorted millions of rows per controller, timing out the service every tick; switched to a `device_meta` PK lookup (same fix class as v6.11.18). That unmasked a second bug: `get_active_alarms()` named alarms by `bit_name` alone, colliding when two different registers shared a bit number, which 500'd the whole snapshot via a unique-key violation on the server. Fixed by disambiguating with `source_label.bit_name`, plus `INSERT IGNORE` on the server insert as defense-in-depth.
 - **Network redesign (v6.11.2)** — auto-failover AP daemon removed, replaced by manual `ap_control.sh` toggle + `health_watchdog.sh` reboot-if-stuck. Missing `192.168.4.1/24` cleanup on AP teardown fixed. `update_wifi.sh` now upserts by SSID. Settings page reorganized into 4 tabs. `_primary_device_ip()` picks the default-route interface.
 - **Installer cleanup (v6.11.3)** — fresh installs work end-to-end: `.gitattributes` forces LF on shell scripts, `setup_pi.sh` creates `poolai` user + venv + eth0 static IP on pool subnet, `install_services.sh` auto-starts UI, example env no longer ships placeholder pool IPs.
 - **WiFi static IP UI (v6.11.4)** — Settings → Connectivity → WiFi IP Configuration. New `update_wifi_ip.sh` helper modifies the active WiFi NM profile.

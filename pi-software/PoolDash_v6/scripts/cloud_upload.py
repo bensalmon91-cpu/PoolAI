@@ -268,7 +268,17 @@ def get_active_alarms(db_path: Path) -> Dict[str, Any]:
         rows = cursor.fetchall()
 
         for row in rows:
-            alarm_name = row["bit_name"] or row["source_label"] or "Unknown"
+            # bit_name alone ("b0") isn't unique - two different registers
+            # (e.g. Status_DigitalInputs vs Status_LimitContactStates) can
+            # both have an open bit 0, and the server's UNIQUE KEY on
+            # (device_id, pool, alarm_source) rejects the second insert,
+            # 500ing the whole snapshot. Combine both fields when present.
+            source_label = row["source_label"] or ""
+            bit_name = row["bit_name"] or ""
+            if source_label and bit_name:
+                alarm_name = f"{source_label}.{bit_name}"
+            else:
+                alarm_name = bit_name or source_label or "Unknown"
             # Simple severity detection based on common alarm patterns
             is_critical = any(kw in alarm_name.lower() for kw in
                             ["critical", "emergency", "fail", "error"])
@@ -375,12 +385,18 @@ def get_controller_status(db_path: Path) -> List[Dict]:
             if not host or not enabled:
                 continue
 
-            # Get most recent reading from this controller
+            # device_meta is keyed by host (PK) and last_seen_ts is updated on
+            # every poll, so this is a single-row lookup. The previous query
+            # scanned `readings` with WHERE host=? ORDER BY ts DESC LIMIT 1 -
+            # SQLite picked idx_readings_host_label (host-prefixed but not
+            # ts-ordered) and fell back to a temp-btree sort of every row for
+            # that host, taking minutes on the multi-million-row table and
+            # timing out the whole upload - same index-selection failure mode
+            # seen elsewhere in this codebase when ORDER BY doesn't match the
+            # chosen index (see CLAUDE.md changelog for the full history).
             query = """
-                SELECT ts FROM readings
+                SELECT last_seen_ts AS ts FROM device_meta
                 WHERE host = ?
-                ORDER BY ts DESC
-                LIMIT 1
             """
             cursor = conn.execute(query, (host,))
             row = cursor.fetchone()

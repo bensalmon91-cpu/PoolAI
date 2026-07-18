@@ -1,6 +1,6 @@
 # PoolAIssistant Pi Software
 
-**Current Version: 6.11.19** (released 2026-06-15)
+**Current Version: 6.11.20** (released 2026-06-24)
 
 ## Live Pi fleet (2026-06-11)
 
@@ -11,6 +11,11 @@
 > `tvcctv` (the former second unit at `10.0.30.131`) was decommissioned — confirmed gone 2026-06-11. Swanwood is the only live Pi.
 
 Updates land at the next 03:00 `update_check.timer` cron, or instantly via Settings → Check for Updates / `sudo python3 /opt/PoolAIssistant/app/scripts/update_check.py --apply`.
+
+**v6.11.20 (2026-06-24): cloud uploads silently broken since 2026-06-15, now fixed (two stacked bugs).**
+- `cloud_upload.py`'s `get_controller_status()` queried `readings WHERE host=? ORDER BY ts DESC LIMIT 1` — SQLite picked `idx_readings_host_label` over `idx_readings_host_ts` and fell back to a temp-btree sort of every row for that host (millions of rows), taking minutes per controller and blowing the service's 120s start timeout every single tick. Same root cause class as the v6.11.18 dashboard iowait fix, in a script that never got it. Now reads `device_meta.last_seen_ts` (PK lookup, ~0ms) instead.
+- Once that client-side hang was fixed, every tick reached the server and immediately hit a second, independent bug dating to at least 2026-06-09: `get_active_alarms()` named an alarm by `bit_name` alone (e.g. "b0"), which collides when two different registers (e.g. `Status_DigitalInputs` and `Status_LimitContactStates`) both have an open bit 0 on the same pool — the server's `UNIQUE KEY (device_id, pool, alarm_source)` on `device_alarms_current` rejected the second row and 500'd the *entire* snapshot (readings included). Fixed by combining `source_label.bit_name` into a unique source string; `snapshot.php`'s insert into `device_alarms_current` also switched to `INSERT IGNORE` as defense-in-depth (matches the existing pattern for alarm closures), so one bad alarm payload can never 500 the whole snapshot again.
+- Diagnosed live on Swanwood via SSH + a one-shot self-deleting PHP probe against `event_log` (same pattern as `deploy_update.php`) since the server has no SSH access. Hotfixed on Swanwood directly, then shipped through the normal `deploy.py --target admin-backend` + tarball update channel.
 
 **v6.11.13 (2026-06-11): screen never sleeps + backdated maintenance + local-only switch.**
 - Kiosk autostart kills swayidle, runs a `wlopm --on '*'` keep-awake loop, and wraps Chromium in `lwrespawn` (a crashed browser over the black swaybg looked exactly like a sleeping screen). `update_check.py` self-heals installed autostarts on update; Swanwood was also hotfixed live via SSH on 2026-06-11.

@@ -141,9 +141,18 @@ try {
     // whatever the Pi reports, including the empty case (all alarms cleared).
     $pdo->prepare("DELETE FROM device_alarms_current WHERE device_id = ?")->execute([$deviceId]);
 
+    $alarmsIgnored = 0;
     if (!empty($alarms['active']) && is_array($alarms['active'])) {
+        // INSERT IGNORE: a malformed/colliding alarm_source from the Pi
+        // (e.g. two distinct registers sharing a generic bit label) must
+        // not 500 the whole snapshot and lose the chemistry readings in
+        // the same payload. Matches the closures insert below. A row that
+        // gets ignored is logged + counted (not just silently dropped) so
+        // a future naming collision the v6.11.20 disambiguation didn't
+        // anticipate stays visible in error_log + the audit trail below -
+        // that audit trail is literally what diagnosed this bug originally.
         $stmtAlarm = $pdo->prepare("
-            INSERT INTO device_alarms_current
+            INSERT IGNORE INTO device_alarms_current
                 (device_id, pool, alarm_source, alarm_name, severity, started_at, received_at)
             VALUES (?, ?, ?, ?, ?, ?, NOW())
         ");
@@ -162,6 +171,10 @@ try {
             }
 
             $stmtAlarm->execute([$deviceId, $pool, $source, $source, $severity, $since]);
+            if ($stmtAlarm->rowCount() === 0) {
+                $alarmsIgnored++;
+                error_log("snapshot.php: duplicate alarm_source ignored for device $deviceId pool='$pool' source='$source'");
+            }
         }
     }
 
@@ -302,6 +315,7 @@ try {
             'controllers_count' => count($controllers),
             'alarms_total' => $alarmsTotal,
             'alarms_critical' => $alarmsCritical,
+            'alarms_ignored' => $alarmsIgnored,
             'has_issues' => $hasIssues,
             'payload_size' => $payloadSize,
         ]
