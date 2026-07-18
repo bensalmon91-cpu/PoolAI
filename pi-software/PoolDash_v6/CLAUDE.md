@@ -1,6 +1,6 @@
 # PoolAIssistant Pi Software (PoolDash_v6 app)
 
-**Current Version: 6.11.20** (released 2026-06-24)
+**Current Version: 6.11.21** (released 2026-07-18)
 
 > This file documents the Flask app inside `PoolDash_v6/`.
 > For the higher-level install / fleet / deploy docs see the parent
@@ -243,10 +243,11 @@ Protected settings in web UI require password: `PoolAI`
 
 ---
 
-## Recently landed (v6.11.2 — v6.11.20)
+## Recently landed (v6.11.2 — v6.11.21)
 
 Highlights of every shipped version since v6.11.2. Use `git log --oneline` for the full trail.
 
+- **Retention actually runs + journald actually persistent (v6.11.21)** — the v6.11.19 nightly cleanup never once completed: per-hour-group `strftime()=?` DELETEs (non-indexable → full scan per group) meant systemd killed it at 30 min every night, invisibly, because the journal was volatile. `data_cleanup.py` thinning rewritten set-based (day slices, temp-table aggregate + indexed range DELETE, `--budget-seconds` wall-clock cap, resume cursors in `cleanup_state.json`); days past the 90d mark go straight to daily averages. Journald: RPi OS's vendor `40-rpi-volatile-storage.conf` drop-in lexically beat our `10-` one — now `99-poolai-persistent.conf`, self-healed by `update_check.py` and written by `kiosk_setup.sh` (which used to force volatile). Tests: `test_data_retention.py`.
 - **Cloud upload fix — two stacked bugs (v6.11.20)** — uploads silently dead since 2026-06-15. `get_controller_status()`'s `readings` query picked the wrong index and temp-sorted millions of rows per controller, timing out the service every tick; switched to a `device_meta` PK lookup (same fix class as v6.11.18). That unmasked a second bug: `get_active_alarms()` named alarms by `bit_name` alone, colliding when two different registers shared a bit number, which 500'd the whole snapshot via a unique-key violation on the server. Fixed by disambiguating with `source_label.bit_name`, plus `INSERT IGNORE` on the server insert as defense-in-depth.
 - **Network redesign (v6.11.2)** — auto-failover AP daemon removed, replaced by manual `ap_control.sh` toggle + `health_watchdog.sh` reboot-if-stuck. Missing `192.168.4.1/24` cleanup on AP teardown fixed. `update_wifi.sh` now upserts by SSID. Settings page reorganized into 4 tabs. `_primary_device_ip()` picks the default-route interface.
 - **Installer cleanup (v6.11.3)** — fresh installs work end-to-end: `.gitattributes` forces LF on shell scripts, `setup_pi.sh` creates `poolai` user + venv + eth0 static IP on pool subnet, `install_services.sh` auto-starts UI, example env no longer ships placeholder pool IPs.

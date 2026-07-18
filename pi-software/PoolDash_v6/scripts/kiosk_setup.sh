@@ -288,12 +288,19 @@ fi
 # ============================================
 log_info "Optimizing for embedded use..."
 
-# Reduce logging to minimize SD card writes
-if [ -f "/etc/systemd/journald.conf" ]; then
-    sed -i 's/#Storage=auto/Storage=volatile/' /etc/systemd/journald.conf
-    sed -i 's/#RuntimeMaxUse=/RuntimeMaxUse=50M/' /etc/systemd/journald.conf
-    log_info "  Configured journald for volatile storage"
-fi
+# Persistent journald, size-capped. Volatile storage (the old choice here)
+# loses all logs on reboot, which repeatedly blinded production diagnosis
+# (settings wipe 2026-06, kiosk freeze 2026-07). SystemMaxUse caps SD wear.
+# Filename must sort after the vendor 40-rpi-volatile-storage.conf drop-in,
+# which otherwise wins (drop-ins apply in lexical order across conf.d dirs).
+mkdir -p /etc/systemd/journald.conf.d
+cat > /etc/systemd/journald.conf.d/99-poolai-persistent.conf << 'EOF'
+[Journal]
+Storage=persistent
+SystemMaxUse=200M
+EOF
+rm -f /etc/systemd/journald.conf.d/10-poolai-persistent.conf
+log_info "  Configured journald for persistent storage (200M cap)"
 
 # Create tmpfs for temporary files
 if ! grep -q "tmpfs /tmp" /etc/fstab; then

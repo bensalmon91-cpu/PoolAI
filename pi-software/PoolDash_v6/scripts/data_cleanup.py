@@ -9,10 +9,19 @@ Progressive data retention:
 4. Delete data older than daily retention
 5. Emergency mode: if disk/DB exceeds threshold, delete oldest data
 
+Thinning is set-based and resumable: each run processes whole-day slices
+(one GROUP BY into a temp table + one indexed range DELETE + one bulk INSERT
+per day) and records progress in cleanup_state.json, stopping when the
+wall-clock budget runs out. The previous implementation issued one
+non-indexable strftime()-matched DELETE per hour-group - a full table scan
+per group - so on a multi-GB DB it never finished before the systemd
+TimeoutStartSec killed it, and retention silently never ran.
+
 Usage:
     python data_cleanup.py          # Normal cleanup (check thresholds)
     python data_cleanup.py --force  # Force cleanup regardless of schedule
     python data_cleanup.py --dry-run  # Show what would be done without doing it
+    python data_cleanup.py --budget-seconds 1200  # Wall-clock cap for thinning
 """
 
 import argparse
@@ -21,7 +30,8 @@ import os
 import shutil
 import sqlite3
 import sys
-from datetime import datetime, timedelta
+import time
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 # Paths
@@ -50,6 +60,15 @@ DEFAULTS = {
     "storage_max_mb": 20000,
 }
 
+# Stop thinning when this much wall-clock time has elapsed; progress persists
+# in cleanup_state.json so the next nightly run resumes where this one left
+# off. Must stay comfortably under the systemd unit's TimeoutStartSec (1800s).
+BUDGET_SECONDS_DEFAULT = 1200
+
+# Aggregated rows carry these raw_type markers (raw logger rows are e.g. 'f32')
+HOURLY_MARK = "hourly_avg"
+DAILY_MARK = "daily_avg"
+
 
 def load_settings():
     """Load settings from JSON file."""
@@ -65,7 +84,7 @@ def load_settings():
 
 
 def load_cleanup_state():
-    """Load cleanup state (last cleanup timestamp, etc.)."""
+    """Load cleanup state (last cleanup timestamp, thinning cursors)."""
     if not CLEANUP_STATE_PATH.exists():
         return {"last_cleanup_ts": None}
     try:
@@ -137,143 +156,135 @@ def get_db_stats(con):
     return stats
 
 
-def aggregate_to_hourly(con, cutoff_date, dry_run=False):
-    """
-    Aggregate readings older than cutoff to hourly averages.
-    Creates averaged entries and removes originals.
-    """
-    print(f"Aggregating data older than {cutoff_date} to hourly averages...")
+def ensure_ts_index(con):
+    """Range scans over ts drive every thinning slice; Swanwood already has
+    this index (add_performance_indexes.sql), fresh installs get it here."""
+    con.execute("CREATE INDEX IF NOT EXISTS idx_readings_ts_pool ON readings(ts, pool)")
 
-    # Find rows to aggregate (not already aggregated)
-    # We identify aggregated rows by checking if there are multiple rows per hour
-    cursor = con.execute(
+
+def _day_bounds(day):
+    """Half-open string bounds for one day, matching both stored ts formats.
+
+    Logger rows look like '2026-04-15T09:12:31+00:00', aggregated rows like
+    '2026-04-15 12:00:00'. Bare 'YYYY-MM-DD' bounds compare correctly against
+    both ('2026-04-15' < '2026-04-15 ...' < '2026-04-15T...' < '2026-04-16').
+    """
+    return day.isoformat(), (day + timedelta(days=1)).isoformat()
+
+
+def aggregate_day(con, day, bucket_fmt, mark, dry_run=False):
+    """Collapse one day of readings to per-bucket averages, set-based.
+
+    bucket_fmt is a strftime format producing the bucket timestamp (hour or
+    day). Returns the net number of rows removed. Idempotent: a day already
+    at this granularity has one row per bucket and is skipped.
+    """
+    start, end = _day_bounds(day)
+
+    total, groups = con.execute(
         """
-        SELECT
-            strftime('%Y-%m-%d %H:00:00', ts) as hour_ts,
-            pool,
-            host,
-            point_label,
-            AVG(value) as avg_value,
-            COUNT(*) as cnt
-        FROM readings
-        WHERE ts < ?
-          AND value IS NOT NULL
-        GROUP BY strftime('%Y-%m-%d %H', ts), pool, host, point_label
-        HAVING cnt > 1
+        SELECT COALESCE(SUM(c), 0), COUNT(*) FROM (
+            SELECT COUNT(*) AS c
+            FROM readings
+            WHERE ts >= ? AND ts < ? AND value IS NOT NULL
+            GROUP BY strftime(?, ts), pool, host, point_label
+        )
         """,
-        (cutoff_date,),
-    )
+        (start, end, bucket_fmt),
+    ).fetchone()
 
-    aggregations = cursor.fetchall()
-    if not aggregations:
-        print("  No data to aggregate to hourly.")
+    if total == 0 or total == groups:
         return 0
 
-    rows_affected = 0
-    for row in aggregations:
-        hour_ts, pool, host, point_label, avg_value, cnt = row
+    if dry_run:
+        print(f"  {day}: would collapse {total} rows into {groups} {mark} rows")
+        return total - groups
 
-        if dry_run:
-            print(f"  Would aggregate {cnt} rows for {pool}/{host}/{point_label} at {hour_ts}")
-            rows_affected += cnt - 1
-            continue
-
-        # Delete original rows for this hour
+    con.execute("BEGIN IMMEDIATE")
+    try:
         con.execute(
             """
-            DELETE FROM readings
-            WHERE strftime('%Y-%m-%d %H:00:00', ts) = ?
-              AND pool = ?
-              AND host = ?
-              AND point_label = ?
+            CREATE TEMP TABLE _agg AS
+            SELECT strftime(?, ts) AS bts, pool, host, point_label,
+                   AVG(value) AS avg_value
+            FROM readings
+            WHERE ts >= ? AND ts < ? AND value IS NOT NULL
+            GROUP BY bts, pool, host, point_label
             """,
-            (hour_ts, pool, host, point_label),
+            (bucket_fmt, start, end),
         )
-
-        # Insert single averaged row
+        con.execute(
+            "DELETE FROM readings WHERE ts >= ? AND ts < ? AND value IS NOT NULL",
+            (start, end),
+        )
         con.execute(
             """
             INSERT INTO readings (ts, pool, host, point_label, value, raw_type)
-            VALUES (?, ?, ?, ?, ?, 'hourly_avg')
+            SELECT bts, pool, host, point_label, avg_value, ? FROM _agg
             """,
-            (hour_ts, pool, host, point_label, avg_value),
+            (mark,),
         )
-
-        rows_affected += cnt - 1
-
-    if not dry_run:
+        con.execute("DROP TABLE _agg")
         con.commit()
+    except Exception:
+        con.rollback()
+        con.execute("DROP TABLE IF EXISTS _agg")
+        raise
 
-    print(f"  Aggregated {rows_affected} rows to hourly averages.")
-    return rows_affected
+    removed = total - groups
+    print(f"  {day}: collapsed {total} rows into {groups} {mark} rows")
+    return removed
 
 
-def aggregate_to_daily(con, cutoff_date, dry_run=False):
+def thin_readings(con, settings, state, deadline, dry_run=False):
+    """Walk day slices oldest-first, thinning per the retention policy.
+
+    Days older than hourly_days go straight to daily averages (single pass);
+    days between full_days and hourly_days go to hourly. Cursors in the state
+    dict make each run resume where the previous one stopped.
     """
-    Aggregate hourly data older than cutoff to daily averages.
-    """
-    print(f"Aggregating data older than {cutoff_date} to daily averages...")
+    today = date.today()
+    hourly_cutoff = today - timedelta(days=settings.get("data_retention_full_days", 30))
+    daily_cutoff = today - timedelta(days=settings.get("data_retention_hourly_days", 90))
 
-    cursor = con.execute(
-        """
-        SELECT
-            strftime('%Y-%m-%d 12:00:00', ts) as day_ts,
-            pool,
-            host,
-            point_label,
-            AVG(value) as avg_value,
-            COUNT(*) as cnt
-        FROM readings
-        WHERE ts < ?
-          AND value IS NOT NULL
-        GROUP BY date(ts), pool, host, point_label
-        HAVING cnt > 1
-        """,
-        (cutoff_date,),
-    )
-
-    aggregations = cursor.fetchall()
-    if not aggregations:
-        print("  No data to aggregate to daily.")
+    oldest_ts = con.execute("SELECT MIN(ts) FROM readings").fetchone()[0]
+    if not oldest_ts:
+        print("No readings to thin.")
         return 0
+    oldest_day = date.fromisoformat(oldest_ts[:10])
 
-    rows_affected = 0
-    for row in aggregations:
-        day_ts, pool, host, point_label, avg_value, cnt = row
+    removed = 0
+    budget_hit = False
 
-        if dry_run:
-            print(f"  Would aggregate {cnt} rows for {pool}/{host}/{point_label} on {day_ts[:10]}")
-            rows_affected += cnt - 1
-            continue
+    passes = [
+        # (state cursor key, first day if no cursor, stop before, bucket, mark)
+        ("daily_thinned_until", oldest_day, daily_cutoff, "%Y-%m-%d 12:00:00", DAILY_MARK),
+        ("hourly_thinned_until", max(oldest_day, daily_cutoff), hourly_cutoff, "%Y-%m-%d %H:00:00", HOURLY_MARK),
+    ]
 
-        # Delete original rows for this day
-        con.execute(
-            """
-            DELETE FROM readings
-            WHERE date(ts) = date(?)
-              AND pool = ?
-              AND host = ?
-              AND point_label = ?
-            """,
-            (day_ts, pool, host, point_label),
-        )
+    for key, first_day, stop_day, fmt, mark in passes:
+        day = first_day
+        if state.get(key):
+            try:
+                day = max(day, date.fromisoformat(state[key]))
+            except ValueError:
+                pass
 
-        # Insert single averaged row
-        con.execute(
-            """
-            INSERT INTO readings (ts, pool, host, point_label, value, raw_type)
-            VALUES (?, ?, ?, ?, ?, 'daily_avg')
-            """,
-            (day_ts, pool, host, point_label, avg_value),
-        )
+        while day < stop_day:
+            if time.monotonic() > deadline:
+                print(f"  Time budget reached; resuming at {day} next run.")
+                budget_hit = True
+                break
+            removed += aggregate_day(con, day, fmt, mark, dry_run)
+            day += timedelta(days=1)
+            if not dry_run:
+                state[key] = day.isoformat()
+                save_cleanup_state(state)
+        if budget_hit:
+            break
 
-        rows_affected += cnt - 1
-
-    if not dry_run:
-        con.commit()
-
-    print(f"  Aggregated {rows_affected} rows to daily averages.")
-    return rows_affected
+    print(f"Thinning removed {removed} rows this run{' (dry run)' if dry_run else ''}.")
+    return removed
 
 
 def delete_old_data(con, cutoff_date, dry_run=False):
@@ -357,18 +368,23 @@ def emergency_cleanup(con, target_mb, dry_run=False):
     return total_deleted
 
 
-def run_cleanup(settings, dry_run=False, vacuum=False):
+def run_cleanup(settings, dry_run=False, vacuum=False, budget_seconds=BUDGET_SECONDS_DEFAULT):
     """Run the full cleanup process."""
     if not POOL_DB_PATH.exists():
         print(f"Database not found: {POOL_DB_PATH}")
         return False
 
+    deadline = time.monotonic() + budget_seconds
+
     storage_info = get_storage_info()
     print(f"Current DB size: {storage_info['db_size_mb']:.2f} MB")
     print(f"Disk usage: {storage_info['disk_used_percent']:.1f}%")
 
-    # Connect to database
-    con = sqlite3.connect(str(POOL_DB_PATH), timeout=60)
+    # Connect to database. isolation_level=None -> autocommit, so the
+    # per-day thinning transactions are managed explicitly (BEGIN IMMEDIATE)
+    # and stay short - the logger writes every poll cycle and WAL mode only
+    # parallelizes readers, not writers.
+    con = sqlite3.connect(str(POOL_DB_PATH), timeout=60, isolation_level=None)
 
     try:
         stats = get_db_stats(con)
@@ -377,9 +393,12 @@ def run_cleanup(settings, dry_run=False, vacuum=False):
 
         now = datetime.now()
 
+        if not dry_run:
+            ensure_ts_index(con)
+
         # Check for emergency cleanup first
         storage_threshold = settings.get("storage_threshold_percent", 80)
-        storage_max_mb = settings.get("storage_max_mb", 500)
+        storage_max_mb = settings.get("storage_max_mb", DEFAULTS["storage_max_mb"])
 
         if storage_info["disk_used_percent"] > storage_threshold:
             print(f"\n⚠️  Disk usage ({storage_info['disk_used_percent']:.1f}%) exceeds threshold ({storage_threshold}%)")
@@ -388,20 +407,12 @@ def run_cleanup(settings, dry_run=False, vacuum=False):
             print(f"\n⚠️  DB size ({storage_info['db_size_mb']:.2f} MB) exceeds max ({storage_max_mb} MB)")
             emergency_cleanup(con, storage_max_mb * 0.8, dry_run)
 
-        # Normal retention policy
-        full_days = settings.get("data_retention_full_days", 30)
-        hourly_days = settings.get("data_retention_hourly_days", 90)
+        # Normal retention policy: day-sliced, budgeted, resumable thinning
+        state = load_cleanup_state()
+        thin_readings(con, settings, state, deadline, dry_run)
+
+        # Delete data older than daily retention (sargable range, uses ts index)
         daily_days = settings.get("data_retention_daily_days", 365)
-
-        # Aggregate to hourly (data older than full_days)
-        hourly_cutoff = (now - timedelta(days=full_days)).strftime("%Y-%m-%d %H:%M:%S")
-        aggregate_to_hourly(con, hourly_cutoff, dry_run)
-
-        # Aggregate to daily (data older than hourly_days)
-        daily_cutoff = (now - timedelta(days=hourly_days)).strftime("%Y-%m-%d %H:%M:%S")
-        aggregate_to_daily(con, daily_cutoff, dry_run)
-
-        # Delete old data (data older than daily_days)
         delete_cutoff = (now - timedelta(days=daily_days)).strftime("%Y-%m-%d %H:%M:%S")
         delete_old_data(con, delete_cutoff, dry_run)
 
@@ -431,6 +442,8 @@ def main():
     parser.add_argument("--force", action="store_true", help="Force cleanup regardless of schedule")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done without making changes")
     parser.add_argument("--vacuum", action="store_true", help="Reclaim freed space (exclusive lock - run with the logger stopped)")
+    parser.add_argument("--budget-seconds", type=int, default=BUDGET_SECONDS_DEFAULT,
+                        help="Wall-clock budget for thinning; progress resumes next run (default %(default)s)")
     args = parser.parse_args()
 
     print(f"=== Data Cleanup - {datetime.now().isoformat()} ===")
@@ -444,7 +457,8 @@ def main():
     if args.dry_run:
         print("DRY RUN MODE - No changes will be made\n")
 
-    success = run_cleanup(settings, args.dry_run, vacuum=args.vacuum)
+    success = run_cleanup(settings, args.dry_run, vacuum=args.vacuum,
+                          budget_seconds=args.budget_seconds)
 
     if success and not args.dry_run:
         state = load_cleanup_state()

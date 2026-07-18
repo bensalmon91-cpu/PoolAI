@@ -1,6 +1,6 @@
 # PoolAIssistant Pi Software
 
-**Current Version: 6.11.20** (released 2026-06-24)
+**Current Version: 6.11.21** (released 2026-07-18)
 
 ## Live Pi fleet (2026-06-11)
 
@@ -11,6 +11,10 @@
 > `tvcctv` (the former second unit at `10.0.30.131`) was decommissioned — confirmed gone 2026-06-11. Swanwood is the only live Pi.
 
 Updates land at the next 03:00 `update_check.timer` cron, or instantly via Settings → Check for Updates / `sudo python3 /opt/PoolAIssistant/app/scripts/update_check.py --apply`.
+
+**v6.11.21 (2026-07-18): data retention actually runs + journald actually persistent.**
+- The v6.11.19 retention timer fired nightly but `data_cleanup.py` was killed at `TimeoutStartSec=1800` **every run** (verified: `cleanup_state.json` never written) — `aggregate_to_hourly()` deleted each hour-group with a non-indexable `strftime(...)=?` WHERE, one full 14M-row scan per group. Rewritten set-based: whole-day slices (one GROUP BY into a temp table + one indexed range DELETE + one bulk INSERT per day), a 20-min wall-clock budget (`--budget-seconds`), and resume cursors in `cleanup_state.json`, so the multi-month backlog drains over a few nights during the cool 03:19 window. Days already past the 90d mark aggregate straight to daily (single pass). Uses/creates `idx_readings_ts_pool`. Tests: `tools/tests/test_data_retention.py`.
+- Persistent journald root cause found: Raspberry Pi OS ships `/usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf` (`Storage=volatile`) and drop-ins apply in **lexical filename order across conf.d dirs**, so it silently beat our `10-poolai-persistent.conf` — that's why every freeze/reboot investigation since v6.11.17 had no logs. The drop-in is now `99-poolai-persistent.conf` (wins), written by `update_check.py`'s self-heal (which previously only checked `/var/log/journal` existed — always true, never effective) and by `kiosk_setup.sh` (which previously *forced* volatile). Fixed live on Swanwood 2026-07-18; verified journal survives on disk.
 
 **v6.11.20 (2026-06-24): cloud uploads silently broken since 2026-06-15, now fixed (two stacked bugs).**
 - `cloud_upload.py`'s `get_controller_status()` queried `readings WHERE host=? ORDER BY ts DESC LIMIT 1` — SQLite picked `idx_readings_host_label` over `idx_readings_host_ts` and fell back to a temp-btree sort of every row for that host (millions of rows), taking minutes per controller and blowing the service's 120s start timeout every single tick. Same root cause class as the v6.11.18 dashboard iowait fix, in a script that never got it. Now reads `device_meta.last_seen_ts` (PK lookup, ~0ms) instead.

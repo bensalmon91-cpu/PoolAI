@@ -939,16 +939,31 @@ def apply_update(archive_path):
         except Exception as e:
             print(f"  Warning: could not reset data ownership: {e}")
 
-        # Persistent journald. Without /var/log/journal the journal is volatile
-        # and all history is lost on every reboot - which blinded the 2026-06-14
-        # settings-wipe diagnosis. Creating the directory flips journald to
-        # persistent storage (the default Storage=auto uses it when present).
+        # Persistent journald. Without it all history is lost on every reboot -
+        # which blinded the 2026-06-14 settings-wipe diagnosis and the 2026-07
+        # kiosk-freeze investigation. Creating /var/log/journal is NOT enough:
+        # Raspberry Pi OS ships /usr/lib/systemd/journald.conf.d/
+        # 40-rpi-volatile-storage.conf (Storage=volatile), and drop-ins apply
+        # in lexical filename order across all conf.d dirs - so our config
+        # must sort after "40-" to win. Root-caused on Swanwood 2026-07-18.
         print("Ensuring persistent journald...")
         try:
-            if not Path("/var/log/journal").exists():
-                subprocess.run(["mkdir", "-p", "/var/log/journal"],
-                               capture_output=True, text=True, timeout=10)
+            dropin_dir = Path("/etc/systemd/journald.conf.d")
+            dropin = dropin_dir / "99-poolai-persistent.conf"
+            stale = dropin_dir / "10-poolai-persistent.conf"  # pre-fix name, loses to 40-rpi
+            content = "[Journal]\nStorage=persistent\nSystemMaxUse=200M\n"
+            changed = False
+            if not dropin.exists() or dropin.read_text() != content:
+                dropin_dir.mkdir(parents=True, exist_ok=True)
+                dropin.write_text(content)
+                changed = True
+            if stale.exists():
+                stale.unlink()
+                changed = True
+            if changed:
                 subprocess.run(["systemctl", "restart", "systemd-journald"],
+                               capture_output=True, text=True, timeout=20)
+                subprocess.run(["journalctl", "--flush"],
                                capture_output=True, text=True, timeout=20)
                 print("  journald is now persistent (survives reboots)")
             else:
