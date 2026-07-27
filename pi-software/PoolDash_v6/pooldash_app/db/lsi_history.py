@@ -3,10 +3,11 @@ LSI (Langelier Saturation Index) history storage and retrieval.
 Stores LSI calculations over time for trend analysis.
 """
 
-import sqlite3
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 import os
+
+from .connection import get_connection
 
 
 def get_db_path() -> str:
@@ -19,7 +20,7 @@ def init_lsi_table(db_path: Optional[str] = None) -> None:
     if db_path is None:
         db_path = get_db_path()
 
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS lsi_readings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +40,6 @@ def init_lsi_table(db_path: Optional[str] = None) -> None:
             CREATE INDEX IF NOT EXISTS idx_lsi_pool_time
             ON lsi_readings(pool, timestamp)
         """)
-        conn.commit()
 
 
 def store_lsi_reading(
@@ -80,7 +80,7 @@ def store_lsi_reading(
 
     timestamp = datetime.now().isoformat()
 
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.execute("""
             INSERT INTO lsi_readings
             (timestamp, pool, ph, temperature_c, calcium_hardness,
@@ -90,7 +90,6 @@ def store_lsi_reading(
             timestamp, pool, ph, temperature_c, calcium_hardness,
             total_alkalinity, tds, lsi_value, ph_saturation, source
         ))
-        conn.commit()
         return cursor.lastrowid
 
 
@@ -133,8 +132,7 @@ def get_lsi_history(
     query += " ORDER BY timestamp DESC LIMIT ?"
     params.append(limit)
 
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection(db_path, readonly=True) as conn:
         cursor = conn.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
 
@@ -168,9 +166,8 @@ def get_lsi_chart_data(
         ORDER BY timestamp ASC
     """
 
-    with sqlite3.connect(db_path) as conn:
-        cursor = conn.execute(query, [pool, f"-{since_days} days"])
-        rows = cursor.fetchall()
+    with get_connection(db_path, readonly=True) as conn:
+        rows = conn.execute(query, [pool, f"-{since_days} days"]).fetchall()
 
     timestamps = [row[0] for row in rows]
     values = [row[1] for row in rows]
@@ -207,10 +204,9 @@ def delete_lsi_reading(reading_id: int, db_path: Optional[str] = None) -> bool:
     if db_path is None:
         db_path = get_db_path()
 
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.execute(
             "DELETE FROM lsi_readings WHERE id = ?",
             [reading_id]
         )
-        conn.commit()
         return cursor.rowcount > 0

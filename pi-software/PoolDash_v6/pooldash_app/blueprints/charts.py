@@ -938,7 +938,8 @@ def trends_page(pool: str):
 @charts_bp.route("/<pool>/lsi")
 def lsi_chart_page(pool: str):
     """LSI history chart page."""
-    from ..db.lsi_history import get_lsi_chart_data, get_lsi_history
+    from ..db.lsi_history import get_lsi_chart_data, get_lsi_history, get_latest_lsi
+    from ..lsi_interpretation import interpret_lsi
 
     days = request.args.get("days", "30", type=str)
     try:
@@ -951,6 +952,24 @@ def lsi_chart_page(pool: str):
 
     # Get recent history for the table
     history = get_lsi_history(pool, limit=20, since_days=since_days)
+
+    # Current-status summary card - same internalized (no AI call)
+    # interpretation used on the maintenance page, so a user landing here
+    # directly gets the same plain-English verdict without re-running a
+    # calculation.
+    status_html = ""
+    latest = get_latest_lsi(pool)
+    if latest and latest.get("lsi_value") is not None:
+        interpretation = interpret_lsi(latest["lsi_value"])
+        status_html = f"""
+          <div class="lsi-status-card lsi-status-card--{interpretation.band}">
+            <div class="lsi-status-card__value">{latest["lsi_value"]:.2f}</div>
+            <div>
+              <div class="lsi-status-card__headline">{interpretation.headline}</div>
+              <div class="muted small">as of {latest.get("timestamp", "")[:16].replace("T", " ")}</div>
+            </div>
+          </div>
+        """
 
     # Build the page content
     inner = f"""
@@ -973,6 +992,8 @@ def lsi_chart_page(pool: str):
         </div>
       </div>
 
+      {status_html}
+
       <div id="chart-container" style="min-height: 400px; position: relative;">
         <div id="chart"></div>
         <div id="chart-error" style="display: none; color: #b00; padding: 20px;"></div>
@@ -988,6 +1009,12 @@ def lsi_chart_page(pool: str):
         .lsi-good {{ color: #4caf50; }}
         .lsi-warning {{ color: #ff9800; }}
         .lsi-danger {{ color: #f44336; }}
+        .lsi-status-card {{ display: flex; align-items: center; gap: 16px; padding: 12px 16px; margin-bottom: 12px; border-radius: 8px; border-left: 4px solid #ddd; background: #f5f5f5; }}
+        .lsi-status-card__value {{ font-size: 1.8rem; font-weight: 700; font-family: monospace; }}
+        .lsi-status-card__headline {{ font-weight: 600; }}
+        .lsi-status-card--balanced {{ border-left-color: #4caf50; }}
+        .lsi-status-card--scaling {{ border-left-color: #f9a825; }}
+        .lsi-status-card--corrosive {{ border-left-color: #c62828; }}
       </style>
 
       <script>
@@ -1151,3 +1178,25 @@ def lsi_chart_page(pool: str):
         head_extra=plotly_script,
         content_html=Markup(inner),
     )
+
+
+@charts_bp.route("/<pool>/lsi/history")
+def lsi_history_api(pool: str):
+    """JSON LSI history for a pool. Moved here from blueprints/main_ui.py
+    (v6.11.22) - LSI/chart data belongs alongside lsi_chart_page, not in the
+    general pool-routing module. Had zero template/JS consumers at either
+    URL, so this is a pure relocation."""
+    from ..db import lsi_history
+
+    limit = request.args.get("limit", 50, type=int)
+    since_days = request.args.get("days", 90, type=int)
+
+    try:
+        history = lsi_history.get_lsi_history(
+            pool=pool,
+            limit=limit,
+            since_days=since_days,
+        )
+        return {"ok": True, "history": history}
+    except (sqlite3.Error, OSError) as e:
+        return {"ok": False, "error": str(e)}

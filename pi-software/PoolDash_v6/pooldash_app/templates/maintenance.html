@@ -5,96 +5,13 @@
   <h2>{{ pool }} – Maintenance</h2>
   <button type="button" class="cog-btn" onclick="openActionsModal()" title="Configure quick actions for this pool">&#9881;</button>
 </div>
-<div class="grid-2">
-  <div>
-    <div class="actions-header">
-      <h3>Quick Actions</h3>
-      <button type="button" class="btn btn--sm btn--secondary" onclick="openActionsModal()">Edit</button>
-    </div>
-    {% set filtered_actions = actions | selectattr('__len__') | list if actions else [] %}
-    {% set display_actions = [] %}
-    {% for a in actions if a not in ['Custom note','TDS'] %}
-      {% set _ = display_actions.append(a) %}
-    {% endfor %}
 
-    {% if display_actions %}
-    <div class="quick-actions-grid">
-      {% for a in actions if a not in ['Custom note','TDS'] %}
-        <form method="post" class="quick-action-form" onsubmit="return confirm('Confirm {{ a|e }}?')">
-          <input type="hidden" name="action" value="{{ a }}">
-          <button class="quick-action-btn" type="submit">
-            <span class="quick-action-icon">{% if 'backwash' in a|lower %}&#127754;{% elif 'clean' in a|lower %}&#129529;{% elif 'pump' in a|lower %}&#9881;{% elif 'check' in a|lower %}&#9989;{% elif 'filter' in a|lower %}&#128203;{% else %}&#128221;{% endif %}</span>
-            <span class="quick-action-label">{{ a }}</span>
-          </button>
-        </form>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="no-actions-empty">
-      <p class="muted">No quick actions configured for this pool.</p>
-      <button type="button" class="btn btn--sm" onclick="openActionsModal()">Add Actions</button>
-    </div>
-    {% endif %}
-  </div>
-  <div>
-    <h3>TDS</h3>
-    {% set tds = last_info.get('TDS', ('—','')) %}
-    <form method="post">
-      <input type="hidden" name="action" value="TDS">
-      <label for="tds_value"><strong>TDS value</strong></label>
-      <input id="tds_value" name="tds" type="number" step="any" placeholder="e.g. 850" class="input--lg w-auto" />
-      <button class="btn mt-2">Log TDS</button>
-      <div class="small mt-2">
-        Last TDS:
-        <span class="mono">{{ tds[1] or '—' }}</span>
-        <span class="mono">({{ tds[0] }})</span>
-      </div>
-    </form>
-
-    <div class="mt-4"></div>
-    <h3>Custom Note</h3>
-    <form method="post">
-      <input type="hidden" name="action" value="Custom note">
-      <label for="note"><strong>Write a note</strong></label>
-      <textarea id="note" name="note" placeholder="Note..." class="textarea--lg"></textarea>
-      <button class="btn mt-2">Save custom note</button>
-    </form>
-  </div>
-</div>
-
-<div class="card">
-  <h3>Log Past Entry</h3>
-  <p class="form-hint mb-3">Record maintenance that was done earlier. Quick actions above always log at the current time.</p>
-  <form method="post">
-    <div class="grid-2">
-      <div>
-        <label for="past_action"><strong>Action</strong></label>
-        <select id="past_action" name="action" class="input--lg" onchange="togglePastTds(this)">
-          {% for a in actions %}
-            <option value="{{ a }}">{{ a }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label for="past_timestamp"><strong>When</strong></label>
-        <input id="past_timestamp" name="timestamp" type="datetime-local" class="input--lg" required>
-      </div>
-    </div>
-    <div id="past_tds_field" class="mt-2" style="display:none;">
-      <label for="past_tds"><strong>TDS value</strong></label>
-      <input id="past_tds" name="tds" type="number" step="any" placeholder="e.g. 850" class="input--lg w-auto">
-    </div>
-    <div class="mt-2">
-      <label for="past_note"><strong>Note (optional)</strong></label>
-      <textarea id="past_note" name="note" placeholder="Note..."></textarea>
-    </div>
-    <button class="btn mt-2" type="submit">Log Past Entry</button>
-  </form>
-</div>
-
+<!-- LSI Calculator - the centerpiece of this page. Promoted above Quick
+     Actions since the Langelier Saturation Index is the primary thing this
+     page exists to help with. -->
 <div class="card">
   <div class="card-header-row">
-    <h3>LSI Calculator</h3>
+    <h3>Langelier Saturation Index (LSI)</h3>
     <a class="btn btn--sm btn--secondary" href="{{ url_for('charts.lsi_chart_page', pool=pool) }}">View LSI History</a>
   </div>
   <form method="post" class="grid-2">
@@ -149,14 +66,109 @@
         <tr><td>D_alkalinity</td><td class="mono">{{ "%.4f"|format(lsi_result.factors["D_alkalinity"]) }}</td></tr>
       </tbody>
     </table>
+
+    {% if lsi_interpretation %}
+    <div class="lsi-interpretation lsi-interpretation--{{ lsi_interpretation.band }} mt-3">
+      <div class="lsi-interpretation__headline">{{ lsi_interpretation.headline }}</div>
+      <p class="lsi-interpretation__description">{{ lsi_interpretation.description }}</p>
+      {% if lsi_interpretation.dominant_factor %}
+        <p class="small muted">Most likely contributor: {{ lsi_interpretation.dominant_factor }}</p>
+      {% endif %}
+      <ul class="lsi-interpretation__actions">
+        {% for action in lsi_interpretation.actions %}
+          <li>{{ action }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if lsi_saved %}
+      <p class="small status-ok mt-2">Saved to LSI history — <a href="{{ url_for('charts.lsi_chart_page', pool=pool) }}">View trend</a></p>
+    {% endif %}
   {% endif %}
 </div>
 
-<!-- REMOVED: Pump selector iframe block
-<div style="margin-top:12px;">
-  <iframe src="/pump/" style="width:100%; height:420px; border:none; border-radius:14px;"></iframe>
+<div class="grid-2">
+  <div>
+    <div class="actions-header">
+      <h3>Quick Actions</h3>
+      <button type="button" class="btn btn--sm btn--secondary" onclick="openActionsModal()">Edit</button>
+    </div>
+
+    {% set display_actions = [] %}
+    {% for a in actions if a not in ['Custom note','TDS'] %}
+      {% set _ = display_actions.append(a) %}
+    {% endfor %}
+
+    {% if display_actions %}
+    <div class="quick-actions-grid">
+      {% for a in actions if a not in ['Custom note','TDS'] %}
+        <form method="post" class="quick-action-form" onsubmit="return confirm('Confirm {{ a|e }}?')">
+          <input type="hidden" name="action" value="{{ a }}">
+          <button class="quick-action-btn" type="submit">
+            <span class="quick-action-icon">{% if 'backwash' in a|lower %}&#127754;{% elif 'clean' in a|lower %}&#129529;{% elif 'pump' in a|lower %}&#9881;{% elif 'check' in a|lower %}&#9989;{% elif 'filter' in a|lower %}&#128203;{% else %}&#128221;{% endif %}</span>
+            <span class="quick-action-label">{{ a }}</span>
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="no-actions-empty">
+      <p class="muted">No quick actions configured for this pool.</p>
+      <button type="button" class="btn btn--sm" onclick="openActionsModal()">Add Actions</button>
+    </div>
+    {% endif %}
+  </div>
+
+  <div>
+    <!-- Single consolidated logging form. Replaces the old TDS card,
+         Custom Note card, and "Log Past Entry" card - those were three
+         separate re-implementations of "action + optional note/TDS +
+         optional timestamp" with the same backend handler underneath.
+         Quick Actions above stay as one-tap shortcuts for "log this now";
+         this form covers everything else, including backdating. -->
+    <h3>Log an Entry</h3>
+    <form method="post" id="logEntryForm">
+      <label for="entry_action"><strong>Action</strong></label>
+      <select id="entry_action" name="action" class="input--lg" onchange="toggleTdsField(this)">
+        {% for a in actions %}
+          <option value="{{ a }}">{{ a }}</option>
+        {% endfor %}
+      </select>
+
+      <div id="entry_tds_field" class="mt-2" style="display:none;">
+        <label for="entry_tds"><strong>TDS value</strong></label>
+        <input id="entry_tds" name="tds" type="number" step="any" placeholder="e.g. 850" class="input--lg w-auto">
+      </div>
+
+      <div class="mt-2">
+        <label for="entry_note"><strong>Note (optional)</strong></label>
+        <textarea id="entry_note" name="note" placeholder="Note..." class="textarea--lg"></textarea>
+      </div>
+
+      <div class="mt-2">
+        <label class="checkbox-label">
+          <input type="checkbox" id="entry_backdate_toggle" onchange="toggleBackdate(this)">
+          Backdate this entry
+        </label>
+      </div>
+      <div id="entry_timestamp_field" class="mt-2" style="display:none;">
+        <label for="entry_timestamp"><strong>When</strong></label>
+        <input id="entry_timestamp" name="timestamp" type="datetime-local" class="input--lg">
+      </div>
+
+      <button class="btn mt-3" type="submit">Log Entry</button>
+    </form>
+
+    <div class="mt-4"></div>
+    <h3>Last TDS</h3>
+    {% set tds = last_info.get('TDS', ('—','')) %}
+    <div class="small">
+      <span class="mono">{{ tds[1] or '—' }}</span>
+      <span class="mono">({{ tds[0] }})</span>
+    </div>
+  </div>
 </div>
--->
 
 <div class="card">
   <h3>Last done</h3>
@@ -189,7 +201,7 @@
         <label>Actions</label>
         <textarea id="poolActionsText" class="textarea--lg" placeholder="Backwash Filter 1&#10;Clean pump strainers&#10;Check chemical levels"></textarea>
       </div>
-      <p class="form-hint mt-2">Leave empty to use the global actions from Settings.</p>
+      <p class="form-hint mt-2">Leave empty to use the global actions from Settings → Maintenance.</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn--sm btn--secondary" onclick="closeActionsModal()">Cancel</button>
@@ -270,13 +282,46 @@
 .card-header-row h3 {
   margin: 0;
 }
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+/* LSI plain-English interpretation card */
+.lsi-interpretation {
+  padding: 12px 16px;
+  border-radius: 8px;
+  border-left: 4px solid var(--color-border, #ddd);
+  background: var(--color-surface-raised, #f5f5f5);
+}
+.lsi-interpretation__headline {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.lsi-interpretation__description {
+  margin: 4px 0;
+}
+.lsi-interpretation__actions {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+.lsi-interpretation--balanced {
+  border-left-color: var(--color-success, #2e7d32);
+}
+.lsi-interpretation--scaling {
+  border-left-color: var(--color-warning, #f9a825);
+}
+.lsi-interpretation--corrosive {
+  border-left-color: var(--color-danger, #c62828);
+}
 </style>
 
 <script>
-// Log Past Entry: clamp the picker to "now" (server rejects future
-// timestamps too) and show the TDS value field only when TDS is selected.
 (function() {
-  var ts = document.getElementById('past_timestamp');
+  var ts = document.getElementById('entry_timestamp');
   if (ts) {
     var now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -284,13 +329,19 @@
   }
 })();
 
-function togglePastTds(select) {
-  var field = document.getElementById('past_tds_field');
-  var input = document.getElementById('past_tds');
+function toggleTdsField(select) {
+  var field = document.getElementById('entry_tds_field');
+  var input = document.getElementById('entry_tds');
   var isTds = select.value === 'TDS';
   field.style.display = isTds ? '' : 'none';
-  input.required = isTds;
   if (!isTds) input.value = '';
+}
+
+function toggleBackdate(checkbox) {
+  var field = document.getElementById('entry_timestamp_field');
+  var input = document.getElementById('entry_timestamp');
+  field.style.display = checkbox.checked ? '' : 'none';
+  if (!checkbox.checked) input.value = '';
 }
 
 // Auto-fill LSI fields from controller sensors

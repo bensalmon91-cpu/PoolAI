@@ -461,8 +461,12 @@ def _get_ethernet_config():
 
     return config
 from ..langelier import lsi_from_values
+from ..lsi_interpretation import interpret_lsi
 from ..db import maintenance as mdb
-from ..persist import load as load_persisted, save as save_persisted, actions_from_text, unique_names
+from ..persist import (
+    load as load_persisted, save as save_persisted, actions_from_text, unique_names,
+    DEFAULTS as PERSIST_DEFAULTS, sanitize_rs485_devices, validate_reboot_time,
+)
 
 main_bp = Blueprint("main", __name__)
 
@@ -485,7 +489,6 @@ def _persisted():
     current_app.config["EZETROL_LAYOUT"] = data.get("ezetrol_layout", "CDAB")
     current_app.config["CHART_DOWNSAMPLE"] = data.get("chart_downsample", True)
     current_app.config["CHART_MAX_POINTS"] = data.get("chart_max_points", 5000)
-    current_app.config["UPLOAD_INTERVAL_MINUTES"] = data.get("upload_interval_minutes", 10)
     current_app.config["BACKEND_URL"] = data.get("backend_url", "")
     current_app.config["BOOTSTRAP_SECRET"] = data.get("bootstrap_secret", "")
     # Device API key (set by auto-provisioning, used by all cloud uploads)
@@ -496,7 +499,7 @@ def _persisted():
     current_app.config["DATA_RETENTION_HOURLY_DAYS"] = data.get("data_retention_hourly_days", 90)
     current_app.config["DATA_RETENTION_DAILY_DAYS"] = data.get("data_retention_daily_days", 365)
     current_app.config["STORAGE_THRESHOLD_PERCENT"] = data.get("storage_threshold_percent", 80)
-    current_app.config["STORAGE_MAX_MB"] = data.get("storage_max_mb", 500)
+    current_app.config["STORAGE_MAX_MB"] = data.get("storage_max_mb", PERSIST_DEFAULTS["storage_max_mb"])
     # Display settings
     current_app.config["SCREEN_ROTATION"] = data.get("screen_rotation", 0)
     return data
@@ -512,7 +515,6 @@ def _save_persisted(data):
     current_app.config["EZETROL_LAYOUT"] = data.get("ezetrol_layout", "CDAB")
     current_app.config["CHART_DOWNSAMPLE"] = data.get("chart_downsample", True)
     current_app.config["CHART_MAX_POINTS"] = data.get("chart_max_points", 5000)
-    current_app.config["UPLOAD_INTERVAL_MINUTES"] = data.get("upload_interval_minutes", 10)
     current_app.config["BACKEND_URL"] = data.get("backend_url", "")
     current_app.config["BOOTSTRAP_SECRET"] = data.get("bootstrap_secret", "")
     # Device API key (set by auto-provisioning, used by all cloud uploads)
@@ -523,7 +525,7 @@ def _save_persisted(data):
     current_app.config["DATA_RETENTION_HOURLY_DAYS"] = data.get("data_retention_hourly_days", 90)
     current_app.config["DATA_RETENTION_DAILY_DAYS"] = data.get("data_retention_daily_days", 365)
     current_app.config["STORAGE_THRESHOLD_PERCENT"] = data.get("storage_threshold_percent", 80)
-    current_app.config["STORAGE_MAX_MB"] = data.get("storage_max_mb", 500)
+    current_app.config["STORAGE_MAX_MB"] = data.get("storage_max_mb", PERSIST_DEFAULTS["storage_max_mb"])
     # Display settings
     current_app.config["SCREEN_ROTATION"] = data.get("screen_rotation", 0)
 
@@ -670,6 +672,8 @@ def maintenance_page(pool: str):
     actions = pool_specific_actions if pool_specific_actions else _get_actions()
     lsi_result = None
     lsi_error = ""
+    lsi_interpretation = None
+    lsi_saved = False
     lsi_inputs = {
         "ph": "",
         "temperature_c": "",
@@ -709,25 +713,35 @@ def maintenance_page(pool: str):
                     tds_mgL=tds_val,
                 )
 
-                # Store LSI result in history
+                # Store LSI result in history. lsi_from_values() returns an
+                # LSIResult frozen dataclass (langelier.py), not a dict - it
+                # has no .get() and the attribute is ph_saturation (lowercase).
+                # Calling .get() here raised AttributeError on every single
+                # calculation, silently swallowed by the broad except below,
+                # so lsi_readings was never once written to in production.
                 try:
                     from ..db import lsi_history
                     source = request.form.get("source", "manual")
                     lsi_history.store_lsi_reading(
                         pool=pool,
-                        lsi_value=lsi_result.get("lsi", 0),
+                        lsi_value=lsi_result.lsi,
                         ph=ph_val,
                         temperature_c=temp_val,
                         calcium_hardness=ca_val,
                         total_alkalinity=alk_val,
                         tds=tds_val,
-                        ph_saturation=lsi_result.get("pH_saturation"),
+                        ph_saturation=lsi_result.ph_saturation,
                         source=source,
                         db_path=db_path
                     )
-                except Exception as e:
+                    lsi_saved = True
+                except (sqlite3.Error, OSError) as e:
                     # Don't fail the calculation if storage fails
                     current_app.logger.warning(f"Failed to store LSI history: {e}")
+
+                # Internalized (no AI/API call) plain-English interpretation
+                # + corrective-action checklist - see lsi_interpretation.py.
+                lsi_interpretation = interpret_lsi(lsi_result.lsi, lsi_result.factors)
 
             except ValueError as e:
                 lsi_error = str(e)
@@ -776,6 +790,8 @@ def maintenance_page(pool: str):
         last_info=last_info,
         lsi_result=lsi_result,
         lsi_error=lsi_error,
+        lsi_interpretation=lsi_interpretation,
+        lsi_saved=lsi_saved,
         lsi_inputs=lsi_inputs,
         active_tab=pool
     )
@@ -827,26 +843,11 @@ def lsi_autofill(pool: str):
     return result
 
 
-@main_bp.route("/pool/<pool>/lsi/history")
-def lsi_history_api(pool: str):
-    """Get LSI history for a pool."""
-    try:
-        from ..db import lsi_history
-        db_path = current_app.config.get("POOL_DB_PATH", "pool_readings.sqlite3")
 
-        limit = request.args.get("limit", 50, type=int)
-        since_days = request.args.get("days", 90, type=int)
-
-        history = lsi_history.get_lsi_history(
-            pool=pool,
-            limit=limit,
-            since_days=since_days,
-            db_path=db_path
-        )
-
-        return {"ok": True, "history": history}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+# lsi_history_api moved to blueprints/charts.py v6.11.22 (as
+# GET /charts/<pool>/lsi/history) - it's LSI/chart data, not general pool
+# routing, and had zero template/JS consumers at either URL (confirmed by
+# grep), so the move is a pure relocation with no link/bookmark to break.
 
 
 # ----------------------------
@@ -872,7 +873,6 @@ def settings():
         "SOFTWARE_VERSION": os.getenv("SOFTWARE_VERSION", ""),
         "UPDATE_CHANNEL": os.getenv("UPDATE_CHANNEL", "stable"),
         "MODBUS_PROFILE": current_app.config.get("MODBUS_PROFILE", "ezetrol"),
-        "UPLOAD_INTERVAL_MINUTES": current_app.config.get("UPLOAD_INTERVAL_MINUTES", 10),
     }
 
     update_status = _read_update_status()
@@ -902,7 +902,6 @@ def settings():
         ezetrol_channel_map=current_app.config.get("EZETROL_CHANNEL_MAP", {}),
         ezetrol_layout=current_app.config.get("EZETROL_LAYOUT", "CDAB"),
         chart_downsample=current_app.config.get("CHART_DOWNSAMPLE", True),
-        upload_interval=current_app.config.get("UPLOAD_INTERVAL_MINUTES", 10),
         backend_url=current_app.config.get("BACKEND_URL", ""),
         bootstrap_secret=current_app.config.get("BOOTSTRAP_SECRET", ""),
         update_status=update_status,
@@ -919,7 +918,7 @@ def settings():
         data_retention_hourly_days=data.get("data_retention_hourly_days", 90),
         data_retention_daily_days=data.get("data_retention_daily_days", 365),
         storage_threshold_percent=data.get("storage_threshold_percent", 80),
-        storage_max_mb=data.get("storage_max_mb", 500),
+        storage_max_mb=data.get("storage_max_mb", PERSIST_DEFAULTS["storage_max_mb"]),
         storage_info=storage_info,
         # AP settings
         ap_suffix=data.get("ap_suffix", ""),
@@ -2182,10 +2181,21 @@ AP_OPEN="true"
         ) as proc:
             proc.communicate(input=ap_config.encode(), timeout=10)
 
-        # If action is "apply", also restart AP services
+        # If action is "apply" and the AP is currently broadcasting, hot-reload
+        # it via ap_control.sh so the new SSID/password take effect immediately.
+        # (poolaissistant_ap_manager, retired v6.11.22, used to be restarted
+        # here instead - see update_check.py's retired_units self-heal.)
         if action == "apply":
-            subprocess.run(["sudo", "systemctl", "restart", "poolaissistant_ap_manager"], capture_output=True, timeout=30)
-            flash(f"AP settings applied: {ap_ssid}. AP manager restarted.")
+            ap_control = "/usr/local/bin/ap_control.sh"
+            status = subprocess.run(
+                ["sudo", ap_control, "status"], capture_output=True, text=True, timeout=15
+            )
+            if status.stdout.strip() == "active":
+                subprocess.run(["sudo", ap_control, "stop"], capture_output=True, timeout=30)
+                subprocess.run(["sudo", ap_control, "start"], capture_output=True, timeout=30)
+                flash(f"AP settings applied: {ap_ssid}. Access Point restarted with the new settings.")
+            else:
+                flash(f"AP settings saved: {ap_ssid}. Turn the Access Point on to use them.")
         else:
             flash(f"AP settings saved: {ap_ssid}. Restart AP to apply changes.")
 
@@ -2739,7 +2749,11 @@ def update_rs485_devices():
             except Exception:
                 pass
 
-    devices = []
+    # Thin request-parsing only - persist.sanitize_rs485_devices() is the
+    # single validation/normalization authority (baud int-cast, mode
+    # allow-list, etc.); this route used to reimplement that same logic a
+    # second time here.
+    raw_devices = []
     for i in sorted(indices):
         # Handle port selection (dropdown or custom)
         port_select = (request.form.get(f"rs485_port__{i}") or "").strip()
@@ -2751,33 +2765,23 @@ def update_rs485_devices():
         else:
             continue  # Skip entries without a valid port
 
-        name = (request.form.get(f"rs485_name__{i}") or "Water Tester").strip()
-        enabled = request.form.get(f"rs485_enabled__{i}") == "on"
-        baud_raw = (request.form.get(f"rs485_baud__{i}") or "9600").strip()
         mode = (request.form.get(f"rs485_mode__{i}") or "standalone").strip()
         merged_pool = (request.form.get(f"rs485_merged_pool__{i}") or "").strip()
-
-        try:
-            baud = int(baud_raw)
-        except Exception:
-            baud = 9600
-
-        if mode not in ("standalone", "merged"):
-            mode = "standalone"
-
         # If mode is standalone, clear merged_pool
         if mode == "standalone":
             merged_pool = ""
 
-        devices.append({
+        raw_devices.append({
             "port": port,
-            "baud": baud,
-            "name": name,
+            "baud": (request.form.get(f"rs485_baud__{i}") or "9600").strip(),
+            "name": (request.form.get(f"rs485_name__{i}") or "Water Tester").strip(),
             "unit_id": 1,  # Default Modbus unit ID
             "mode": mode,
             "merged_with_pool": merged_pool,
-            "enabled": enabled,
+            "enabled": request.form.get(f"rs485_enabled__{i}") == "on",
         })
+
+    devices = sanitize_rs485_devices(raw_devices)
 
     data = _persisted()
     data["rs485_devices"] = devices
@@ -2815,57 +2819,21 @@ def detect_rs485_devices():
     return {"success": True, "ports": ports}
 
 
-@main_bp.route("/settings/upload_interval", methods=["POST"])
-def update_upload_interval():
-    action = (request.form.get("action") or "").strip().lower()
-    data = _persisted()
-    allowed = {1, 3, 6, 12, 20, 30, 40, 60}
 
-    if action == "reset":
-        data["upload_interval_minutes"] = 10
-        _save_persisted(data)
-        flash("Upload interval reset to default (10 minutes).")
-        return redirect(url_for("main.settings"))
-
-    try:
-        value = int(request.form.get("upload_interval") or "")
-    except Exception:
-        value = 0
-
-    if value not in allowed:
-        flash("Invalid upload interval selection.")
-        return redirect(url_for("main.settings"))
-
-    data["upload_interval_minutes"] = value
-    _save_persisted(data)
-    flash("Upload interval updated. Next sync will follow this schedule.")
-    return redirect(url_for("main.settings"))
-
-
-@main_bp.route("/settings/backend_credentials", methods=["POST"])
-def update_backend_credentials():
-    action = (request.form.get("action") or "").strip().lower()
-    data = _persisted()
-
-    if action == "reset":
-        data["backend_url"] = ""
-        data["bootstrap_secret"] = ""
-        _save_persisted(data)
-        flash("Backend credentials cleared.")
-        return redirect(url_for("main.settings"))
-
-    backend_url = (request.form.get("backend_url") or "").strip()
-    bootstrap_secret = (request.form.get("bootstrap_secret") or "").strip()
-
-    if backend_url and not backend_url.startswith("http"):
-        flash("Backend URL must start with http or https.")
-        return redirect(url_for("main.settings"))
-
-    data["backend_url"] = backend_url
-    data["bootstrap_secret"] = bootstrap_secret
-    _save_persisted(data)
-    flash("Backend credentials saved. Restart sync service if needed.")
-    return redirect(url_for("main.settings"))
+# update_upload_interval (POST /settings/upload_interval) and
+# update_backend_credentials (POST /settings/backend_credentials) removed
+# v6.11.22.
+#
+# upload_interval_minutes had zero template consumers (confirmed by grep)
+# and was fully superseded by cloud_upload_interval_minutes years ago; the
+# route and setting key are both dead. See persist.py's DEFAULTS/load()/
+# save() for the corresponding key removal.
+#
+# The backend-credentials form was a no-op: persist.save() has always
+# unconditionally overwritten backend_url/bootstrap_secret from the
+# hardcoded SYSTEM_URLS (persist.py, also enforced on load), so every
+# "Save" silently did nothing. system.html now renders these as a plain
+# read-only display instead of a form, so no route is needed at all.
 
 
 @main_bp.route("/settings/check_update", methods=["POST"])
@@ -3173,9 +3141,48 @@ def get_external_storage():
     return {"ok": True, **info}
 
 
+_external_storage_proc = None
+_external_storage_lock = threading.Lock()
+
+
+def _read_external_storage_status():
+    """Read the status JSON written by scripts/usb_data_mount.sh.
+
+    Never does any subprocess/disk I/O of its own beyond a plain file read -
+    this is the only migration-progress info a page render or poll may use.
+    """
+    status_path = os.getenv(
+        "EXTERNAL_STORAGE_STATUS_PATH",
+        "/opt/PoolAIssistant/data/external_storage_status.json",
+    )
+    if status_path and os.path.exists(status_path):
+        try:
+            with open(status_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _external_storage_running():
+    with _external_storage_lock:
+        return _external_storage_proc is not None and _external_storage_proc.poll() is None
+
+
 @main_bp.route("/settings/external-storage/enable", methods=["POST"])
 def enable_external_storage():
-    """Enable external storage for data."""
+    """Start the external-storage migration in the background and return
+    immediately. Copying a multi-GB database onto a USB drive can take far
+    longer than any reasonable request timeout (a v6.11.21-era incident on
+    Swanwood hit exactly this: a 180s subprocess.run() timeout fired mid-copy,
+    and because the timeout only kills the immediate child - not the cp/rsync
+    it had spawned - the copy kept running orphaned in the background anyway,
+    just with no way for the UI to see progress or the final result). The
+    page now polls /settings/external-storage/status and re-renders once the
+    background script's status file reports "done" or "error".
+    """
+    global _external_storage_proc
+
     device = request.form.get("device", "").strip()
     if not device:
         flash("No device specified.", "error")
@@ -3186,49 +3193,81 @@ def enable_external_storage():
         flash("Invalid device path.", "error")
         return redirect(url_for("main.system_page"))
 
-    try:
-        # Run the USB data mount script with the device as argument
-        script_path = "/opt/PoolAIssistant/app/scripts/usb_data_mount.sh"
-        if os.path.exists(script_path):
-            # Increased timeout to 180s for formatting/copying large data
-            result = subprocess.run(
+    script_path = "/opt/PoolAIssistant/app/scripts/usb_data_mount.sh"
+    if not os.path.exists(script_path):
+        flash("External storage script not found.", "error")
+        return redirect(url_for("main.system_page"))
+
+    with _external_storage_lock:
+        if _external_storage_running():
+            flash("An external storage migration is already running.", "warning")
+            return redirect(url_for("main.system_page"))
+        try:
+            _external_storage_proc = subprocess.Popen(
                 ["sudo", script_path, device],
-                capture_output=True, text=True, timeout=180
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
             )
-            if result.returncode == 0:
-                flash("External storage enabled successfully. Services will restart.", "success")
-                # Restart services to use new storage
-                subprocess.run(["sudo", "systemctl", "restart", "poolaissistant_logger"], timeout=30)
-                subprocess.run(["sudo", "systemctl", "restart", "poolaissistant_ui"], timeout=30)
-            else:
-                flash(f"Failed to enable external storage: {result.stderr}", "error")
-        else:
-            flash("External storage script not found.", "error")
-    except subprocess.TimeoutExpired:
-        flash("Operation timed out. The device may still be formatting. Check back shortly.", "warning")
-    except Exception as e:
-        flash(f"Error enabling external storage: {e}", "error")
+            flash("Migrating data to external storage - this can take a while for a large database. Progress will appear below.", "success")
+        except Exception as e:
+            flash(f"Failed to start external storage migration: {e}", "error")
 
     return redirect(url_for("main.system_page"))
 
 
+@main_bp.route("/settings/external-storage/status")
+def external_storage_status():
+    """AJAX endpoint: is a migration running, plus the cached status file."""
+    return {
+        "ok": True,
+        "running": _external_storage_running(),
+        "status": _read_external_storage_status(),
+    }
+
+
+def _write_external_storage_status(phase: str, message: str, error: str = None):
+    """Python-side counterpart to usb_data_mount.sh's write_status(), used by
+    disable_external_storage() so the UI's polling/status display stays
+    consistent regardless of which side (bash migration script or this
+    fast, local-only revert) last touched the status file."""
+    status_path = os.getenv(
+        "EXTERNAL_STORAGE_STATUS_PATH",
+        "/opt/PoolAIssistant/data/external_storage_status.json",
+    )
+    try:
+        with open(status_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "phase": phase,
+                "message": message,
+                "error": error,
+                "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }, f)
+    except Exception:
+        pass
+
+
 @main_bp.route("/settings/external-storage/disable", methods=["POST"])
 def disable_external_storage():
-    """Disable external storage, revert to internal SD card."""
+    """Disable external storage, revert to internal SD card.
+
+    Unlike enable (which can copy several GB and must run detached), this
+    only ever touches a symlink and an already-local .sd_backup directory -
+    both fast, same-filesystem operations - so it's safe to run synchronously.
+    """
     data_dir = "/opt/PoolAIssistant/data"
     backup_dir = f"{data_dir}.sd_backup"
 
-    try:
-        # Check if currently using external storage
-        if not os.path.islink(data_dir):
-            flash("Already using internal storage.", "info")
-            return redirect(url_for("main.settings"))
+    if not os.path.islink(data_dir):
+        flash("Already using internal storage.", "info")
+        return redirect(url_for("main.settings"))
 
-        # Stop services first
+    _write_external_storage_status("disabling", "Reverting to internal SD card storage")
+
+    try:
         subprocess.run(["sudo", "systemctl", "stop", "poolaissistant_logger"], timeout=30)
         subprocess.run(["sudo", "systemctl", "stop", "poolaissistant_ui"], timeout=30)
 
-        # Remove symlink and restore SD backup
         subprocess.run(["sudo", "rm", data_dir], timeout=10)
 
         if os.path.exists(backup_dir):
@@ -3239,22 +3278,14 @@ def disable_external_storage():
             subprocess.run(["sudo", "chown", "poolaissistant:poolaissistant", data_dir], timeout=10)
             flash("Reverted to internal storage (fresh directory).", "success")
 
-        # Restart services
-        subprocess.run(["sudo", "systemctl", "start", "poolaissistant_logger"], timeout=30)
-        subprocess.run(["sudo", "systemctl", "start", "poolaissistant_ui"], timeout=30)
-
+        _write_external_storage_status("idle", "Using internal SD card storage")
     except Exception as e:
         flash(f"Error disabling external storage: {e}", "error")
-        # Try to restart services anyway
+        _write_external_storage_status("error", "Failed to revert to internal storage", str(e))
+    finally:
         subprocess.run(["sudo", "systemctl", "start", "poolaissistant_logger"], timeout=30)
         subprocess.run(["sudo", "systemctl", "start", "poolaissistant_ui"], timeout=30)
 
-    return redirect(url_for("main.settings"))
-
-
-@main_bp.route("/settings/advanced")
-def advanced_settings():
-    """Redirect to main settings (advanced settings now in protected section)."""
     return redirect(url_for("main.settings"))
 
 
@@ -3270,7 +3301,7 @@ def update_data_retention():
         data["data_retention_hourly_days"] = 90
         data["data_retention_daily_days"] = 365
         data["storage_threshold_percent"] = 80
-        data["storage_max_mb"] = 500
+        data["storage_max_mb"] = PERSIST_DEFAULTS["storage_max_mb"]
         _save_persisted(data)
         flash("Data retention settings reset to defaults.")
         return redirect(url_for("main.settings"))
@@ -3299,9 +3330,9 @@ def update_data_retention():
         data["storage_threshold_percent"] = 80
 
     try:
-        data["storage_max_mb"] = max(100, int(request.form.get("storage_max_mb") or 500))
+        data["storage_max_mb"] = max(100, int(request.form.get("storage_max_mb") or PERSIST_DEFAULTS["storage_max_mb"]))
     except ValueError:
-        data["storage_max_mb"] = 500
+        data["storage_max_mb"] = PERSIST_DEFAULTS["storage_max_mb"]
 
     _save_persisted(data)
     flash("Data retention settings updated.")
@@ -3311,21 +3342,17 @@ def update_data_retention():
 @main_bp.route("/settings/advanced/scheduled_reboot", methods=["POST"])
 def update_scheduled_reboot():
     """Update scheduled reboot settings and configure the timer."""
-    import re
-
     data = _persisted()
 
     # Get form values
     enabled = request.form.get("scheduled_reboot_enabled") == "on"
-    reboot_time = (request.form.get("scheduled_reboot_time") or "04:00").strip()
+    raw_reboot_time = (request.form.get("scheduled_reboot_time") or "04:00").strip()
 
-    # Validate time format (HH:MM)
-    if not re.match(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$', reboot_time):
-        reboot_time = "04:00"
-
-    # Normalize to HH:MM
-    parts = reboot_time.split(":")
-    reboot_time = f"{int(parts[0]):02d}:{parts[1]}"
+    # validate_reboot_time() is the single authority for the HH:MM format
+    # check (persist.py); this route used to reimplement the same regex.
+    reboot_time = validate_reboot_time(raw_reboot_time)
+    if reboot_time != raw_reboot_time:
+        flash(f"'{raw_reboot_time}' isn't a valid time, using {reboot_time} instead.", "warning")
 
     # Save settings
     data["scheduled_reboot_enabled"] = enabled
@@ -3687,6 +3714,30 @@ def update_cloud_enabled():
     return redirect(url_for("main.system_page"))
 
 
+@main_bp.route("/settings/cloud_upload", methods=["POST"])
+def update_cloud_upload():
+    """Enable/disable automatic snapshot uploads and set their interval.
+
+    v6.11.22: these settings (cloud_upload_enabled/interval_minutes) already
+    existed in persist.py and were already consumed by scripts/cloud_upload.py,
+    but had no UI - added here alongside the Last Upload Status display so a
+    silent-upload-failure incident like v6.11.20 is visible on this page
+    instead of only discoverable via SSH.
+    """
+    data = _persisted()
+    data["cloud_upload_enabled"] = request.form.get("cloud_upload_enabled") == "on"
+
+    try:
+        interval = int(request.form.get("cloud_upload_interval_minutes") or 6)
+    except ValueError:
+        interval = 6
+    data["cloud_upload_interval_minutes"] = interval
+
+    _save_persisted(data)
+    flash("Portal sync settings saved.", "success")
+    return redirect(url_for("main.system_page"))
+
+
 # ----------------------------
 # Monitoring cadence (poll interval + intensive window)
 # ----------------------------
@@ -3783,12 +3834,13 @@ def system_page():
         ezetrol_channel_map=current_app.config.get("EZETROL_CHANNEL_MAP", {}),
         ezetrol_layout=current_app.config.get("EZETROL_LAYOUT", "CDAB"),
         chart_max_points=data.get("chart_max_points", 5000),
+        chart_downsample=data.get("chart_downsample", True),
         data_retention_enabled=data.get("data_retention_enabled", True),
         data_retention_full_days=data.get("data_retention_full_days", 30),
         data_retention_hourly_days=data.get("data_retention_hourly_days", 90),
         data_retention_daily_days=data.get("data_retention_daily_days", 365),
         storage_threshold_percent=data.get("storage_threshold_percent", 80),
-        storage_max_mb=data.get("storage_max_mb", 500),
+        storage_max_mb=data.get("storage_max_mb", PERSIST_DEFAULTS["storage_max_mb"]),
         ap_suffix=data.get("ap_suffix", ""),
         ap_password_enabled=data.get("ap_password_enabled", False),
         ap_password=data.get("ap_password", ""),
@@ -3800,6 +3852,17 @@ def system_page():
         scheduled_reboot_time=data.get("scheduled_reboot_time", "04:00"),
         # Cloud connection (local-only switch)
         cloud_enabled=data.get("cloud_enabled", True),
+        # Portal sync (automatic snapshot uploads) - v6.11.22: these settings
+        # already existed in persist.py (cloud_upload_enabled/interval) and
+        # were already being written to by scripts/cloud_upload.py
+        # (last_ts/last_status/last_error), but had no UI at all - exactly
+        # the visibility gap that let the v6.11.20 incident (uploads
+        # silently dead for 9 days) go unnoticed until an SSH session found it.
+        cloud_upload_enabled=data.get("cloud_upload_enabled", True),
+        cloud_upload_interval_minutes=data.get("cloud_upload_interval_minutes", 6),
+        cloud_upload_last_ts=data.get("cloud_upload_last_ts", ""),
+        cloud_upload_last_status=data.get("cloud_upload_last_status", ""),
+        cloud_upload_last_error=data.get("cloud_upload_last_error", ""),
         # Monitoring cadence
         logger_poll_interval_seconds=data.get("logger_poll_interval_seconds", 30),
         intensive_poll_interval_seconds=data.get("intensive_poll_interval_seconds", 5),

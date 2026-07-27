@@ -758,9 +758,25 @@ def apply_update(archive_path):
         # and removed on already-deployed Pis, or they keep firing forever.
         # remote_sync was superseded by cloud_upload (snapshots) +
         # chunk_manager (history chunks) and retired 2026-06-12.
+        # poolaissistant_ap_manager was "retired" in v6.11.2 (replaced by
+        # manual ap_control.sh + health_watchdog.sh — its 10s polling raced
+        # NetworkManager and repeatedly killed working WiFi), but the
+        # retirement only lived in install_services.sh, which never re-runs
+        # on an already-deployed Pi via the incremental update path — so it
+        # silently kept running (self-restarting under Restart=always, and
+        # separately resurrected every ~5 min by watchdog.py's SERVICES
+        # list until v6.11.22 removed it from there too) on Swanwood for
+        # 20+ releases. Retired here for real, v6.11.22.
         retired_units = [
             "poolaissistant_remote_sync.timer",
             "poolaissistant_remote_sync.service",
+            "poolaissistant_ap_manager.service",
+        ]
+        # Loose script files (not systemd units) left behind by retired
+        # daemons — removed alongside their unit so nothing can restart them
+        # by hand or via a stale reference.
+        retired_scripts = [
+            Path("/usr/local/bin/poolaissistant_ap_manager.sh"),
         ]
         print("Removing retired systemd units...")
         try:
@@ -782,6 +798,13 @@ def apply_update(archive_path):
                     capture_output=True, text=True, timeout=15
                 )
                 removed.append(unit)
+            for script_path in retired_scripts:
+                if script_path.exists():
+                    subprocess.run(
+                        ["sudo", "rm", "-f", str(script_path)],
+                        capture_output=True, text=True, timeout=15
+                    )
+                    removed.append(str(script_path))
             if removed:
                 subprocess.run(
                     ["sudo", "systemctl", "daemon-reload"],

@@ -26,6 +26,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Same sys.path pattern used by auto_provision.py/health_reporter.py to reach
+# the Flask app's modules from a standalone scripts/ entry point.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pooldash_app"))
+from db.maintenance import ensure_db as _ensure_maintenance_db  # noqa: E402
+
 # Default paths (matching config.py)
 DATA_DIR = Path("/opt/PoolAIssistant/data")
 POOL_DB_PATH = DATA_DIR / "pool_readings.sqlite3"
@@ -54,30 +59,21 @@ def get_paths():
 
 
 def ensure_maintenance_table(pool_db_path: Path) -> bool:
-    """Create maintenance_logs table in pool_readings database."""
-    print(f"Ensuring maintenance_logs table in {pool_db_path}...")
+    """Create maintenance_logs table in pool_readings database.
 
-    conn = sqlite3.connect(str(pool_db_path))
+    Delegates to pooldash_app/db/maintenance.py's ensure_db() - this used to
+    redefine the same CREATE TABLE/index DDL a second time here, which meant
+    the schema could silently drift between the two if one copy was ever
+    updated without the other.
+    """
+    print(f"Ensuring maintenance_logs table in {pool_db_path}...")
     try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS maintenance_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                pool TEXT NOT NULL,
-                action TEXT NOT NULL,
-                note TEXT
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_maint_timestamp ON maintenance_logs(timestamp)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_maint_pool_action_time ON maintenance_logs(pool, action, timestamp)")
-        conn.commit()
+        _ensure_maintenance_db(str(pool_db_path))
         print("  Table and indexes created/verified.")
         return True
     except Exception as e:
         print(f"  ERROR creating table: {e}")
         return False
-    finally:
-        conn.close()
 
 
 def count_rows(db_path: Path, table: str) -> int:

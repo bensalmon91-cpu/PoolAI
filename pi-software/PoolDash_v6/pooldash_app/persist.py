@@ -77,7 +77,6 @@ DEFAULTS = {
     "ezetrol_layout_migrated": False,
     "chart_downsample": True,
     "chart_max_points": 5000,         # Limit data points in Plotly charts for UI performance
-    "upload_interval_minutes": 10,
     # Server connection (PERMANENT - do not change)
     "backend_url": "https://poolaissistant.modprojects.co.uk",
     "bootstrap_secret": _BOOTSTRAP_SECRET,
@@ -220,8 +219,10 @@ def load(app_instance_path: str) -> Dict[str, Any]:
             merged["chart_downsample"] = DEFAULTS["chart_downsample"]
         if not isinstance(merged.get("chart_max_points"), int):
             merged["chart_max_points"] = DEFAULTS["chart_max_points"]
-        if not isinstance(merged.get("upload_interval_minutes"), int):
-            merged["upload_interval_minutes"] = DEFAULTS["upload_interval_minutes"]
+        # upload_interval_minutes removed v6.11.22 - dead legacy key, superseded
+        # by cloud_upload_interval_minutes; drop it from any settings file that
+        # still carries it forward (same pattern as retired remote_sync_* keys).
+        merged.pop("upload_interval_minutes", None)
         # Server connection - always use defaults (permanent values)
         merged["backend_url"] = DEFAULTS["backend_url"]
         merged["bootstrap_secret"] = DEFAULTS["bootstrap_secret"]
@@ -332,49 +333,17 @@ def load(app_instance_path: str) -> Dict[str, Any]:
         # Scheduled reboot settings
         if not isinstance(merged.get("scheduled_reboot_enabled"), bool):
             merged["scheduled_reboot_enabled"] = DEFAULTS["scheduled_reboot_enabled"]
-        if not isinstance(merged.get("scheduled_reboot_time"), str):
-            merged["scheduled_reboot_time"] = DEFAULTS["scheduled_reboot_time"]
-        # Validate time format (HH:MM)
-        import re
-        if not re.match(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$', merged.get("scheduled_reboot_time", "")):
-            merged["scheduled_reboot_time"] = DEFAULTS["scheduled_reboot_time"]
+        # validate_reboot_time() is the single authority for the HH:MM
+        # format check - this used to re-implement the same regex inline,
+        # which meant the two copies had to be kept in sync by hand.
+        merged["scheduled_reboot_time"] = validate_reboot_time(
+            merged.get("scheduled_reboot_time", DEFAULTS["scheduled_reboot_time"])
+        )
 
-        # RS485 devices
-        if not isinstance(merged.get("rs485_devices"), list):
-            merged["rs485_devices"] = []
-
-        # Sanitize RS485 devices
-        clean_rs485 = []
-        for dev in merged.get("rs485_devices") or []:
-            if not isinstance(dev, dict):
-                continue
-            port = (dev.get("port") or "").strip()
-            if not port:
-                continue
-            name = (dev.get("name") or "Water Tester").strip()
-            try:
-                baud = int(dev.get("baud", 9600))
-            except Exception:
-                baud = 9600
-            try:
-                unit_id = int(dev.get("unit_id", 1))
-            except Exception:
-                unit_id = 1
-            mode = dev.get("mode", "standalone")
-            if mode not in ("standalone", "merged"):
-                mode = "standalone"
-            merged_with_pool = (dev.get("merged_with_pool") or "").strip()
-            enabled = bool(dev.get("enabled", True))
-            clean_rs485.append({
-                "port": port,
-                "baud": baud,
-                "name": name,
-                "unit_id": unit_id,
-                "mode": mode,
-                "merged_with_pool": merged_with_pool,
-                "enabled": enabled,
-            })
-        merged["rs485_devices"] = clean_rs485
+        # RS485 devices - sanitize_rs485_devices() is the single authority
+        # for this (see its docstring); this used to reimplement the same
+        # loop inline.
+        merged["rs485_devices"] = sanitize_rs485_devices(merged.get("rs485_devices"))
 
         # ALWAYS enforce system URLs from SYSTEM_URLS (cannot be overridden)
         merged["backend_url"] = SYSTEM_URLS["backend_url"]
@@ -428,10 +397,6 @@ def load(app_instance_path: str) -> Dict[str, Any]:
             except Exception:
                 pass
 
-        # Clamp upload interval to supported values
-        allowed = {1, 3, 6, 12, 20, 30, 40, 60}
-        if merged.get("upload_interval_minutes") not in allowed:
-            merged["upload_interval_minutes"] = DEFAULTS["upload_interval_minutes"]
         return merged
     except Exception:
         # If file is corrupt, fall back to defaults but keep file untouched
@@ -478,7 +443,6 @@ def save(app_instance_path: str, data: Dict[str, Any]) -> Path:
         "ezetrol_layout_migrated": bool(data.get("ezetrol_layout_migrated", False)),
         "chart_downsample": bool(data.get("chart_downsample", DEFAULTS["chart_downsample"])),
         "chart_max_points": int(data.get("chart_max_points") or DEFAULTS["chart_max_points"]),
-        "upload_interval_minutes": int(data.get("upload_interval_minutes") or DEFAULTS["upload_interval_minutes"]),
         # Server connection - always use SYSTEM_URLS (permanent, not user-editable)
         "backend_url": SYSTEM_URLS["backend_url"],
         "bootstrap_secret": SYSTEM_URLS["bootstrap_secret"],
@@ -528,10 +492,10 @@ def save(app_instance_path: str, data: Dict[str, Any]) -> Path:
         "cloud_upload_last_status": (data.get("cloud_upload_last_status") or "").strip(),
         "cloud_upload_last_error": (data.get("cloud_upload_last_error") or "").strip(),
         # RS485 devices
-        "rs485_devices": _sanitize_rs485_devices(data.get("rs485_devices")),
+        "rs485_devices": sanitize_rs485_devices(data.get("rs485_devices")),
         # Scheduled reboot settings
         "scheduled_reboot_enabled": bool(data.get("scheduled_reboot_enabled", DEFAULTS["scheduled_reboot_enabled"])),
-        "scheduled_reboot_time": _validate_reboot_time(data.get("scheduled_reboot_time", DEFAULTS["scheduled_reboot_time"])),
+        "scheduled_reboot_time": validate_reboot_time(data.get("scheduled_reboot_time", DEFAULTS["scheduled_reboot_time"])),
     }
     # Validate AP password - disable if too short (WPA2 requires min 8 chars)
     if out["ap_password_enabled"] and len(out["ap_password"]) < 8:
@@ -555,8 +519,14 @@ def save(app_instance_path: str, data: Dict[str, Any]) -> Path:
             raise
     return path
 
-def _validate_reboot_time(time_str) -> str:
-    """Validate and normalize reboot time to HH:MM format."""
+def validate_reboot_time(time_str) -> str:
+    """Validate and normalize reboot time to HH:MM format.
+
+    The single authority for this check - route handlers should call this
+    (not re-implement the regex) and use the return value to decide what to
+    tell the user, e.g. flash a warning when the result differs from what
+    they submitted.
+    """
     import re
     if not isinstance(time_str, str):
         return DEFAULTS["scheduled_reboot_time"]
@@ -568,8 +538,13 @@ def _validate_reboot_time(time_str) -> str:
     return DEFAULTS["scheduled_reboot_time"]
 
 
-def _sanitize_rs485_devices(devices) -> List[Dict[str, Any]]:
-    """Sanitize RS485 device list for saving."""
+def sanitize_rs485_devices(devices) -> List[Dict[str, Any]]:
+    """Sanitize an RS485 device list (port/baud/unit_id/mode/enabled).
+
+    The single authority for this - previously reimplemented separately in
+    load(), in save(), and again in main_ui.py's update_rs485_devices route,
+    with all three copies needing to be kept in sync by hand.
+    """
     if not isinstance(devices, list):
         return []
     clean = []

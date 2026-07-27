@@ -52,7 +52,7 @@ echo "  -> AP dependencies: OK"
 echo
 
 # ============================================
-# AP Manager daemon: DISABLED.
+# AP Manager daemon: RETIRED (v6.11.2, fully removed v6.11.22).
 # The old poolaissistant_ap_manager.service auto-started an AP whenever
 # it thought the network was down, but its 10s polling raced against
 # NetworkManager and repeatedly killed working WiFi connections. Every
@@ -60,20 +60,20 @@ echo
 # Settings → Connectivity toggle. See ap_control.sh and the new
 # health_watchdog service below.
 #
-# We keep /usr/local/bin/poolaissistant_ap_manager.sh on disk for one
-# release so a manual rollback is possible. It will be deleted in the
-# next release.
+# v6.11.2 kept the script on disk "for one release" as a rollback window,
+# but install_services.sh only runs at install time - it never re-ran on
+# already-deployed Pis via the incremental update path, so this rollback
+# copy kept getting silently reinstalled release after release and the
+# daemon was still running (self-restarting, still racing NetworkManager)
+# on Swanwood 20+ releases later. v6.11.22 removes the script from the repo
+# entirely and self-heals already-deployed Pis via update_check.py instead
+# of relying on install_services.sh ever running again.
 # ============================================
-echo "Disabling legacy AP Manager daemon..."
+echo "Removing legacy AP Manager daemon (if present from a pre-v6.11.22 install)..."
 systemctl disable poolaissistant_ap_manager.service 2>/dev/null || true
 systemctl stop poolaissistant_ap_manager.service 2>/dev/null || true
-# Remove the unit file so it doesn't get re-enabled by daemon-reload
 rm -f "$SYSTEMD_DIR/poolaissistant_ap_manager.service"
-# Keep the script on disk (per rollback window)
-if [ -f "$SCRIPT_DIR/poolaissistant_ap_manager.sh" ]; then
-    cp "$SCRIPT_DIR/poolaissistant_ap_manager.sh" "/usr/local/bin/"
-    chmod +x "/usr/local/bin/poolaissistant_ap_manager.sh"
-fi
+rm -f "/usr/local/bin/poolaissistant_ap_manager.sh"
 mkdir -p /etc/hostapd /etc/dnsmasq.d 2>/dev/null || true
 
 # Install the manual AP control CLI (called by the Flask /settings/ap endpoint

@@ -18,7 +18,11 @@ LOG_FILE = DATA_DIR / "watchdog.log"
 ALERT_FILE = DATA_DIR / "alerts.json"
 
 # Critical services to monitor
-SERVICES = ["poolaissistant_ui", "poolaissistant_logger", "poolaissistant_ap_manager"]
+# poolaissistant_ap_manager was retired in v6.11.2 (manual-only AP via
+# ap_control.sh + health_watchdog.sh) but stayed in this list, so this
+# watchdog silently `systemctl restart`-ed the zombie daemon back to life
+# every ~5 minutes on any Pi where it had been stopped - removed v6.11.22.
+SERVICES = ["poolaissistant_ui", "poolaissistant_logger"]
 
 # Thresholds
 DISK_WARNING_PCT = 80

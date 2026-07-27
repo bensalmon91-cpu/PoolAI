@@ -223,6 +223,9 @@ document.querySelectorAll('input[name="appearance_accent_color"]').forEach(input
   <div class="settings-divider"></div>
 
   <h4 class="settings-section__title">External Storage</h4>
+  <div id="externalStorageProgress" style="display:none" class="storage-status mb-2">
+    <span class="status-warn">&#9679;</span> <span id="externalStorageProgressText">Working...</span>
+  </div>
   <div id="externalStorageInfo">
     <p class="form-hint">Checking for external storage...</p>
   </div>
@@ -230,6 +233,51 @@ document.querySelectorAll('input[name="appearance_accent_color"]').forEach(input
 
 <script>
 (function() {
+  // Poll while a background migration (enable_external_storage) is running,
+  // showing real progress instead of a single "check back shortly" message -
+  // the whole point of the v6.11.22 hardening after the Swanwood incident
+  // where a synchronous 180s-timeout copy left no way to see what was
+  // actually happening.
+  function pollExternalStorage() {
+    fetch('/settings/external-storage/status')
+      .then(r => r.json())
+      .then(data => {
+        const progress = document.getElementById('externalStorageProgress');
+        const progressText = document.getElementById('externalStorageProgressText');
+        const status = data.status || {};
+        if (data.running) {
+          progress.style.display = '';
+          progressText.textContent = status.message || 'Working...';
+          setTimeout(pollExternalStorage, 3000);
+        } else if (progress.style.display !== 'none') {
+          if (status.phase === 'error') {
+            progressText.textContent = status.message || 'Migration failed';
+            progress.querySelector('.status-warn').className = 'status-bad';
+            setTimeout(() => location.reload(), 2500);
+          } else {
+            location.reload();
+          }
+        }
+      })
+      .catch(() => {});
+  }
+  pollExternalStorage();
+})();
+
+(function() {
+  // dev.model comes from the USB device's own descriptor string (via
+  // udevadm ID_MODEL) - a crafted/malicious USB stick could present an
+  // arbitrary model name, so every device-supplied field is HTML-escaped
+  // before being interpolated into innerHTML below.
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   fetch('/settings/external-storage')
     .then(r => r.json())
     .then(data => {
@@ -256,20 +304,20 @@ document.querySelectorAll('input[name="appearance_accent_color"]').forEach(input
         data.devices.forEach(dev => {
           html += '<div class="external-device-card">';
           html += '<div class="device-header">';
-          html += '<strong>' + (dev.model || 'Unknown Device') + '</strong>';
+          html += '<strong>' + escapeHtml(dev.model || 'Unknown Device') + '</strong>';
           if (dev.is_active) {
             html += ' <span class="badge badge--active">Active</span>';
           }
           html += '</div>';
           html += '<div class="device-details">';
-          html += '<div class="device-row"><span class="muted">Device:</span> <code>' + dev.device + '</code></div>';
-          html += '<div class="device-row"><span class="muted">Size:</span> ' + dev.size + '</div>';
-          html += '<div class="device-row"><span class="muted">Format:</span> ' + (dev.fstype || 'Unknown') + '</div>';
+          html += '<div class="device-row"><span class="muted">Device:</span> <code>' + escapeHtml(dev.device) + '</code></div>';
+          html += '<div class="device-row"><span class="muted">Size:</span> ' + escapeHtml(dev.size) + '</div>';
+          html += '<div class="device-row"><span class="muted">Format:</span> ' + escapeHtml(dev.fstype || 'Unknown') + '</div>';
           if (dev.mounted) {
-            html += '<div class="device-row"><span class="muted">Mount:</span> <code>' + dev.mountpoint + '</code></div>';
+            html += '<div class="device-row"><span class="muted">Mount:</span> <code>' + escapeHtml(dev.mountpoint) + '</code></div>';
             html += '<div class="device-row"><span class="muted">Used:</span> ';
-            html += '<div class="usage-bar"><div class="usage-fill" style="width:' + dev.used_percent + '%"></div></div>';
-            html += ' ' + dev.used_percent + '% (' + dev.free_gb + ' GB free)</div>';
+            html += '<div class="usage-bar"><div class="usage-fill" style="width:' + encodeURIComponent(dev.used_percent) + '%"></div></div>';
+            html += ' ' + escapeHtml(dev.used_percent) + '% (' + escapeHtml(dev.free_gb) + ' GB free)</div>';
           } else {
             html += '<div class="device-row"><span class="status-warn">Not mounted</span></div>';
           }
@@ -283,7 +331,7 @@ document.querySelectorAll('input[name="appearance_accent_color"]').forEach(input
             html += '</form>';
           } else {
             html += '<form method="post" action="/settings/external-storage/enable" class="m-0">';
-            html += '<input type="hidden" name="device" value="' + dev.device + '">';
+            html += '<input type="hidden" name="device" value="' + escapeHtml(dev.device) + '">';
             html += '<button class="btn btn--sm" type="submit" ';
             if (dev.mounted) {
               html += 'onclick="return confirm(\'Use this device for data storage? Existing data will be migrated.\')">Use This Device</button>';
@@ -362,6 +410,54 @@ document.querySelectorAll('input[name="screen_rotation"]').forEach(input => {
     </div>
     <button class="btn btn--full mt-3" type="submit">Save Cloud Setting</button>
   </form>
+</div>
+
+<!-- ===== PORTAL SYNC (automatic snapshot uploads) =====
+     v6.11.22: cloud_upload_enabled/interval already existed in persist.py
+     and were already being read/written by scripts/cloud_upload.py, but had
+     no UI at all - this card, plus the Last Upload Status block below, is
+     the direct fix for the exact blind spot that let uploads run silently
+     dead for 9 days in the v6.11.20 incident. -->
+<div class="card">
+  <h3>Portal Sync</h3>
+  <p class="form-hint mb-3">Automatic snapshot uploads to the customer portal (readings, health, alarms). Requires Cloud Connection above to be enabled.</p>
+  <form method="post" action="{{ url_for('main.update_cloud_upload') }}">
+    <div class="settings-section">
+      <label class="checkbox-label">
+        <input type="checkbox" name="cloud_upload_enabled" {% if cloud_upload_enabled %}checked{% endif %} {% if not cloud_enabled %}disabled{% endif %}>
+        <span>Enable automatic snapshot uploads</span>
+      </label>
+    </div>
+    <div class="form-field mt-2">
+      <label for="cloud_upload_interval_minutes">Upload interval (minutes)</label>
+      <select id="cloud_upload_interval_minutes" name="cloud_upload_interval_minutes" class="input--lg" {% if not cloud_enabled %}disabled{% endif %}>
+        {% for mins in [1, 3, 6, 12, 20, 30, 60] %}
+          <option value="{{ mins }}" {% if cloud_upload_interval_minutes == mins %}selected{% endif %}>{{ mins }} minutes</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="btn btn--full mt-3" type="submit" {% if not cloud_enabled %}disabled{% endif %}>Save Portal Sync Settings</button>
+  </form>
+
+  <div class="settings-divider"></div>
+
+  <h4 class="settings-section__title">Last Upload Status</h4>
+  {% if cloud_upload_last_ts %}
+    <div class="storage-grid mb-2">
+      <div class="storage-item"><span class="muted">Last upload</span><strong>{{ cloud_upload_last_ts }}</strong></div>
+      <div class="storage-item">
+        <span class="muted">Status</span>
+        <strong class="{% if cloud_upload_last_status == 'ok' %}status-ok{% elif cloud_upload_last_status == 'warning' %}status-warn{% else %}status-bad{% endif %}">
+          {{ cloud_upload_last_status or 'unknown' }}
+        </strong>
+      </div>
+    </div>
+    {% if cloud_upload_last_error %}
+      <p class="small status-bad">{{ cloud_upload_last_error }}</p>
+    {% endif %}
+  {% else %}
+    <p class="form-hint">No upload has completed yet.</p>
+  {% endif %}
 </div>
 
 <!-- ===== SYSTEM HEALTH (SoC temp / fan / throttle) ===== -->
@@ -543,6 +639,12 @@ document.querySelectorAll('input[name="screen_rotation"]').forEach(input => {
           <button class="btn btn--sm" type="submit">Save</button>
         </div>
       </form>
+      <form method="post" action="{{ url_for('main.update_chart_downsample') }}" class="mt-2">
+        <label class="checkbox-label">
+          <input type="checkbox" name="chart_downsample" {% if chart_downsample %}checked{% endif %} onchange="this.form.submit()">
+          <span>Downsample large charts (faster rendering, slightly less detail)</span>
+        </label>
+      </form>
     </div>
 
     <div class="settings-divider"></div>
@@ -623,23 +725,27 @@ document.querySelectorAll('input[name="screen_rotation"]').forEach(input => {
 
     <div class="settings-divider"></div>
 
-    <!-- Backend Credentials (Debug) -->
+    <!-- Backend Credentials (Debug) - read-only. These are permanent,
+         hardcoded values (persist.py SYSTEM_URLS) that get re-applied on
+         every save regardless of what's edited here, so this used to be an
+         editable form that silently did nothing. Shown for support/debug
+         purposes only. -->
     <details>
       <summary class="summary--muted">Backend Credentials (Debug)</summary>
-      <form method="post" action="{{ url_for('main.update_backend_credentials') }}" class="form-stack mt-2">
+      <dl class="form-stack mt-2">
         <div class="form-field">
           <label>Server URL</label>
-          <input type="text" name="backend_url" value="{{ backend_url }}" placeholder="https://...">
+          <div class="muted">{{ backend_url }}</div>
         </div>
         <div class="form-field">
           <label>Bootstrap Secret</label>
           <div class="input-row">
-            <input type="password" name="bootstrap_secret" value="{{ bootstrap_secret }}" id="bootstrap-secret" class="input--flex">
+            <div class="muted input--flex" id="bootstrap-secret-display" data-secret="{{ bootstrap_secret }}" data-revealed="false">••••••••••••••••</div>
             <button class="btn btn--sm btn--secondary" type="button" onclick="toggleSecretVisibility()">Show</button>
           </div>
         </div>
-        <button class="btn btn--sm btn--full">Save</button>
-      </form>
+        <p class="form-hint">These are permanent server settings and cannot be changed here. They are only ever updated by a software update.</p>
+      </dl>
     </details>
 
     <div class="settings-divider"></div>
@@ -797,8 +903,10 @@ function toggleRebootOptions(checkbox) {
 })();
 
 function toggleSecretVisibility() {
-  const input = document.getElementById('bootstrap-secret');
-  input.type = input.type === 'password' ? 'text' : 'password';
+  const display = document.getElementById('bootstrap-secret-display');
+  const revealed = display.dataset.revealed === 'true';
+  display.textContent = revealed ? '••••••••••••••••' : (display.dataset.secret || '');
+  display.dataset.revealed = revealed ? 'false' : 'true';
 }
 
 // Fetch CPU temperature from health endpoint
