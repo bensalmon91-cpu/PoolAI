@@ -22,6 +22,25 @@ esac
 sleep 2
 wlr-randr --output DSI-2 --transform "$TRANSFORM" 2>/dev/null &
 
+# Device-scale-factor for the kiosk browser - compensates for high-DPI panels
+# (e.g. the 10" official touchscreen, ~226dpi) so touch targets stay a
+# comparable physical size to the 7" screen (~132dpi) the UI was tuned for.
+# Defaults to 1.0 (no scaling) so existing 7" units are unaffected.
+# Unlike the ROTATION read above, this value isn't funneled through a `case`
+# with a safe catch-all, so the bounds check (matching persist.py's
+# 0.5-4 range) happens inline here - this is the only place that would
+# otherwise pass a raw JSON value straight to Chromium's command line, and
+# this file has no UI to keep it correct at the source (chromium_scale_factor
+# has no settings-page route; it's set by hand-editing pooldash_settings.json).
+SCALE=$(python3 -c "
+import json
+try:
+    v = float(json.load(open('/opt/PoolAIssistant/data/pooldash_settings.json')).get('chromium_scale_factor', 1.0))
+except Exception:
+    v = 1.0
+print(v if 0.5 <= v <= 4 else 1.0)
+" 2>/dev/null || echo 1.0)
+
 sleep 3
 
 # Clear stale Chromium lock files (prevents startup failure after crash/reboot)
@@ -34,4 +53,5 @@ rm -f ~/.config/chromium/SingletonLock ~/.config/chromium/SingletonSocket ~/.con
   --ozone-platform=wayland --password-store=basic \
   --touch-events=enabled \
   --enable-touch-drag-drop \
+  --force-device-scale-factor="$SCALE" \
   http://localhost &

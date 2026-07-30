@@ -102,6 +102,10 @@ DEFAULTS = {
 
     # Display settings
     "screen_rotation": 0,                # 0, 90, 180, or 270 degrees
+    "chromium_scale_factor": 1.0,         # kiosk browser device-scale-factor; compensates for
+                                          # high-DPI panels (e.g. the 10" official touchscreen,
+                                          # ~226dpi vs the 7" screen's ~132dpi) so touch targets
+                                          # keep a comparable physical size. 1.0 = no scaling.
 
     # Access Point settings
     "ap_suffix": "",                     # Suffix in brackets, e.g., "Pool 1" -> "PoolAI (Pool 1)"
@@ -259,6 +263,9 @@ def load(app_instance_path: str) -> Dict[str, Any]:
         # Display settings
         if merged.get("screen_rotation") not in (0, 90, 180, 270):
             merged["screen_rotation"] = DEFAULTS["screen_rotation"]
+        scale = merged.get("chromium_scale_factor")
+        if not isinstance(scale, (int, float)) or isinstance(scale, bool) or not (0.5 <= scale <= 4):
+            merged["chromium_scale_factor"] = DEFAULTS["chromium_scale_factor"]
 
         # Access Point settings
         if not isinstance(merged.get("ap_suffix"), str):

@@ -25,6 +25,20 @@
 #   - verifies the copy (byte-size match + sqlite3 integrity_check on the
 #     pool readings DB) before doing the swap that discards the SD original
 #
+# v6.11.23: fixed a fleet-wide latent boot deadlock. find_usb_device()'s
+# log() calls wrote to stdout, and USB_DEVICE=$(find_usb_device) captured
+# ALL of that output - so "no device found" still returned non-empty text,
+# the emptiness guard never fired, and the script fell through into a full
+# migration against a directory that was never actually mounted. Separately,
+# start_services() called a *blocking* systemctl start on units this unit's
+# own Before= ordering requires to start after it - a guaranteed self-deadlock
+# on any boot with no USB attached. Also fixed: mount_usb()/has_filesystem()
+# not distinguishing "confirmed no filesystem" from "blkid failed" (the
+# latter must never trigger mkfs.ext4); remount_ro() firing on every boot
+# instead of only when this script itself remounted root rw; migrate_data()
+# not guarding against an already-existing .sd_backup; start_services()
+# failures not reaching write_status.
+#
 # Run manually via Settings -> System -> External Storage, or directly with
 # a device path argument.
 
@@ -35,12 +49,26 @@ MARKER_FILE="$USB_DATA/.poolaissistant_data"
 LOG_FILE="/var/log/poolaissistant_usb.log"
 STATUS_FILE="$DATA_DIR/external_storage_status.json"
 POOL_DB_NAME="pool_readings.sqlite3"
-SERVICES=("poolaissistant_logger" "poolaissistant_ui")
+# Must match this unit's systemd Before= list (scripts/systemd/poolaissistant_usb_storage.service)
+# so every service the ordering protects also gets stopped before the copy and
+# restarted after - not just the two most obviously data-writing ones.
+SERVICES=("poolaissistant_logger" "poolaissistant_ui" "poolaissistant_provision")
+
+# Tracks whether THIS run remounted root rw, so remount_ro() only undoes its
+# own work (see remount_ro() below). Tracks per-service restart failures so
+# they can be reflected in write_status() instead of only the log.
+ROOT_REMOUNTED_RW=false
+SERVICES_START_FAILED=""
 
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+    # Written to stderr (not stdout) so functions whose result is captured via
+    # command substitution - e.g. USB_DEVICE=$(find_usb_device) - don't get
+    # their log lines mixed into the captured value. journald captures stderr
+    # from this unit the same as stdout (StandardError=journal), so nothing
+    # is lost from the log file or journal.
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE" >&2
 }
 
 log_error() {
@@ -67,15 +95,25 @@ write_status() {
 remount_rw() {
     if mount | grep -q "on / type.*ro,"; then
         log "Remounting root filesystem as read-write..."
-        mount -o remount,rw / || log "Warning: Could not remount as read-write"
+        if mount -o remount,rw /; then
+            ROOT_REMOUNTED_RW=true
+        else
+            log "Warning: Could not remount as read-write"
+        fi
     fi
 }
 
 remount_ro() {
-    if mount | grep -q "on / type.*rw"; then
-        log "Remounting root filesystem as read-only..."
-        mount -o remount,ro / || true
-    fi
+    # Only restore read-only if THIS run is the one that made root writable.
+    # Root is normally rw on every boot, and this function is installed as
+    # `trap remount_ro EXIT` - so without this guard it would attempt
+    # `mount -o remount,ro /` on every single invocation, including the
+    # common "no USB attached, nothing to do" exit path. That previously went
+    # unnoticed only because the pre-v6.11.23 deadlock meant this trap almost
+    # never got a chance to run to completion on a no-USB boot.
+    [ "$ROOT_REMOUNTED_RW" = true ] || return 0
+    log "Restoring root filesystem to read-only..."
+    mount -o remount,ro / || log "Warning: could not restore read-only root"
 }
 
 get_data_owner() {
@@ -84,6 +122,11 @@ get_data_owner() {
     elif id "poolai" &>/dev/null; then
         echo "poolai:poolai"
     else
+        # log_error writes to stderr, not stdout, so it's safe to call here
+        # even though get_data_owner's result is captured via command
+        # substitution (owner=$(get_data_owner)) - see the log() comment
+        # above for why that distinction matters.
+        log_error "Neither poolaissistant nor poolai user exists - falling back to root:root ownership (services will likely be unable to write the data directory)"
         echo "root:root"
     fi
 }
@@ -99,9 +142,25 @@ stop_services() {
 
 start_services() {
     log "Restarting PoolAIssistant services..."
+    # --no-block: this unit's systemd entry orders itself Before= every
+    # service in $SERVICES (see scripts/systemd/poolaissistant_usb_storage.service
+    # for the authoritative list, so this comment can't drift out of sync
+    # with it) so the data-directory swap finishes before they read from it.
+    # A normal blocking `systemctl start` here would wait for those units to
+    # become active, but systemd won't start them until THIS unit's own job
+    # finishes - a guaranteed self-deadlock whenever this runs as that
+    # boot-time job. (It can't deadlock when invoked directly, e.g. via the
+    # Settings UI's subprocess.Popen call, since there's no systemd job for
+    # this script's own execution to be blocked on - --no-block is harmless
+    # there either way.)
+    SERVICES_START_FAILED=""
     for svc in "${SERVICES[@]}"; do
-        systemctl start "$svc" 2>/dev/null || log "Warning: could not start $svc"
+        if ! systemctl start --no-block "$svc" 2>/dev/null; then
+            log "Warning: could not queue start for $svc"
+            SERVICES_START_FAILED="$SERVICES_START_FAILED $svc"
+        fi
     done
+    [ -z "$SERVICES_START_FAILED" ]
 }
 
 find_usb_device() {
@@ -147,25 +206,52 @@ format_usb() {
     log "Format complete"
 }
 
+# Returns 0 if $device has a recognized filesystem, 1 if blkid confirms it
+# genuinely has none, or 2 if blkid itself failed (busy device, I/O error,
+# udev race, unparseable-but-present partition table). That distinction
+# matters: callers must never treat "blkid failed" the same as "confirmed
+# blank" - the latter is the only case safe to hand to mkfs.ext4.
 has_filesystem() {
     local device="$1"
-    blkid "$device" | grep -qE "TYPE=\"(ext4|ext3|vfat|ntfs)\"" 2>/dev/null
+    local fstype
+    fstype=$(blkid -s TYPE -o value "$device" 2>/dev/null)
+    local rc=$?
+    # blkid exit codes: 0 = found a value, 2 = token/device not found (i.e.
+    # genuinely no filesystem). Anything else is a real failure, not a blank
+    # device.
+    if [ $rc -ne 0 ] && [ $rc -ne 2 ]; then
+        return 2
+    fi
+    [ -n "$fstype" ]
 }
 
 mount_usb() {
     local device="$1"
     mkdir -p "$USB_MOUNT"
-    local fstype=$(blkid -s TYPE -o value "$device" 2>/dev/null)
-    if [ -z "$fstype" ]; then
+
+    has_filesystem "$device"
+    local fs_rc=$?
+    if [ $fs_rc -eq 2 ]; then
+        log_error "blkid failed to query $device - refusing to format, aborting mount"
+        return 1
+    fi
+
+    local fstype
+    if [ $fs_rc -ne 0 ]; then
         log "No filesystem found on $device - formatting..."
         format_usb "$device"
         fstype="ext4"
+    else
+        fstype=$(blkid -s TYPE -o value "$device" 2>/dev/null)
     fi
     local mount_opts="defaults,noatime"
     if [ "$fstype" = "vfat" ] || [ "$fstype" = "ntfs" ]; then
         mount_opts="$mount_opts,uid=1000,gid=1000"
     fi
-    mount -t "$fstype" -o "$mount_opts" "$device" "$USB_MOUNT"
+    if ! mount -t "$fstype" -o "$mount_opts" "$device" "$USB_MOUNT"; then
+        log_error "mount command failed for $device ($fstype) at $USB_MOUNT"
+        return 1
+    fi
     log "Mounted $device ($fstype) at $USB_MOUNT"
 }
 
@@ -201,7 +287,10 @@ copy_data() {
         return $?
     else
         log "Warning: rsync not available, falling back to cp -a"
-        cp -a "$DATA_DIR"/* "$USB_DATA"/ 2>>"$LOG_FILE"
+        # dotglob in a subshell (not the whole script) so "$DATA_DIR"/* also
+        # matches dotfiles directly under DATA_DIR instead of silently
+        # skipping them while still reporting success.
+        ( shopt -s dotglob; cp -a "$DATA_DIR"/* "$USB_DATA"/ 2>>"$LOG_FILE" )
         return $?
     fi
 }
@@ -252,8 +341,20 @@ verify_copy() {
 # at the (already-copied-and-verified) USB destination.
 migrate_data() {
     if [ -d "$DATA_DIR" ] && [ ! -L "$DATA_DIR" ]; then
+        if [ -e "${DATA_DIR}.sd_backup" ]; then
+            # A leftover .sd_backup (e.g. from a prior manual recovery) means
+            # `mv "$DATA_DIR" "${DATA_DIR}.sd_backup"` would move the source
+            # INSIDE it instead of replacing it - silently nesting the real
+            # data one level deeper than restore_sd_fallback() expects, while
+            # every check downstream still reports success.
+            log_error "${DATA_DIR}.sd_backup already exists - refusing to nest the SD original inside it. Remove or move it aside first."
+            return 1
+        fi
         log "Backing up original SD-card data directory..."
-        mv "$DATA_DIR" "${DATA_DIR}.sd_backup"
+        if ! mv "$DATA_DIR" "${DATA_DIR}.sd_backup"; then
+            log_error "Failed to move $DATA_DIR to ${DATA_DIR}.sd_backup"
+            return 1
+        fi
         log "Original data backed up to ${DATA_DIR}.sd_backup"
     fi
 }
@@ -330,7 +431,10 @@ main() {
         log "Found existing PoolAIssistant data on USB"
     else
         log "Initializing new USB data directory"
-        init_usb_data
+        if ! init_usb_data; then
+            write_status "error" "Failed to initialize external storage directory" "init failed"
+            exit 1
+        fi
     fi
 
     # Stop services for the entire copy+verify window - a live, actively
@@ -351,7 +455,12 @@ main() {
         exit 1
     fi
 
-    migrate_data
+    if ! migrate_data; then
+        log_error "Could not prepare the SD data directory for swap - aborting, SD data untouched"
+        write_status "error" "Could not prepare external storage swap - still using SD card storage (no data was changed)" "backup failed"
+        start_services
+        exit 1
+    fi
     create_symlink
     start_services
 
@@ -360,8 +469,12 @@ main() {
         log "  Device: $USB_DEVICE"
         log "  Mount: $USB_MOUNT"
         log "  Data: $USB_DATA"
-        write_status "done" "Now using external storage for data"
-        df -h "$USB_MOUNT" | tail -1 | awk '{print "  Space: " $3 " used / " $2 " total (" $5 " used)"}'
+        if [ -n "$SERVICES_START_FAILED" ]; then
+            write_status "done" "Now using external storage for data (warning: failed to restart:$SERVICES_START_FAILED)" "service start failed"
+        else
+            write_status "done" "Now using external storage for data"
+        fi
+        df -h "$USB_MOUNT" | tail -1 | awk '{print "  Space: " $3 " used / " $2 " total (" $5 " used)"}' | tee -a "$LOG_FILE" >&2
     else
         log "ERROR: Failed to set up USB storage"
         write_status "error" "Failed to switch over to external storage" "symlink setup failed"
