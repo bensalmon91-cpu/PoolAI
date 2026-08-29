@@ -4,6 +4,24 @@ from urllib.parse import urljoin
 
 proxy_bp = Blueprint("proxy", __name__)
 
+# Headers we never forward to the controller: hop-by-hop headers per RFC 7230,
+# plus Cookie (Cloudflare Access's CF_Authorization cookie alone can run
+# 1.1-1.4KB, overflowing the embedded controller's ~1.5KB header buffer and
+# causing it to reject the request outright) and CF-*/X-Forwarded-* headers
+# the controller has no use for.
+_UPSTREAM_DROP_HEADERS = {
+    "host", "cookie", "connection", "keep-alive", "proxy-authenticate",
+    "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade",
+    "content-length", "accept-encoding",
+}
+
+def _upstream_headers(headers):
+    return {
+        k: v for k, v in headers.items()
+        if k.lower() not in _UPSTREAM_DROP_HEADERS
+        and not k.lower().startswith(("cf-", "x-forwarded-"))
+    }
+
 def _passthrough(upstream):
     def generate():
         for chunk in upstream.iter_content(chunk_size=8192):
@@ -38,7 +56,7 @@ def proxy_ui(path):
     try:
         upstream = requests.request(
             method=request.method, url=target_url, params=upstream_params if upstream_params else None,
-            headers={k:v for k,v in request.headers if k.lower() not in ("host","content-length","transfer-encoding","connection","accept-encoding")},
+            headers=_upstream_headers(request.headers),
             data=request.get_data() if request.method in ("POST","PUT","PATCH") else None,
             stream=True, timeout=10)
     except requests.RequestException as e:

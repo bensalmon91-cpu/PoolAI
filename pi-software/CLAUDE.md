@@ -1,6 +1,6 @@
 # PoolAIssistant Pi Software
 
-**Current Version: 6.11.24** (released 2026-07-30)
+**Current Version: 6.11.25** (released 2026-08-29)
 
 ## Live Pi fleet (2026-07-30)
 
@@ -12,6 +12,11 @@
 > `tvcctv` (the former second unit at `10.0.30.131`) was decommissioned — confirmed gone 2026-06-11.
 
 Updates land at the next 03:00 `update_check.timer` cron, or instantly via Settings → Check for Updates / `sudo python3 /opt/PoolAIssistant/app/scripts/update_check.py --apply`.
+
+**v6.11.25 (2026-08-29): controller-proxy 502 over Cloudflare Access fixed.**
+- The "view local controller" button on `/pool/Main` (`/proxy/ui/?host=192.168.200.11`, reverse-proxying to the Ezetrol controller's own embedded web UI) 502'd whenever it was opened via `pool.swanwood.app` behind Cloudflare Access. Root cause: `pooldash_app/blueprints/proxy.py`'s `proxy_ui()` forwarded the incoming request's full `Cookie` header upstream to the controller — Cloudflare Access's `CF_Authorization` cookie alone runs ~1.1-1.4KB, which overflows the controller's ~1.5KB embedded-device header buffer, so it rejected the request outright. Direct-LAN access (small/no cookie) always worked, which is why the bug went unnoticed until Cloudflare Access was put in front of the Pi. Reproduced with curl (200 with a small `Cookie` header, 502 once it exceeds ~1.5KB).
+- Fixed by replacing the inline upstream-header filter with a `_upstream_headers()` helper backed by an `_UPSTREAM_DROP_HEADERS` set that drops `Cookie`, the remaining RFC 7230 hop-by-hop headers, and any `CF-*`/`X-Forwarded-*` header before the request is forwarded to the controller. Only what's sent *to the controller* changed — the Pi's own incoming-request/session handling is untouched.
+- Hotfixed live on Swanwood 2026-08-29 (backed up the prior file, restarted `poolaissistant_ui`, verified 502→200), then shipped as a proper release: `VERSION` bumped, tarball built and published via `scripts/publish_update.py` (unsigned — no `trust/require_signature` marker set, same as prior releases), and applied fleet-side through the normal `update_check.py --apply` channel rather than left as a manual-only hotfix.
 
 **v6.11.24 (2026-07-30): review-fix follow-up to v6.11.23.**
 - A 4-agent code review of the v6.11.23 fix (code quality, silent-failure hunt, test coverage, comment accuracy) surfaced further issues in `usb_data_mount.sh`, all fixed and verified (67/67 existing + 8 new unit tests pass on real Linux hardware): (1) the newly-*unblocked* `remount_ro()` EXIT trap fired on every boot regardless of whether this script itself remounted root rw — before the deadlock fix, this trap rarely got the chance to run to completion, so the bug was latent; now guarded by a `ROOT_REMOUNTED_RW` flag so it only undoes its own work. (2) `blkid` failures (busy device, I/O error, udev race) were indistinguishable from "confirmed no filesystem," and either one triggered `mkfs.ext4` — `has_filesystem()`/`mount_usb()` now distinguish the two and abort on ambiguity instead of formatting. (3) `migrate_data()`'s `mv` was unguarded and didn't check for a pre-existing `.sd_backup`, which could silently nest the SD original a level too deep for `restore_sd_fallback()` to find. (4) `start_services()` failures were swallowed into a log-only warning while `write_status` still reported unconditional success; now tracked and reflected in the status the Settings UI polls. Also: `get_data_owner()`'s silent `root:root` fallback now logs as an error; the `cp -a` fallback path now includes dotfiles; `SERVICES` now includes `poolaissistant_provision` to match the unit's own `Before=` ordering.
